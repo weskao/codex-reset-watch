@@ -1,0 +1,17 @@
+{
+  "latest_reset": {
+    "id": "evt-53",
+    "timestamp": "2026-09-12T08:09:00Z",
+    "type": "regular",
+    "message": "Reset all propagated. Sweet dreams.",
+    "source_url": "https://x.com/example/status/53"
+  },
+  "forecast": {
+    "chance_percent": 45,
+    "confidence": "elevated",
+    "window_label": "within 24h",
+    "window_end": "2026-09-21T15:09:00Z",
+    "message": "Who says it won't reset in a while 👀",
+    "source_url": "https://x.com/example/status/hint"
+  }
+}

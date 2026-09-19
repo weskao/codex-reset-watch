@@ -1,0 +1,18 @@
+{
+  "resets": [
+    {
+      "id": "evt-53",
+      "timestamp": "2026-09-12T08:09:00Z",
+      "type": "regular",
+      "message": "Reset all propagated. Sweet dreams.",
+      "source_url": "https://x.com/example/status/53"
+    },
+    {
+      "id": "evt-52",
+      "timestamp": "2026-09-08T01:56:00Z",
+      "type": "regular",
+      "message": "All reset for everyone.",
+      "source_url": "https://x.com/example/status/52"
+    }
+  ]
+}
