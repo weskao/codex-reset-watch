@@ -106,6 +106,10 @@ class Event:
 class Upcoming:
     timestamp: Optional[dt.datetime] = None
     timing_kind: str = "forecast_window"
+    event_type: str = ""
+    status: str = ""
+    title: str = ""
+    time_text: str = ""
     chance_percent: Optional[float] = None
     confidence: str = ""
     window_label: str = ""
@@ -118,6 +122,10 @@ class Upcoming:
         raw = "|".join([
             iso_utc(self.timestamp) if self.timestamp else "",
             self.timing_kind,
+            self.event_type,
+            self.status,
+            self.title,
+            self.time_text,
             str(self.chance_percent),
             self.confidence,
             self.window_label,
@@ -182,13 +190,19 @@ def parse_time(value: Any) -> Optional[dt.datetime]:
     return None
 
 
+def normalize_key(value: Any) -> str:
+    """Normalize JSON field names so snake_case/kebab-case/camelCase match."""
+    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
 def first_value(d: Dict[str, Any], keys: Sequence[str]) -> Any:
-    lowered = {str(k).lower(): v for k, v in d.items()}
+    normalized = {normalize_key(k): v for k, v in d.items()}
     for key in keys:
         if key in d and d[key] not in (None, ""):
             return d[key]
-        if key.lower() in lowered and lowered[key.lower()] not in (None, ""):
-            return lowered[key.lower()]
+        v = normalized.get(normalize_key(key))
+        if v not in (None, ""):
+            return v
     return None
 
 
@@ -215,13 +229,13 @@ def numeric(v: Any) -> Optional[float]:
 
 
 def deep_first(d: Dict[str, Any], keys: Sequence[str], max_depth: int = 3) -> Tuple[Any, str]:
-    wanted = {k.lower() for k in keys}
+    wanted = {normalize_key(k) for k in keys}
     queue: List[Tuple[Dict[str, Any], str, int]] = [(d, "", 0)]
     while queue:
         cur, prefix, depth = queue.pop(0)
         for k, v in cur.items():
             path = f"{prefix}.{k}" if prefix else str(k)
-            if str(k).lower() in wanted and v not in (None, ""):
+            if normalize_key(k) in wanted and v not in (None, ""):
                 return v, path
         if depth < max_depth:
             for k, v in cur.items():
@@ -339,31 +353,73 @@ def latest_event(status: Any, resets: Any) -> Optional[Event]:
 
 
 UPCOMING_CONTAINER_KEYS = (
-    "forecast", "prediction", "upcoming", "upcoming_reset", "next_reset", "next", "outlook", "reset_forecast", "next_reset_forecast", "forecast_window"
+    "forecast", "prediction", "upcoming", "upcoming_reset", "next_reset", "next",
+    "outlook", "reset_forecast", "next_reset_forecast", "forecast_window",
+    "scheduled_reset", "reset_schedule", "next_reset_schedule", "banked_reset",
 )
 EXACT_TIME_KEYS = (
-    "next_reset_at", "scheduled_reset_at", "target_at", "estimated_at", "eta", "eta_at", "reset_at", "scheduled_at", "expected_at"
+    "next_reset_at", "scheduled_reset_at", "target_at", "estimated_at", "eta",
+    "eta_at", "reset_at", "scheduled_at", "expected_at", "scheduled_for",
 )
 WINDOW_TIME_KEYS = (
     "window_end_at", "window_end", "until", "by", "end_at", "forecast_until", "deadline"
 )
+UPCOMING_TYPE_KEYS = ("type", "reset_type", "event_type", "kind", "category", "mode")
+UPCOMING_STATUS_KEYS = ("status", "state", "schedule_status", "reset_status")
+UPCOMING_TITLE_KEYS = ("title", "headline", "label", "name")
+UPCOMING_TIME_TEXT_KEYS = (
+    "time_text", "time_label", "schedule_text", "timing_text", "when", "eta_text",
+    "scheduled_for_text",
+)
+UPCOMING_FLAG_KEYS = (
+    "scheduled", "is_scheduled", "is_upcoming", "has_upcoming", "has_upcoming_reset",
+    "pending", "announced",
+)
 
 
 def iter_candidate_containers(status: Dict[str, Any]) -> Iterable[Tuple[str, Dict[str, Any]]]:
-    for key in UPCOMING_CONTAINER_KEYS:
-        v = status.get(key)
-        if isinstance(v, dict):
-            yield key, v
+    wanted = {normalize_key(k) for k in UPCOMING_CONTAINER_KEYS}
+
+    def yield_from(parent: Dict[str, Any], prefix: str = "") -> Iterable[Tuple[str, Dict[str, Any]]]:
+        for key, value in parent.items():
+            if isinstance(value, dict) and normalize_key(key) in wanted:
+                name = f"{prefix}.{key}" if prefix else str(key)
+                yield name, value
+
+    yield from yield_from(status)
     data = status.get("data")
     if isinstance(data, dict):
-        for key in UPCOMING_CONTAINER_KEYS:
-            v = data.get(key)
-            if isinstance(v, dict):
-                yield f"data.{key}", v
-    # Some APIs flatten the next-reset forecast into top-level fields.
-    flat_keys = set(k.lower() for k in status.keys())
-    if flat_keys.intersection(set(EXACT_TIME_KEYS + WINDOW_TIME_KEYS + ("chance_percent", "probability", "confidence"))):
+        yield from yield_from(data, "data")
+
+    # Some API versions flatten forecast/schedule fields into the root object.
+    root_signal_keys = (
+        *EXACT_TIME_KEYS, *WINDOW_TIME_KEYS, *UPCOMING_FLAG_KEYS,
+        "chance_percent", "probability", "confidence", "schedule_status",
+        "upcoming_reset_type",
+    )
+    flat_keys = {normalize_key(k) for k in status.keys()}
+    if flat_keys.intersection({normalize_key(k) for k in root_signal_keys}):
         yield "root", status
+
+
+def boolish(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on", "scheduled", "pending", "upcoming"}
+    return False
+
+
+def looks_like_future_signal(*values: Any) -> bool:
+    text = " ".join(str(v) for v in values if v not in (None, "")).lower()
+    phrases = (
+        "scheduled", "upcoming", "pending", "time to be announced", "to be announced",
+        "tba", "coming", "next reset", "will reset", "will give", "will credit",
+        "will do", "lands", "landing", "scheduled reset",
+    )
+    return any(p in text for p in phrases)
 
 
 def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> Optional[Upcoming]:
@@ -375,6 +431,7 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
         ts: Optional[dt.datetime] = None
         raw_field = ""
         timing_kind = "forecast_window"
+
         val, nested_path = deep_first(d, EXACT_TIME_KEYS)
         maybe = parse_time(val)
         if maybe:
@@ -384,29 +441,62 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
             maybe = parse_time(val)
             if maybe:
                 ts, raw_field, timing_kind = maybe, f"{container_name}.{nested_path}", "forecast_window"
-        if ts is None or ts <= now:
+        if ts is not None and ts <= now:
             continue
+
+        event_type_raw, _ = deep_first(d, UPCOMING_TYPE_KEYS)
+        status_raw, _ = deep_first(d, UPCOMING_STATUS_KEYS)
+        title_raw, _ = deep_first(d, UPCOMING_TITLE_KEYS)
+        time_text_raw, _ = deep_first(d, UPCOMING_TIME_TEXT_KEYS)
+        flag_raw, _ = deep_first(d, UPCOMING_FLAG_KEYS)
         chance_raw, _ = deep_first(d, ["chance_percent", "probability_percent", "chance", "probability", "percent", "likelihood_percent"])
         chance = numeric(chance_raw)
         if chance is not None and 0 <= chance <= 1:
             chance *= 100
         confidence_raw, _ = deep_first(d, ["confidence", "confidence_label", "level", "signal"])
         window_raw, _ = deep_first(d, ["window_label", "window", "horizon", "within", "time_window"])
-        message_raw, _ = deep_first(d, ["message", "text", "reason", "summary", "hint", "source_text", "description"])
-        source_raw, _ = deep_first(d, ["source_url", "url", "x_url", "tweet_url", "post_url"])
+        message_raw, _ = deep_first(d, ["message", "text", "reason", "summary", "hint", "source_text", "description", "announcement"])
+        source_url = nested_source_url(d)
+
+        event_type = str(event_type_raw).strip() if event_type_raw is not None else ""
+        status_text = str(status_raw).strip() if status_raw is not None else ""
+        title = str(title_raw).strip() if title_raw is not None else ""
+        time_text = str(time_text_raw).strip() if time_text_raw is not None else ""
+        message = str(message_raw).strip() if message_raw is not None else ""
+
+        # A scheduled reset is useful information even when the upstream tracker has
+        # not published an exact timestamp yet (e.g. "Time to be announced").
+        if ts is None:
+            meaningful = any((event_type, status_text, title, time_text, message, source_url, chance is not None))
+            future_signal = boolish(flag_raw) or looks_like_future_signal(
+                container_name, event_type, status_text, title, time_text, message
+            )
+            if not meaningful or not future_signal:
+                continue
+            timing_kind = "scheduled_tba"
+            if not time_text:
+                time_text = "Time to be announced"
+
         found.append(Upcoming(
             timestamp=ts,
             timing_kind=timing_kind,
+            event_type=event_type,
+            status=status_text,
+            title=title,
+            time_text=time_text,
             chance_percent=chance,
             confidence=str(confidence_raw).strip() if confidence_raw is not None else "",
             window_label=str(window_raw).strip() if window_raw is not None and not isinstance(window_raw, dict) else "",
-            message=str(message_raw).strip() if message_raw is not None else "",
-            source_url=str(source_raw).strip() if source_raw is not None else "",
+            message=message,
+            source_url=source_url,
             raw_field=raw_field,
         ))
     if not found:
         return None
-    found.sort(key=lambda u: u.timestamp or dt.datetime.max.replace(tzinfo=UTC))
+
+    # Exact/forecast times sort before TBA signals. If all are TBA, preserve the
+    # API/container order because that is the tracker's own priority.
+    found.sort(key=lambda u: (u.timestamp is None, u.timestamp or dt.datetime.max.replace(tzinfo=UTC)))
     return found[0]
 
 
@@ -610,6 +700,33 @@ def safe_text(s: str, max_len: int = 900) -> str:
     return s if len(s) <= max_len else s[:max_len - 1] + "…"
 
 
+def upcoming_status_label(upcoming: Upcoming) -> str:
+    if upcoming.title:
+        return upcoming.title
+    parts: List[str] = []
+    if upcoming.event_type:
+        event_type = upcoming.event_type.replace("_", " ").strip()
+        parts.append(event_type[:1].upper() + event_type[1:])
+    if upcoming.status:
+        status = upcoming.status.replace("_", " ").strip()
+        if not parts or normalize_key(status) not in normalize_key(" ".join(parts)):
+            parts.append(status)
+    if parts:
+        label = " ".join(parts)
+        if "reset" not in label.lower() and upcoming.event_type:
+            label = label.split()[0] + " reset" + (" " + " ".join(label.split()[1:]) if len(label.split()) > 1 else "")
+        return label
+    return "Reset scheduled" if upcoming.timestamp is None else "Upcoming reset"
+
+
+def append_upcoming_links(lines: List[str], upcoming: Upcoming) -> None:
+    if upcoming.source_url:
+        lines.append(f"🔗 公告：{upcoming.source_url}")
+    tracker = DEFAULT_API_BASE + "/"
+    if upcoming.source_url.rstrip("/") != tracker.rstrip("/"):
+        lines.append(f"🌐 Codex Resets：{tracker}")
+
+
 def format_manual(snapshot: Snapshot) -> str:
     lines = ["🔎 Codex Reset 即時查詢", "━━━━━━━━━━━━━━"]
     lines.append(f"🛰️ 檢查時間：{fmt_local(snapshot.checked_at)}")
@@ -627,26 +744,29 @@ def format_manual(snapshot: Snapshot) -> str:
     else:
         lines += ["", "ℹ️ 最近一次 Reset：API 未提供可解析資料"]
     if snapshot.upcoming:
-        label = "預告/估計時間" if snapshot.upcoming.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
-        lines += [
-            "",
-            "🔮 尚未發生的 Reset 訊號",
-            f"🕒 {label}：{fmt_local(snapshot.upcoming.timestamp)}",
-            f"⏳ 距離現在：{fmt_remaining(snapshot.upcoming.timestamp, snapshot.checked_at)}",
-        ]
-        if snapshot.upcoming.chance_percent is not None:
-            lines.append(f"🎯 機率：{snapshot.upcoming.chance_percent:g}%")
-        if snapshot.upcoming.confidence:
-            lines.append(f"📊 信心：{snapshot.upcoming.confidence}")
-        if snapshot.upcoming.window_label:
-            lines.append(f"🪟 Window：{snapshot.upcoming.window_label}")
-        if snapshot.upcoming.message:
-            lines.append(f"💬 訊號：{safe_text(snapshot.upcoming.message)}")
-        if snapshot.upcoming.source_url:
-            lines.append(f"🔗 來源：{snapshot.upcoming.source_url}")
+        u = snapshot.upcoming
+        lines += ["", "🔮 尚未發生的 Reset 訊號"]
+        lines.append(f"📌 狀態：{upcoming_status_label(u)}")
+        if u.event_type:
+            lines.append(f"🏷️ 類型：{u.event_type}")
+        if u.timestamp is None:
+            lines.append(f"🕒 時間：尚未公布（{u.time_text or 'Time to be announced'}）")
+        else:
+            label = "預告/估計時間" if u.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
+            lines.append(f"🕒 {label}：{fmt_local(u.timestamp)}")
+            lines.append(f"⏳ 距離現在：{fmt_remaining(u.timestamp, snapshot.checked_at)}")
+        if u.chance_percent is not None:
+            lines.append(f"🎯 機率：{u.chance_percent:g}%")
+        if u.confidence:
+            lines.append(f"📊 信心：{u.confidence}")
+        if u.window_label:
+            lines.append(f"🪟 Window：{u.window_label}")
+        if u.message:
+            lines.append(f"💬 訊號：{safe_text(u.message)}")
+        append_upcoming_links(lines, u)
         lines.append("⚠️ 此為第三方公開追蹤/預測訊號，不等同 OpenAI 對個人帳戶的保證時間。")
     else:
-        lines += ["", "🌙 尚未偵測到未來 Reset 的可解析時間訊號。"]
+        lines += ["", "🌙 尚未偵測到未來 Reset 訊號。"]
     if snapshot.status_error:
         lines += ["", f"⚠️ status API：{safe_text(snapshot.status_error, 300)}"]
     if snapshot.resets_error:
@@ -655,14 +775,20 @@ def format_manual(snapshot: Snapshot) -> str:
 
 
 def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime) -> str:
-    label = "預告/估計時間" if upcoming.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
     lines = [
         "🚨 Codex Reset Watch",
         "━━━━━━━━━━━━━━",
         "🔮 發現尚未發生的 Reset 訊號",
-        f"🕒 {label}：{fmt_local(upcoming.timestamp)}",
-        f"⏳ 距離現在：{fmt_remaining(upcoming.timestamp, checked_at)}",
+        f"📌 狀態：{upcoming_status_label(upcoming)}",
     ]
+    if upcoming.event_type:
+        lines.append(f"🏷️ 類型：{upcoming.event_type}")
+    if upcoming.timestamp is None:
+        lines.append(f"🕒 時間：尚未公布（{upcoming.time_text or 'Time to be announced'}）")
+    else:
+        label = "預告/估計時間" if upcoming.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
+        lines.append(f"🕒 {label}：{fmt_local(upcoming.timestamp)}")
+        lines.append(f"⏳ 距離現在：{fmt_remaining(upcoming.timestamp, checked_at)}")
     if upcoming.chance_percent is not None:
         lines.append(f"🎯 機率：{upcoming.chance_percent:g}%")
     if upcoming.confidence:
@@ -671,8 +797,7 @@ def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime) -> str:
         lines.append(f"🪟 Window：{upcoming.window_label}")
     if upcoming.message:
         lines.append(f"💬 訊號：{safe_text(upcoming.message)}")
-    if upcoming.source_url:
-        lines.append(f"🔗 來源：{upcoming.source_url}")
+    append_upcoming_links(lines, upcoming)
     lines += [
         f"🛰️ 檢查時間：{fmt_local(checked_at)}",
         "⚠️ 第三方公開追蹤/預測，不代表你的個人 Codex 額度一定會在該時間重置。",
