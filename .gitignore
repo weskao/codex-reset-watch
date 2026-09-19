@@ -1,6 +1,291 @@
-.venv/
+# ============================================================
+# codex-reset-watch
+# Python + uv
+# macOS / Windows / Linux
+# ============================================================
+
+
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+
 __pycache__/
 *.py[cod]
-.DS_Store
-dist/
+*$py.class
+*.so
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python packaging / build
 build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+
+# ------------------------------------------------------------
+# uv
+# ------------------------------------------------------------
+
+# uv local cache
+.uv/
+
+# Keep these tracked:
+# uv.lock
+# .python-version
+
+
+# ------------------------------------------------------------
+# Tests / Coverage
+# ------------------------------------------------------------
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage.json
+
+.tox/
+.nox/
+
+*.cover
+*.py,cover
+.hypothesis/
+
+
+# ------------------------------------------------------------
+# Type checkers / linters
+# ------------------------------------------------------------
+
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+.pyre/
+.pytype/
+
+.ruff_cache/
+
+.pyright/
+
+
+# ------------------------------------------------------------
+# Runtime / Logs / Temporary files
+# ------------------------------------------------------------
+
+*.log
+*.log.*
+logs/
+log/
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+
+tmp/
+temp/
+
+*.pid
+*.pid.lock
+
+
+# ------------------------------------------------------------
+# Secrets / Environment variables
+# ------------------------------------------------------------
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+secrets/
+credentials/
+
+
+# ------------------------------------------------------------
+# Local application state
+# ------------------------------------------------------------
+
+state.json
+config.local.json
+*.state.json
+
+runtime/
+data/
+
+
+# ------------------------------------------------------------
+# macOS
+# ------------------------------------------------------------
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# AFP share files
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+
+# ------------------------------------------------------------
+# Windows
+# ------------------------------------------------------------
+
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+Desktop.ini
+
+$RECYCLE.BIN/
+
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# Windows dump files
+*.dmp
+
+
+# ------------------------------------------------------------
+# Linux
+# ------------------------------------------------------------
+
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+
+# ------------------------------------------------------------
+# Visual Studio Code
+# ------------------------------------------------------------
+
+.vscode/
+
+# If you later want to share selected VS Code settings:
+# .vscode/*
+# !.vscode/settings.json
+# !.vscode/extensions.json
+# !.vscode/tasks.json
+# !.vscode/launch.json
+
+
+# ------------------------------------------------------------
+# JetBrains IDEs
+# PyCharm / IntelliJ / WebStorm
+# ------------------------------------------------------------
+
+.idea/
+*.iml
+*.iws
+*.ipr
+
+
+# ------------------------------------------------------------
+# Vim / Neovim
+# ------------------------------------------------------------
+
+*.swp
+*.swo
+*.swn
+Session.vim
+.netrwhist
+
+
+# ------------------------------------------------------------
+# Emacs
+# ------------------------------------------------------------
+
+*~
+\#*\#
+.\#*
+.dir-locals.el
+
+
+# ------------------------------------------------------------
+# Archives generated locally
+# ------------------------------------------------------------
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+
+# ------------------------------------------------------------
+# Project-specific local artifacts
+# ------------------------------------------------------------
+
+# launchd-generated local plist copies, if generated inside repo
+generated/
+generated-plists/
+
+# Local API response/debug dumps
+api-dumps/
+debug/
+*.debug.json
+
+# Local test output
+test-results/
