@@ -73,4 +73,30 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(e.timestamp.strftime("%Y-%m-%dT%H:%M:%S"), "2026-09-12T08:09:17")
         self.assertEqual(e.source_url, "https://x.com/thsottiaux/status/2098685367058612394")
 
+    def test_scheduled_upcoming_without_exact_time_is_kept(self):
+        now = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        u = crw.upcoming_from_status(self.fixture("status_scheduled_tba.json"), now=now)
+        self.assertIsNotNone(u)
+        self.assertIsNone(u.timestamp)
+        self.assertEqual(u.timing_kind, "scheduled_tba")
+        self.assertEqual(u.event_type, "banked")
+        self.assertEqual(u.status, "scheduled")
+        self.assertEqual(u.title, "Banked reset scheduled")
+        self.assertEqual(u.time_text, "Time to be announced")
+        self.assertEqual(u.source_url, "https://x.com/thsottiaux/status/2101352781219258527")
+
+    def test_scheduled_flag_without_time_uses_tba_fallback(self):
+        data = {
+            "nextReset": {
+                "isScheduled": True,
+                "resetType": "banked",
+                "sourceUrl": "https://x.com/thsottiaux/status/2101352781219258527",
+            }
+        }
+        u = crw.upcoming_from_status(data, now=dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc))
+        self.assertIsNotNone(u)
+        self.assertIsNone(u.timestamp)
+        self.assertEqual(u.time_text, "Time to be announced")
+        self.assertEqual(crw.upcoming_status_label(u), "Banked reset")
+
 if __name__ == "__main__": unittest.main()

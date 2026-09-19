@@ -1,0 +1,24 @@
+{
+  "latest_reset": {
+    "id": "2098685367058612394",
+    "publishedAt": "2026-09-12T08:09:17Z",
+    "type": "regular",
+    "message": "Reset all propagated. Sweet dreams.",
+    "source": {
+      "type": "x_post",
+      "author": "thsottiaux",
+      "url": "https://x.com/thsottiaux/status/2098685367058612394"
+    }
+  },
+  "upcomingReset": {
+    "title": "Banked reset scheduled",
+    "resetType": "banked",
+    "status": "scheduled",
+    "timeLabel": "Time to be announced",
+    "source": {
+      "type": "x_post",
+      "author": "thsottiaux",
+      "url": "https://x.com/thsottiaux/status/2101352781219258527"
+    }
+  }
+}

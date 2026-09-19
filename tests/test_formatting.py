@@ -20,4 +20,39 @@ class FormattingTests(unittest.TestCase):
             self.assertEqual(crw.display_path("/opt/homebrew/bin/python3"), "/opt/homebrew/bin/python3")
         finally:
             crw.home = original
+    def test_manual_output_shows_scheduled_reset_even_without_timestamp(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(
+            timestamp=None,
+            timing_kind="scheduled_tba",
+            event_type="banked",
+            status="scheduled",
+            title="Banked reset scheduled",
+            time_text="Time to be announced",
+            source_url="https://x.com/thsottiaux/status/2101352781219258527",
+        )
+        snapshot = crw.Snapshot(checked, None, upcoming, True, True)
+        text = crw.format_manual(snapshot)
+        self.assertIn("📌 狀態：Banked reset scheduled", text)
+        self.assertIn("🏷️ 類型：banked", text)
+        self.assertIn("🕒 時間：尚未公布（Time to be announced）", text)
+        self.assertNotIn("⏳ 距離現在：", text)
+        self.assertIn("🔗 公告：https://x.com/thsottiaux/status/2101352781219258527", text)
+        self.assertIn("🌐 Codex Resets：https://codex-resets.com/", text)
+
+    def test_tba_upcoming_notice_has_no_fake_countdown(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(
+            timing_kind="scheduled_tba",
+            event_type="banked",
+            status="scheduled",
+            title="Banked reset scheduled",
+            time_text="Time to be announced",
+            source_url="https://x.com/thsottiaux/status/2101352781219258527",
+        )
+        text = crw.format_upcoming_notice(upcoming, checked)
+        self.assertIn("Banked reset scheduled", text)
+        self.assertIn("Time to be announced", text)
+        self.assertNotIn("距離現在", text)
+
 if __name__ == "__main__": unittest.main()
