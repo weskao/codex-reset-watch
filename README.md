@@ -247,7 +247,19 @@ Example:
 ⏳ 距離現在：2 Days 1 hour 35 minutes
 ```
 
-## 9. Logs and disk usage
+## 9. Event parsing resilience
+
+`event_from_dict` tolerates upstream API schema drift instead of assuming one fixed shape:
+
+- Timestamp and source-URL keys match both `snake_case` and `camelCase` variants
+  (`created_at`/`createdAt`, `source_url`/`sourceUrl`, etc.), searched up to 3 levels deep so a
+  nested `source: {url: ...}` object resolves correctly.
+- If no timestamp field is present or parseable, the event ID or source URL is checked for an
+  embedded X/Twitter Snowflake post ID, which encodes its own creation time. This keeps
+  historical reset times available even if the upstream schema changes or omits its timestamp
+  field. API-provided timestamps always take priority over this fallback.
+
+## 10. Logs and disk usage
 
 Application logs:
 
@@ -267,7 +279,7 @@ Default config limits each rotated application/API log to roughly 2 MiB with 3 b
 
 Launchd stdout/stderr logs are separately trimmed by the installer when they exceed 512 KiB.
 
-## 10. Tests
+## 11. Tests
 
 Run everything through uv:
 
@@ -284,7 +296,7 @@ make test-integration
 
 The integration test starts a local HTTP server and exercises the real HTTP client and response normalization path without contacting the production API.
 
-## 11. launchd status
+## 12. launchd status
 
 ```bash
 make launch-status
@@ -297,7 +309,7 @@ launchctl print gui/$(id -u)/com.wes.codex-reset-watch.daily
 launchctl print gui/$(id -u)/com.wes.codex-reset-watch.monitor
 ```
 
-## 12. Uninstall
+## 13. Uninstall
 
 ```bash
 cd ~/Documents/Workspace/codex-reset-watch
