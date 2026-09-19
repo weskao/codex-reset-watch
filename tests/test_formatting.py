@@ -1,4 +1,4 @@
-import sys, datetime as dt, importlib.util, pathlib, unittest
+import sys, datetime as dt, importlib.util, os, pathlib, unittest
 import codex_reset_watch as crw
 class FormattingTests(unittest.TestCase):
     def test_utc8(self):
@@ -14,10 +14,16 @@ class FormattingTests(unittest.TestCase):
     def test_display_path_uses_tilde_for_home(self):
         original = crw.home
         try:
-            crw.home = lambda: pathlib.Path("/Users/example")
-            self.assertEqual(crw.display_path("/Users/example"), "~")
-            self.assertEqual(crw.display_path("/Users/example/Library/Logs/codex-reset-watch"), "~/Library/Logs/codex-reset-watch")
-            self.assertEqual(crw.display_path("/opt/homebrew/bin/python3"), "/opt/homebrew/bin/python3")
+            # Built with pathlib/os.sep rather than literal "/" so the fixture
+            # and the expectation use the same separator on every OS.
+            root = pathlib.Path(pathlib.Path.cwd().anchor)
+            fake_home = root / "Users" / "example"
+            crw.home = lambda: fake_home
+            self.assertEqual(crw.display_path(fake_home), "~")
+            nested = fake_home / "Library" / "Logs" / "codex-reset-watch"
+            self.assertEqual(crw.display_path(nested), "~" + os.sep + os.path.join("Library", "Logs", "codex-reset-watch"))
+            outside = root / "opt" / "homebrew" / "bin" / "python3"
+            self.assertEqual(crw.display_path(outside), str(outside))
         finally:
             crw.home = original
     def test_manual_output_shows_scheduled_reset_even_without_timestamp(self):

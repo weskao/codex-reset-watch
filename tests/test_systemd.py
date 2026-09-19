@@ -35,8 +35,8 @@ class SystemdTests(unittest.TestCase):
             self.render(out, logs, program)
             daily_service = configparser.ConfigParser(strict=False)
             daily_service.read(out / "codex-reset-watch-daily.service")
-            self.assertEqual(daily_service["Service"]["StandardOutput"], f"append:{logs}/systemd-daily.out.log")
-            self.assertEqual(daily_service["Service"]["StandardError"], f"append:{logs}/systemd-daily.err.log")
+            self.assertEqual(daily_service["Service"]["StandardOutput"], f"append:{logs / 'systemd-daily.out.log'}")
+            self.assertEqual(daily_service["Service"]["StandardError"], f"append:{logs / 'systemd-daily.err.log'}")
 
 if __name__ == "__main__":
     unittest.main()
