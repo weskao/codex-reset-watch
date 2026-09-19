@@ -248,16 +248,70 @@ def list_from_payload(payload: Any) -> List[Any]:
     return []
 
 
+EVENT_TIME_KEYS = (
+    "timestamp", "occurred_at", "occurredAt", "published_at", "publishedAt",
+    "created_at", "createdAt", "reset_at", "resetAt", "posted_at", "postedAt",
+    "announced_at", "announcedAt", "date", "time", "datetime",
+)
+SOURCE_URL_KEYS = (
+    "source_url", "sourceUrl", "url", "x_url", "xUrl", "tweet_url", "tweetUrl",
+    "post_url", "postUrl", "href", "link",
+)
+
+
+def x_snowflake_time(value: Any) -> Optional[dt.datetime]:
+    """Decode an X/Twitter snowflake ID into its UTC creation timestamp.
+
+    This is a fallback only. API-provided timestamps always win. X snowflakes encode
+    milliseconds since 2010-11-04T01:42:54.657Z in the upper bits.
+    """
+    if value is None:
+        return None
+    m = re.search(r"(?:/status/)?(\d{15,22})", str(value))
+    if not m:
+        return None
+    try:
+        snowflake = int(m.group(1))
+        millis = (snowflake >> 22) + 1288834974657
+        parsed = dt.datetime.fromtimestamp(millis / 1000.0, tz=UTC)
+    except (ValueError, OSError, OverflowError):
+        return None
+    # Reject obviously invalid IDs/times so an unrelated numeric identifier cannot
+    # silently become an event timestamp.
+    if parsed < dt.datetime(2010, 11, 4, tzinfo=UTC) or parsed > now_utc() + dt.timedelta(days=2):
+        return None
+    return parsed
+
+
+def nested_source_url(d: Dict[str, Any]) -> str:
+    direct = first_value(d, SOURCE_URL_KEYS)
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    source = d.get("source")
+    if isinstance(source, dict):
+        value, _ = deep_first(source, SOURCE_URL_KEYS, max_depth=3)
+        if isinstance(value, str):
+            return value.strip()
+    return ""
+
+
 def event_from_dict(d: Dict[str, Any]) -> Event:
-    ts = parse_time(first_value(d, [
-        "timestamp", "occurred_at", "published_at", "created_at", "reset_at", "date", "time", "datetime"
-    ]))
+    # The upstream API has changed shape over time (snake_case/camelCase and nested
+    # source objects). Search a few levels deep instead of assuming one fixed schema.
+    ts_value, _ = deep_first(d, EVENT_TIME_KEYS, max_depth=3)
+    ts = parse_time(ts_value)
+    event_id = first_str(d, ["id", "event_id", "eventId", "reset_id", "resetId", "tweet_id", "tweetId", "post_id", "postId"])
+    source_url = nested_source_url(d)
+    if ts is None:
+        # Public X post IDs carry their creation timestamp. This keeps historical
+        # event time available even if codex-resets.com omits/renames its time field.
+        ts = x_snowflake_time(source_url) or x_snowflake_time(event_id)
     return Event(
-        event_id=first_str(d, ["id", "event_id", "reset_id", "tweet_id", "post_id"]),
+        event_id=event_id,
         timestamp=ts,
-        event_type=first_str(d, ["type", "event_type", "reset_type", "kind", "category", "status"]),
+        event_type=first_str(d, ["type", "event_type", "eventType", "reset_type", "resetType", "kind", "category", "status"]),
         message=first_str(d, ["message", "text", "content", "body", "announcement", "description", "summary"]),
-        source_url=first_str(d, ["source_url", "url", "x_url", "tweet_url", "post_url", "source"]),
+        source_url=source_url,
     )
 
 

@@ -42,4 +42,35 @@ class ParserTests(unittest.TestCase):
         self.assertIsNotNone(t)
         self.assertEqual(t.tzinfo, dt.timezone.utc)
 
+    def test_event_nested_source_and_camelcase_time(self):
+        data = {
+            "id": "2098685367058612394",
+            "type": "regular",
+            "publishedAt": "2026-09-12T08:09:17Z",
+            "message": "Reset all propagated. Sweet dreams.",
+            "source": {
+                "type": "x_post",
+                "author": "thsottiaux",
+                "url": "https://x.com/thsottiaux/status/2098685367058612394",
+            },
+        }
+        e = crw.event_from_dict(data)
+        self.assertEqual(crw.iso_utc(e.timestamp), "2026-09-12T08:09:17Z")
+        self.assertEqual(e.source_url, "https://x.com/thsottiaux/status/2098685367058612394")
+
+    def test_event_x_snowflake_time_fallback(self):
+        data = {
+            "type": "regular",
+            "message": "Reset all propagated. Sweet dreams.",
+            "source": {
+                "type": "x_post",
+                "author": "thsottiaux",
+                "url": "https://x.com/thsottiaux/status/2098685367058612394",
+            },
+        }
+        e = crw.event_from_dict(data)
+        self.assertIsNotNone(e.timestamp)
+        self.assertEqual(e.timestamp.strftime("%Y-%m-%dT%H:%M:%S"), "2026-09-12T08:09:17")
+        self.assertEqual(e.source_url, "https://x.com/thsottiaux/status/2098685367058612394")
+
 if __name__ == "__main__": unittest.main()
