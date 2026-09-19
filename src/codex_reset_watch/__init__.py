@@ -15,7 +15,6 @@ import os
 import pathlib
 import re
 import shutil
-import subprocess
 import sys
 import time
 import urllib.error
@@ -23,6 +22,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+from . import telegram_notify
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = "https://codex-resets.com"
@@ -67,7 +68,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "status_path": "/api/v1/status",
     "resets_path": "/api/v1/resets?limit=20&order=desc",
     "timezone_label": "UTC+8",
-    "telegram_sender": "~/.claude/scripts/tg-send.sh",
     "request_timeout_seconds": 15,
     "request_retries": 3,
     "daily_hour": 10,
@@ -665,9 +665,6 @@ def load_config() -> Dict[str, Any]:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
                 cfg.update(raw)
-    # Environment is intentionally limited to operational overrides useful for tests/recovery.
-    if os.environ.get("CRW_TG_SEND"):
-        cfg["telegram_sender"] = os.environ["CRW_TG_SEND"]
     return cfg
 
 
@@ -822,23 +819,14 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime) -> str:
 
 
 def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
-    sender = os.path.expanduser(str(cfg.get("telegram_sender", "~/.claude/scripts/tg-send.sh")))
-    if not os.path.isfile(sender) or not os.access(sender, os.X_OK):
-        logger.event("ERROR", "telegram_sender_unavailable", path=sender)
+    token = os.environ.get("TG_BOT_TOKEN", "")
+    chat_id = os.environ.get("TG_CHAT_ID", "")
+    if not token or not chat_id:
+        logger.event("ERROR", "telegram_credentials_missing")
         return False
-    try:
-        proc = subprocess.run([sender, "send", message], text=True, capture_output=True, timeout=45)
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.event("ERROR", "telegram_exception", error=str(e), path=sender)
-        return False
-    logger.event(
-        "INFO" if proc.returncode == 0 else "ERROR",
-        "telegram_send",
-        returncode=proc.returncode,
-        stderr=safe_text(proc.stderr, 800),
-        stdout=safe_text(proc.stdout, 800),
-    )
-    return proc.returncode == 0
+    ok = telegram_notify.send_telegram(token, chat_id, message)
+    logger.event("INFO" if ok else "ERROR", "telegram_send", ok=ok)
+    return ok
 
 
 def snapshot_to_log(snapshot: Snapshot) -> Dict[str, Any]:
@@ -956,14 +944,10 @@ def doctor() -> int:
     checks.append(("Python >= 3.11", py_ok, f"{sys.version.split()[0]} ({display_path(sys.executable)})"))
     cfg_path = default_config_path()
     checks.append(("Config", cfg_path.exists(), display_path(cfg_path)))
-    sender = pathlib.Path(os.path.expanduser(str(cfg.get("telegram_sender", ""))))
-    checks.append(("Telegram sender executable", sender.is_file() and os.access(sender, os.X_OK), display_path(sender)))
-    if sender.is_file() and os.access(sender, os.X_OK):
-        try:
-            proc = subprocess.run([str(sender), "preflight"], capture_output=True, text=True, timeout=30)
-            checks.append(("Telegram preflight", proc.returncode == 0, safe_text(proc.stderr or proc.stdout, 180)))
-        except Exception as e:
-            checks.append(("Telegram preflight", False, str(e)))
+    has_token = bool(os.environ.get("TG_BOT_TOKEN"))
+    has_chat = bool(os.environ.get("TG_CHAT_ID"))
+    checks.append(("TG_BOT_TOKEN set", has_token, "set" if has_token else "unset"))
+    checks.append(("TG_CHAT_ID set", has_chat, "set" if has_chat else "unset"))
     client = APIClient(cfg, logger)
     status, err = client.get_json(str(cfg.get("status_path", "/api/v1/status")))
     checks.append(("Codex Resets status API", status is not None, "OK" if status is not None else err))

@@ -3,7 +3,6 @@
   "status_path": "/api/v1/status",
   "resets_path": "/api/v1/resets?limit=20&order=desc",
   "timezone_label": "UTC+8",
-  "telegram_sender": "~/.claude/scripts/tg-send.sh",
   "request_timeout_seconds": 15,
   "request_retries": 3,
   "daily_hour": 10,

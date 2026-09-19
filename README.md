@@ -1,6 +1,6 @@
 # Codex Reset Watch
 
-macOS `launchd` monitor for `codex-resets.com`, with Telegram notifications through the existing `~/.claude/scripts/tg-send.sh` sender.
+macOS `launchd` monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API (`src/codex_reset_watch/telegram_notify.py`, stdlib-only).
 
 This version is **uv-native**:
 
@@ -50,6 +50,13 @@ uv --version
 ```
 
 ## 2. Install Codex Reset Watch
+
+Export Telegram credentials first — `make install` bakes them into the generated LaunchAgent plists, since launchd jobs don't inherit your shell env:
+
+```bash
+export TG_BOT_TOKEN="..."
+export TG_CHAT_ID="..."
+```
 
 From the extracted project folder:
 
@@ -213,19 +220,14 @@ The program uses a lock so overlapping daily/monitor invocations do not corrupt 
 
 ## 7. Telegram
 
-Default sender:
-
-```text
-~/.claude/scripts/tg-send.sh
-```
-
-The project does not copy or hardcode Telegram credentials. Your existing sender continues to resolve `TG_BOT_TOKEN`, Keychain values, `TG_CHAT_ID`, and/or its access JSON at runtime.
-
-Test it directly:
+Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script dependency. Set both env vars before running:
 
 ```bash
-~/.claude/scripts/tg-send.sh preflight
+export TG_BOT_TOKEN="..."
+export TG_CHAT_ID="..."
 ```
+
+The project does not copy or hardcode credentials; both vars are read at runtime only. `crw doctor` reports whether they're set.
 
 Then:
 

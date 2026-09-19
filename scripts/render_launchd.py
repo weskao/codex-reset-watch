@@ -2,7 +2,7 @@
 import argparse, os, pathlib, plistlib
 
 
-def build(program, args, label, stdout, stderr, calendar=None, run_at_load=True):
+def build(program, args, label, stdout, stderr, calendar=None, run_at_load=True, env=None):
     d = {
         "Label": label,
         "ProgramArguments": [program] + args,
@@ -14,6 +14,8 @@ def build(program, args, label, stdout, stderr, calendar=None, run_at_load=True)
     }
     if calendar is not None:
         d["StartCalendarInterval"] = calendar
+    if env:
+        d["EnvironmentVariables"] = env
     return d
 
 
@@ -27,13 +29,16 @@ def main():
     program = os.path.abspath(os.path.expanduser(a.program))
     out = pathlib.Path(os.path.expanduser(a.out_dir)); out.mkdir(parents=True, exist_ok=True)
     log = pathlib.Path(os.path.expanduser(a.log_dir)); log.mkdir(parents=True, exist_ok=True)
+    # launchd jobs don't inherit the login shell env, so TG_BOT_TOKEN/TG_CHAT_ID must be
+    # baked into the plist at render time (from whatever env install.sh was run with).
+    env = {k: os.environ[k] for k in ("TG_BOT_TOKEN", "TG_CHAT_ID") if os.environ.get(k)}
     daily = build(program, ["daily"], "com.wes.codex-reset-watch.daily",
                   str(log / "launchd-daily.out.log"), str(log / "launchd-daily.err.log"),
-                  {"Hour": 10, "Minute": 0}, True)
+                  {"Hour": 10, "Minute": 0}, True, env)
     every2 = [{"Hour": h, "Minute": 5} for h in range(0,24,2)]
     monitor = build(program, ["monitor"], "com.wes.codex-reset-watch.monitor",
                     str(log / "launchd-monitor.out.log"), str(log / "launchd-monitor.err.log"),
-                    every2, True)
+                    every2, True, env)
     for name, data in [
         ("com.wes.codex-reset-watch.daily.plist", daily),
         ("com.wes.codex-reset-watch.monitor.plist", monitor),
