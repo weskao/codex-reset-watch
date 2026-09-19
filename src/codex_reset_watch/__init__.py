@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -23,7 +22,7 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import telegram_notify
+from . import filelock, paths, telegram_notify
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = "https://codex-resets.com"
@@ -52,15 +51,18 @@ def display_path(value: Any) -> str:
 
 
 def default_config_path() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("CRW_CONFIG", home() / "Library/Application Support/codex-reset-watch/config.json"))
+    override = os.environ.get("CRW_CONFIG")
+    return pathlib.Path(override) if override else paths.app_config_dir() / "config.json"
 
 
 def default_state_dir() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("CRW_STATE_DIR", home() / "Library/Application Support/codex-reset-watch"))
+    override = os.environ.get("CRW_STATE_DIR")
+    return pathlib.Path(override) if override else paths.app_state_dir()
 
 
 def default_log_dir() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("CRW_LOG_DIR", home() / "Library/Logs/codex-reset-watch"))
+    override = os.environ.get("CRW_LOG_DIR")
+    return pathlib.Path(override) if override else paths.app_log_dir()
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
@@ -574,21 +576,8 @@ class StateStore:
         os.chmod(tmp, 0o600)
         tmp.replace(self.path)
 
-    @contextlib.contextmanager
     def lock(self, blocking: bool = False):
-        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o600)
-        try:
-            flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-            try:
-                fcntl.flock(fd, flags)
-            except BlockingIOError:
-                yield False
-                return
-            yield True
-        finally:
-            with contextlib.suppress(OSError):
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
+        return filelock.lock(self.lock_path, blocking=blocking)
 
 
 class APIClient:
@@ -977,7 +966,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", aliases=["update"], help="立即查詢、更新狀態、輸出到 Terminal，預設同時 Telegram 通知")
     check.add_argument("--no-notify", action="store_true", help="只顯示，不傳 Telegram")
-    mon = sub.add_parser("monitor", help="launchd 每 2 小時背景掃描（只通知新資訊）")
+    mon = sub.add_parser("monitor", help="排程器每 2 小時背景掃描（只通知新資訊）")
     mon.add_argument("--no-notify", action="store_true")
     daily = sub.add_parser("daily", help="10:00 daily/catch-up 檢查")
     daily.add_argument("--force", action="store_true", help="忽略當日 10:00 gate，用於測試")

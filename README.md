@@ -1,6 +1,6 @@
 # Codex Reset Watch
 
-macOS `launchd` monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API (`src/codex_reset_watch/telegram_notify.py`, stdlib-only).
+Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API (`src/codex_reset_watch/telegram_notify.py`, stdlib-only).
 
 This version is **uv-native**:
 
@@ -10,37 +10,50 @@ This version is **uv-native**:
 - runtime: uv-managed Python
 - installed CLI: `uv tool install`
 - CLI entry points: `codex-reset-watch` and `crw`
-- launchd calls the installed uv-tool executable directly; it does **not** depend on shell activation or `.venv`
+- the OS scheduler calls the installed uv-tool executable directly; it does **not** depend on shell activation or `.venv`
+
+Native OS scheduling backend, chosen automatically by `scripts/install.py`:
+
+| OS | Scheduler | Renderer |
+|---|---|---|
+| macOS | `launchd` | `scripts/render_launchd.py` |
+| Linux | `systemd --user` timers | `scripts/render_systemd.py` |
+| Windows | Task Scheduler (`schtasks`) | `scripts/schtasks.py` |
 
 ## Installed paths
 
-| Purpose | Path |
-|---|---|
-| Project | `~/Documents/Workspace/codex-reset-watch` |
-| CLI | `~/scripts/codex-reset-watch` (symlinked to `/opt/homebrew/bin/codex-reset-watch`) |
-| Short CLI | `~/scripts/crw` (symlinked to `/opt/homebrew/bin/crw`) |
-| Config | `~/Library/Application Support/codex-reset-watch/config.json` |
-| State | `~/Library/Application Support/codex-reset-watch/state.json` |
-| Logs | `~/Library/Logs/codex-reset-watch/` |
-| Daily LaunchAgent | `~/Library/LaunchAgents/com.wes.codex-reset-watch.daily.plist` |
-| 2-hour monitor | `~/Library/LaunchAgents/com.wes.codex-reset-watch.monitor.plist` |
+| Purpose | macOS | Linux | Windows |
+|---|---|---|---|
+| Config | `~/Library/Application Support/codex-reset-watch/config.json` | `$XDG_CONFIG_HOME/codex-reset-watch/config.json` (default `~/.config/...`) | `%APPDATA%\codex-reset-watch\config.json` |
+| State | `~/Library/Application Support/codex-reset-watch/state.json` | `$XDG_STATE_HOME/codex-reset-watch/state.json` (default `~/.local/state/...`) | `%LOCALAPPDATA%\codex-reset-watch\state.json` |
+| Logs | `~/Library/Logs/codex-reset-watch/` | `$XDG_STATE_HOME/codex-reset-watch/log/` | `%LOCALAPPDATA%\codex-reset-watch\Logs\` |
+| Scheduler units | `~/Library/LaunchAgents/com.wes.codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
+| CLI | `~/scripts/codex-reset-watch` (symlinked to `/opt/homebrew/bin/codex-reset-watch`) | `~/scripts/codex-reset-watch` | `%USERPROFILE%\scripts\codex-reset-watch.exe` |
 
-> `~` is used in documentation and user-facing output. `launchd` plist files contain expanded absolute paths because `launchd` does not expand `~`.
+Resolution logic lives in `src/codex_reset_watch/paths.py`; override any of the three with `CRW_CONFIG`, `CRW_STATE_DIR`, `CRW_LOG_DIR`.
+
+> `~` is used in documentation and user-facing output. Scheduler job files/tasks contain expanded absolute paths — none of `launchd`/`systemd`/Task Scheduler expand `~`.
 
 ## 1. Install uv
 
 If `uv` is already installed, skip this section.
 
-Homebrew:
+macOS (Homebrew):
 
 ```bash
 brew install uv
 ```
 
-Or Astral's official installer:
+Linux/macOS (Astral's official installer):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 Verify:
@@ -51,29 +64,40 @@ uv --version
 
 ## 2. Install Codex Reset Watch
 
-Export Telegram credentials first — `make install` bakes them into the generated LaunchAgent plists, since launchd jobs don't inherit your shell env:
+Export Telegram credentials first — `scripts/install.py` bakes them into the generated scheduler job (macOS/Linux) or persists them into your user environment via `setx` (Windows), since none of the three schedulers inherit your shell env:
 
 ```bash
 export TG_BOT_TOKEN="..."
 export TG_CHAT_ID="..."
 ```
 
-From the extracted project folder:
+```powershell
+$env:TG_BOT_TOKEN = "..."
+$env:TG_CHAT_ID = "..."
+```
+
+From the extracted project folder, macOS/Linux:
 
 ```bash
 make test
 make install
 ```
 
-`make install` will:
+Windows (no `make` required):
 
-1. copy the project to `~/Documents/Workspace/codex-reset-watch`
+```powershell
+uv run python -m unittest discover -s tests -v
+uv run python scripts/install.py
+```
+
+`scripts/install.py` will:
+
+1. copy the project to `$CRW_INSTALL_DIR` (default `~/Documents/Workspace/codex-reset-watch`)
 2. run `uv python install 3.13`
 3. install the package as a persistent isolated uv tool
-4. put `codex-reset-watch` and `crw` in `~/scripts`, and symlink both into `/opt/homebrew/bin` (already on `PATH`, no `~/.zshrc` edit needed)
+4. put `codex-reset-watch` and `crw` in `~/scripts` (`%USERPROFILE%\scripts` on Windows); on macOS, also symlink both into `/opt/homebrew/bin` (already on `PATH`, no `~/.zshrc` edit needed)
 5. create config/state/log directories
-6. generate both LaunchAgent plist files
-7. bootstrap/reload both LaunchAgents
+6. register the native scheduler job for the current OS (launchd / systemd --user timers / Task Scheduler)
 
 Verify:
 
@@ -179,44 +203,41 @@ cd ~/Documents/Workspace/codex-reset-watch
 make tool-reinstall
 ```
 
-`make install` is preferred when `launchd` configuration or installer files also changed.
+`make install` (or `uv run python scripts/install.py` on Windows) is preferred when scheduler configuration or installer files also changed.
 
-## 6. launchd schedule
+## 6. Scheduler jobs
+
+Both jobs run at the same wall-clock times on every OS; only the mechanism differs.
 
 ### Daily job
 
-`com.wes.codex-reset-watch.daily`
-
-- scheduled for 10:00 local macOS time
-- `RunAtLoad=true`
-- Python-side daily gate prevents duplicate daily work
-- if the Mac sleeps through 10:00, `StartCalendarInterval` is eligible to run after wake
-- if the Mac was powered off and starts after 10:00, `RunAtLoad` plus the daily gate provides the catch-up path
+- runs at 10:00 local time
+- runs immediately at login/boot too (`RunAtLoad`/`Persistent`), so a missed 10:00 (machine asleep/off) catches up
+- Python-side daily gate (`last_daily_date` in state) prevents duplicate daily work even if the OS runs it more than once
 
 ### Monitor job
 
-`com.wes.codex-reset-watch.monitor`
+Runs every two hours at minute `05` (`00:05`, `02:05`, ... `22:05`).
 
-Runs every two hours at minute `05`:
+The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`) so overlapping daily/monitor invocations do not corrupt state or duplicate work.
 
-```text
-00:05
-02:05
-04:05
-06:05
-08:05
-10:05
-12:05
-14:05
-16:05
-18:05
-20:05
-22:05
-```
+### macOS — launchd
 
-It also has `RunAtLoad=true`.
+- `~/Library/LaunchAgents/com.wes.codex-reset-watch.daily.plist` (`StartCalendarInterval`)
+- `~/Library/LaunchAgents/com.wes.codex-reset-watch.monitor.plist` (12 `StartCalendarInterval` entries)
+- installer runs `launchctl bootstrap`/`enable` for both
 
-The program uses a lock so overlapping daily/monitor invocations do not corrupt state or duplicate work.
+### Linux — systemd --user timers
+
+- `~/.config/systemd/user/codex-reset-watch-daily.{service,timer}` (`OnCalendar=*-*-* 10:00:00`)
+- `~/.config/systemd/user/codex-reset-watch-monitor.{service,timer}` (`OnCalendar=*-*-* 0/2:05:00`)
+- installer runs `systemctl --user daemon-reload` then `enable --now` on both timers
+- requires a systemd user instance (lingering, if you want jobs to run without an active login session: `loginctl enable-linger $USER`)
+
+### Windows — Task Scheduler
+
+- tasks `CodexResetWatchDaily` (`/SC DAILY /ST 10:00`) and `CodexResetWatchMonitor` (`/SC HOURLY /MO 2 /ST 00:05`), created via `schtasks /Create`
+- `TG_BOT_TOKEN`/`TG_CHAT_ID` are persisted with `setx` into your user environment rather than passed as task arguments, since `schtasks /query /v` output is not a safe place for secrets
 
 ## 7. Telegram
 
@@ -279,54 +300,84 @@ Default config limits each rotated application/API log to roughly 2 MiB with 3 b
 }
 ```
 
-Launchd stdout/stderr logs are separately trimmed by the installer when they exceed 512 KiB.
+launchd stdout/stderr logs are separately trimmed to 256 KiB by the installer when they exceed 512 KiB (macOS only — `install.trim_launchd_logs`). systemd/journald and Windows Task Scheduler manage their own job-output retention.
 
 ## 11. Tests
 
-Run everything through uv:
+Run everything through uv (macOS/Linux):
 
 ```bash
 make test
 ```
 
-Individual groups:
+Windows:
+
+```powershell
+uv run python -m unittest discover -s tests -v
+```
+
+Individual groups (macOS/Linux):
 
 ```bash
 make test-unit
 make test-integration
 ```
 
-The integration test starts a local HTTP server and exercises the real HTTP client and response normalization path without contacting the production API.
+The integration test starts a local HTTP server and exercises the real HTTP client and response normalization path without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
 
-## 12. launchd status
+## 12. Scheduler status
+
+macOS:
 
 ```bash
 make launch-status
-```
-
-Or:
-
-```bash
+# or
 launchctl print gui/$(id -u)/com.wes.codex-reset-watch.daily
 launchctl print gui/$(id -u)/com.wes.codex-reset-watch.monitor
 ```
 
+Linux:
+
+```bash
+systemctl --user status codex-reset-watch-daily.timer codex-reset-watch-monitor.timer
+systemctl --user list-timers 'codex-reset-watch-*'
+```
+
+Windows:
+
+```powershell
+schtasks /Query /TN CodexResetWatchDaily /V /FO LIST
+schtasks /Query /TN CodexResetWatchMonitor /V /FO LIST
+```
+
 ## 13. Uninstall
+
+macOS/Linux:
 
 ```bash
 cd ~/Documents/Workspace/codex-reset-watch
 make uninstall
 ```
 
-This unloads/removes LaunchAgents and uninstalls the uv tool. Project files, config, state, and logs are intentionally retained.
+Windows:
 
-To remove retained data manually:
-
-```bash
-rm -rf ~/Library/Application\ Support/codex-reset-watch
-rm -rf ~/Library/Logs/codex-reset-watch
+```powershell
+uv run python scripts/uninstall.py
 ```
 
-## Why launchd does not call `uv run`
+This removes the scheduler job(s) for the current OS and uninstalls the uv tool. Project files, config, state, and logs are intentionally retained (path printed by the uninstaller).
 
-`uv run` is ideal for project development because it discovers the project, syncs the project environment when needed, and executes within that environment. For a long-running background setup, this project instead installs the CLI with `uv tool install` and lets launchd call the installed executable directly. That keeps each scheduled invocation small and avoids depending on the current working directory, shell startup files, PATH activation, or project `.venv` state.
+## 14. CI notifications
+
+`.github/workflows/ci.yml` runs the test matrix (macOS/Linux/Windows) on every push and PR, then a separate `notify-telegram` job sends a Telegram message only when the test job fails on a `push` (never on green runs, never on `pull_request`, to avoid pinging on forks/external PRs). Configure it once per repo:
+
+```bash
+gh secret set TELEGRAM_BOT_TOKEN
+gh secret set TELEGRAM_CHAT_ID
+```
+
+Both are independent of this project's own runtime `TG_BOT_TOKEN`/`TG_CHAT_ID` — the CI ones only ever see a failure alert with the repo/branch/commit and a link to the run; they never touch the app's monitoring data.
+
+## Why the installer does not call `uv run` for scheduled jobs
+
+`uv run` is ideal for project development because it discovers the project, syncs the project environment when needed, and executes within that environment. For a long-running background setup, this project instead installs the CLI with `uv tool install` and lets the OS scheduler call the installed executable directly. That keeps each scheduled invocation small and avoids depending on the current working directory, shell startup files, PATH activation, or project `.venv` state.

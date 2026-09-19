@@ -3,10 +3,10 @@ UV_PYTHON ?= 3.13
 .PHONY: install uninstall sync lock check update check-no-tg monitor daily doctor logs test test-unit test-integration lint reload launch-status tool-list tool-reinstall tool-uninstall
 
 install:
-	CRW_UV_PYTHON=$(UV_PYTHON) ./scripts/install.sh
+	CRW_UV_PYTHON=$(UV_PYTHON) $(UV) run python scripts/install.py
 
 uninstall:
-	./scripts/uninstall.sh
+	$(UV) run python scripts/uninstall.py
 
 sync:
 	$(UV) sync --python $(UV_PYTHON)
@@ -49,11 +49,12 @@ launch-status:
 	@launchctl print gui/$$(id -u)/com.wes.codex-reset-watch.monitor 2>/dev/null | head -50 || true
 
 reload:
-	CRW_UV_PYTHON=$(UV_PYTHON) ./scripts/install.sh
+	CRW_UV_PYTHON=$(UV_PYTHON) $(UV) run python scripts/install.py
 
 lint:
-	$(UV) run python -m py_compile src/codex_reset_watch/__init__.py scripts/render_launchd.py
-	bash -n scripts/install.sh scripts/uninstall.sh
+	$(UV) run python -m py_compile src/codex_reset_watch/__init__.py src/codex_reset_watch/paths.py \
+		src/codex_reset_watch/filelock.py scripts/render_launchd.py scripts/render_systemd.py \
+		scripts/schtasks.py scripts/install.py scripts/uninstall.py
 
 test-unit:
 	$(UV) run python -m unittest tests.test_parser tests.test_formatting tests.test_state tests.test_launchd -v
