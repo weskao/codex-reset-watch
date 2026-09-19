@@ -1,0 +1,18 @@
+{
+  "api_base": "https://codex-resets.com",
+  "status_path": "/api/v1/status",
+  "resets_path": "/api/v1/resets?limit=20&order=desc",
+  "timezone_label": "UTC+8",
+  "telegram_sender": "~/.claude/scripts/tg-send.sh",
+  "request_timeout_seconds": 15,
+  "request_retries": 3,
+  "daily_hour": 10,
+  "daily_minute": 0,
+  "daily_notify_when_unchanged": false,
+  "monitor_notify_when_unchanged": false,
+  "notify_new_reset_events": true,
+  "notify_upcoming_reset": true,
+  "max_log_bytes": 2097152,
+  "log_backups": 3,
+  "user_agent": "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)"
+}
