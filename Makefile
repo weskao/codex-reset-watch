@@ -1,6 +1,6 @@
 UV ?= uv
 UV_PYTHON ?= 3.13
-.PHONY: install uninstall sync lock check update check-no-tg monitor daily doctor logs test test-unit test-integration lint reload launch-status tool-list tool-reinstall tool-uninstall
+.PHONY: install uninstall sync lock check update check-no-tg monitor daily doctor logs config apply-schedule test test-unit test-integration lint reload launch-status tool-list tool-reinstall tool-uninstall
 
 install:
 	CRW_UV_PYTHON=$(UV_PYTHON) $(UV) run python scripts/install.py
@@ -35,6 +35,12 @@ doctor:
 logs:
 	$(UV) run codex-reset-watch logs -n 50
 
+config:
+	$(UV) run codex-reset-watch config
+
+apply-schedule:
+	$(UV) run codex-reset-watch apply-schedule
+
 tool-list:
 	$(UV) tool list
 
@@ -53,14 +59,16 @@ reload:
 
 lint:
 	$(UV) run python -m py_compile src/codex_reset_watch/__init__.py src/codex_reset_watch/paths.py \
-		src/codex_reset_watch/filelock.py scripts/render_launchd.py scripts/render_systemd.py \
+		src/codex_reset_watch/filelock.py src/codex_reset_watch/config.py src/codex_reset_watch/scheduler.py \
+		src/codex_reset_watch/ui.py scripts/render_launchd.py scripts/render_systemd.py \
 		scripts/schtasks.py scripts/install.py scripts/uninstall.py
 
 test-unit:
-	$(UV) run python -m unittest tests.test_parser tests.test_formatting tests.test_state tests.test_launchd -v
+	$(UV) run python -m unittest tests.test_parser tests.test_formatting tests.test_state tests.test_config \
+		tests.test_scheduler tests.test_ui tests.test_launchd -v
 
 test-integration:
-	$(UV) run python -m unittest tests.test_integration -v
+	$(UV) run python -m unittest tests.test_integration tests.test_run_check tests.test_cli_config -v
 
 test: lint
 	$(UV) run python -m unittest discover -s tests -v

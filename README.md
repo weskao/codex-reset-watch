@@ -30,7 +30,10 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 | Scheduler units | `~/Library/LaunchAgents/com.wes.codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
 | CLI | `~/scripts/codex-reset-watch` (symlinked to `/opt/homebrew/bin/codex-reset-watch`) | `~/scripts/codex-reset-watch` | `%USERPROFILE%\scripts\codex-reset-watch.exe` |
 
-Resolution logic lives in `src/codex_reset_watch/paths.py`; override any of the three with `CRW_CONFIG`, `CRW_STATE_DIR`, `CRW_LOG_DIR`.
+Resolution logic lives in `src/codex_reset_watch/paths.py` (defaults) and `config.py` (overrides).
+Override any of the three with the env vars `CRW_CONFIG`, `CRW_STATE_DIR`, `CRW_LOG_DIR`, or set
+state/log folder via `crw config` (the `state_dir`/`log_dir` settings — env vars win if both are
+set). `CRW_CONFIG` has no config-file equivalent, since it names the config file itself.
 
 > `~` is used in documentation and user-facing output. Scheduler job files/tasks contain expanded absolute paths — none of `launchd`/`systemd`/Task Scheduler expand `~`.
 
@@ -159,7 +162,95 @@ Run monitor path manually:
 crw monitor
 ```
 
-## 4. uv project commands
+Adjust timing, notifications, or paths (see [§4](#4-configuration-crw-config)):
+
+```bash
+crw config
+```
+
+## 4. Configuration (`crw config`)
+
+Every tunable value — whether the daily notification runs at all and at what time, how often the
+background scan runs, notification toggles, API endpoints/timeouts, and config/state/log folder
+locations — lives in one schema (`src/codex_reset_watch/config.py`) and is editable without hand-
+editing JSON:
+
+```bash
+crw config              # interactive menu (arrow-free: type a number, Enter)
+crw config --list       # print current settings and exit
+crw config --set scan_interval_minutes=45m --set daily_time=09:30
+```
+
+`crw config --list` (values below are an example, not your real settings):
+
+```text
+╭────────────────────────────────────────────────────────────────╮
+│ ◈ Codex Reset Watch · 設定                                    │
+│ ~/Library/Application Support/codex-reset-watch/config.json    │
+╰────────────────────────────────────────────────────────────────╯
+
+ ▎ 排程 Scheduling
+  1  每日通知 ················································ On
+  2  每日時間 ············································· 09:30
+  3  背景掃描 ················································ On
+  4  掃描間隔 ········································ 45 minutes
+  5  時區 ··········································· Asia/Taipei
+
+ ▎ 通知 Notifications
+  6  新 Reset 事件 ··········································· On
+  7  未來 Reset 訊號 ········································· On
+  8  掃描無變化也通知 ······································· Off
+  9  每日無變化也通知 ········································ On
+
+ ▎ API
+ 10  API 位址 ·························· https://codex-resets.com
+ ...
+
+ ▎ 位置 Storage
+ 16  狀態資料夾 ···································· （系統預設）
+ 17  Log 資料夾 ···································· （系統預設）
+ 18  單一 log 上限 ········································ 2 MiB
+ 19  Log 保留份數 ············································· 5
+```
+
+The interactive menu (`crw config`, no flags) renders the same panel in color, with numbered
+prompts for each row (type the number, `Enter` to edit; a bare `Enter` on a `true`/`false` row
+toggles it; `a` applies the schedule immediately, `d` restores defaults, `q` quits — a
+schedule-relevant change re-applies on quit automatically either way).
+
+| Setting | Meaning | Examples |
+|---|---|---|
+| `daily_enabled` | Run the daily notification at all | `on` / `off` |
+| `daily_time` | Wall-clock time for the daily job | `10:00`, `9:30` |
+| `monitor_enabled` | Run the background scan at all | `on` / `off` |
+| `scan_interval_minutes` | How often the background scan runs — **min 1 minute, max 1 day** | `30m`, `2h`, `1d`, or a bare number of minutes |
+| `timezone` | Timezone `daily_time` and rendered timestamps use | `UTC+8`, `UTC-05:30`, `UTC`, `local`, or an IANA name (`Asia/Taipei`) |
+| `notify_new_reset_events` / `notify_upcoming_reset` | Which event types trigger a Telegram push | `on` / `off` |
+| `monitor_notify_when_unchanged` / `daily_notify_when_unchanged` | Push even when nothing changed since last check | `on` / `off` |
+| `api_base`, `status_path`, `resets_path` | codex-resets.com endpoints | — |
+| `request_timeout_seconds`, `request_retries` | HTTP client tuning | — |
+| `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
+| `max_log_bytes`, `log_backups` | Application log rotation | — |
+
+`crw config --set` validates every value the same way the interactive menu does (rejects an
+out-of-range interval, a malformed `HH:MM`, etc.) and reports which key failed. Changing any
+setting that affects the OS scheduler (`daily_enabled`, `daily_time`, `monitor_enabled`,
+`scan_interval_minutes`, `timezone`, `log_dir`) automatically re-renders and re-registers the
+scheduler job(s) for the current OS on exit/save — the same effect as running:
+
+```bash
+crw apply-schedule
+```
+
+which you can also run directly any time (e.g. after editing `config.json` by hand). This is the
+config-driven counterpart to `scripts/render_launchd.py` / `render_systemd.py` / `schtasks.py`,
+which `scripts/install.py` also calls on first install — see [§7](#7-scheduler-jobs).
+
+Config file location, in priority order: `$CRW_CONFIG`, else the platform default from the
+[Installed paths](#installed-paths) table above. `config.example.json` documents every key with
+its default value.
+
+## 5. uv project commands
 
 For development inside the project:
 
@@ -187,7 +278,7 @@ The installer intentionally sets `UV_TOOL_BIN_DIR=~/scripts` during tool install
 ~/scripts/crw
 ```
 
-## 5. Reinstall after source changes
+## 6. Reinstall after source changes
 
 Recommended:
 
@@ -205,41 +296,49 @@ make tool-reinstall
 
 `make install` (or `uv run python scripts/install.py` on Windows) is preferred when scheduler configuration or installer files also changed.
 
-## 6. Scheduler jobs
+## 7. Scheduler jobs
 
-Both jobs run at the same wall-clock times on every OS; only the mechanism differs.
+Both the daily time and the monitor interval are read from config at render time (see [§4](#4-configuration-crw-config)) —
+defaults below are what ships in `config.example.json`. Either job can also be turned off entirely
+(`daily_enabled` / `monitor_enabled`), which removes its scheduler entry instead of leaving a
+disabled stub. All rendering lives in `src/codex_reset_watch/scheduler.py`, shared by
+`scripts/install.py` (first install) and `crw config` / `crw apply-schedule` (re-apply after a
+settings change) — the per-OS scripts under `scripts/` are thin wrappers around it.
 
 ### Daily job
 
-- runs at 10:00 local time
-- runs immediately at login/boot too (`RunAtLoad`/`Persistent`), so a missed 10:00 (machine asleep/off) catches up
+- default: 10:00, in the configured timezone (`timezone` setting; converted to the machine's own
+  local time at render time, since every OS scheduler fires on system local time)
+- runs immediately at login/boot too (`RunAtLoad`/`Persistent`), so a missed run (machine asleep/off) catches up
 - Python-side daily gate (`last_daily_date` in state) prevents duplicate daily work even if the OS runs it more than once
 
 ### Monitor job
 
-Runs every two hours at minute `05` (`00:05`, `02:05`, ... `22:05`).
+Runs every `scan_interval_minutes` (default 120 = every 2 hours; **min 1 minute, max 1440 = 1 day**),
+as a rolling interval from when the job last fired — not a fixed set of wall-clock minutes.
 
 The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`) so overlapping daily/monitor invocations do not corrupt state or duplicate work.
 
 ### macOS — launchd
 
 - `~/Library/LaunchAgents/com.wes.codex-reset-watch.daily.plist` (`StartCalendarInterval`)
-- `~/Library/LaunchAgents/com.wes.codex-reset-watch.monitor.plist` (12 `StartCalendarInterval` entries)
-- installer runs `launchctl bootstrap`/`enable` for both
+- `~/Library/LaunchAgents/com.wes.codex-reset-watch.monitor.plist` (`StartInterval`, in seconds)
+- installer/`crw apply-schedule` runs `launchctl bootout` (both, to clear a disabled job) then `bootstrap`/`enable` for each enabled job
 
 ### Linux — systemd --user timers
 
-- `~/.config/systemd/user/codex-reset-watch-daily.{service,timer}` (`OnCalendar=*-*-* 10:00:00`)
-- `~/.config/systemd/user/codex-reset-watch-monitor.{service,timer}` (`OnCalendar=*-*-* 0/2:05:00`)
-- installer runs `systemctl --user daemon-reload` then `enable --now` on both timers
+- `~/.config/systemd/user/codex-reset-watch-daily.{service,timer}` (`OnCalendar=*-*-* HH:MM:00`)
+- `~/.config/systemd/user/codex-reset-watch-monitor.{service,timer}` (`OnBootSec=`/`OnUnitActiveSec=<N>min`)
+- installer/`crw apply-schedule` runs `systemctl --user daemon-reload` then `enable --now` on each enabled timer (and `disable --now` a job that was just turned off)
 - requires a systemd user instance (lingering, if you want jobs to run without an active login session: `loginctl enable-linger $USER`)
 
 ### Windows — Task Scheduler
 
-- tasks `CodexResetWatchDaily` (`/SC DAILY /ST 10:00`) and `CodexResetWatchMonitor` (`/SC HOURLY /MO 2 /ST 00:05`), created via `schtasks /Create`
+- `CodexResetWatchDaily` (`/SC DAILY /ST HH:MM`)
+- `CodexResetWatchMonitor`: `/SC HOURLY /MO <hours>` when the interval is a whole number of hours (e.g. the 2-hour default), `/SC MINUTE /MO <minutes>` otherwise, `/SC DAILY` for a full 1-day interval
 - `TG_BOT_TOKEN`/`TG_CHAT_ID` are persisted with `setx` into your user environment rather than passed as task arguments, since `schtasks /query /v` output is not a safe place for secrets
 
-## 7. Telegram
+## 8. Telegram
 
 Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script dependency. Set both env vars before running:
 
@@ -256,9 +355,10 @@ Then:
 crw check
 ```
 
-## 8. UTC+8 and countdown
+## 9. Timezone and countdown
 
-Upcoming reset information is rendered in UTC+8 and includes remaining time with:
+Upcoming reset information is rendered in the configured `timezone` (default `UTC+8` — see
+[§4](#4-configuration-crw-config)) and includes remaining time with:
 
 - maximum unit: Day
 - minimum unit: minutes
@@ -270,7 +370,7 @@ Example:
 ⏳ 距離現在：2 Days 1 hour 35 minutes
 ```
 
-## 9. Event parsing resilience
+## 10. Event parsing resilience
 
 `event_from_dict` tolerates upstream API schema drift instead of assuming one fixed shape:
 
@@ -282,7 +382,7 @@ Example:
   historical reset times available even if the upstream schema changes or omits its timestamp
   field. API-provided timestamps always take priority over this fallback.
 
-## 10. Logs and disk usage
+## 11. Logs and disk usage
 
 Application logs:
 
@@ -302,7 +402,7 @@ Default config limits each rotated application/API log to roughly 2 MiB with 3 b
 
 launchd stdout/stderr logs are separately trimmed to 256 KiB by the installer when they exceed 512 KiB (macOS only — `install.trim_launchd_logs`). systemd/journald and Windows Task Scheduler manage their own job-output retention.
 
-## 11. Tests
+## 12. Tests
 
 Run everything through uv (macOS/Linux):
 
@@ -323,9 +423,11 @@ make test-unit
 make test-integration
 ```
 
-The integration test starts a local HTTP server and exercises the real HTTP client and response normalization path without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
+The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config` flows without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
 
-## 12. Scheduler status
+Every test that exercises `crw config`/`crw apply-schedule` mocks `scheduler.apply` — none of them call the real `launchctl`/`systemctl`/`schtasks` against whatever this machine actually has registered (`tests/test_ui.py`, `tests/test_cli_config.py`); the scheduler *rendering* logic itself (`tests/test_scheduler.py`, `tests/test_launchd.py`, `tests/test_systemd.py`) is exercised fully, just always against a throwaway output directory.
+
+## 13. Scheduler status
 
 macOS:
 
@@ -350,7 +452,7 @@ schtasks /Query /TN CodexResetWatchDaily /V /FO LIST
 schtasks /Query /TN CodexResetWatchMonitor /V /FO LIST
 ```
 
-## 13. Uninstall
+## 14. Uninstall
 
 macOS/Linux:
 
@@ -367,7 +469,7 @@ uv run python scripts/uninstall.py
 
 This removes the scheduler job(s) for the current OS and uninstalls the uv tool. Project files, config, state, and logs are intentionally retained (path printed by the uninstaller).
 
-## 14. CI notifications
+## 15. CI notifications
 
 `.github/workflows/ci.yml` runs the test matrix (macOS/Linux/Windows) on every push and PR, then a separate `notify-telegram` job sends a Telegram message only when the test job fails on a `push` (never on green runs, never on `pull_request`, to avoid pinging on forks/external PRs). Configure it once per repo:
 

@@ -4,6 +4,11 @@
 macOS -> launchd, Linux -> systemd --user timers, Windows -> Task Scheduler.
 Replaces the old install.sh: bash isn't native on Windows, Python already is
 (uv itself requires it), so one script covers all three OSes.
+
+Scheduling is config-driven (see ``codex_reset_watch.config``/``.scheduler``):
+this script renders/registers whichever jobs `daily_enabled`/`monitor_enabled`
+turn on, at the times/interval the config says. Re-run it (or `crw
+apply-schedule` / `crw config`) after changing those settings.
 """
 from __future__ import annotations
 
@@ -14,21 +19,11 @@ import shutil
 import subprocess
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import schtasks  # noqa: E402
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
-from codex_reset_watch import paths  # noqa: E402
+from codex_reset_watch import config, paths, scheduler  # noqa: E402
 
-BACKENDS = {"Darwin": "launchd", "Linux": "systemd", "Windows": "schtasks"}
-
-
-def backend_for(system: str) -> str:
-    try:
-        return BACKENDS[system]
-    except KeyError:
-        raise ValueError(f"unsupported platform: {system}")
+backend_for = scheduler.backend_for
 
 
 def uv_bin() -> str:
@@ -50,23 +45,6 @@ def sync_dest(dest: pathlib.Path) -> None:
     )
 
 
-def install_launchd(uv: str, program: pathlib.Path, log_dir: pathlib.Path, python_version: str) -> None:
-    launch_dir = pathlib.Path.home() / "Library" / "LaunchAgents"
-    launch_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call([
-        uv, "run", "--python", python_version, str(REPO_ROOT / "scripts/render_launchd.py"),
-        "--program", str(program), "--out-dir", str(launch_dir), "--log-dir", str(log_dir),
-    ])
-    uid = str(os.getuid())
-    for label in ("com.wes.codex-reset-watch.daily", "com.wes.codex-reset-watch.monitor"):
-        subprocess.run(["launchctl", "bootout", f"gui/{uid}/{label}"], capture_output=True)
-    for label in ("daily", "monitor"):
-        plist = launch_dir / f"com.wes.codex-reset-watch.{label}.plist"
-        subprocess.check_call(["launchctl", "bootstrap", f"gui/{uid}", str(plist)])
-        subprocess.run(["launchctl", "enable", f"gui/{uid}/com.wes.codex-reset-watch.{label}"])
-    trim_launchd_logs(log_dir)
-
-
 def trim_launchd_logs(log_dir: pathlib.Path, max_bytes: int = 512 * 1024, keep_bytes: int = 256 * 1024) -> None:
     for f in log_dir.glob("launchd-*.log"):
         if f.stat().st_size > max_bytes:
@@ -74,28 +52,15 @@ def trim_launchd_logs(log_dir: pathlib.Path, max_bytes: int = 512 * 1024, keep_b
             f.write_bytes(tail)
 
 
-def install_systemd(uv: str, program: pathlib.Path, log_dir: pathlib.Path, python_version: str) -> None:
-    unit_dir = pathlib.Path.home() / ".config" / "systemd" / "user"
-    unit_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call([
-        uv, "run", "--python", python_version, str(REPO_ROOT / "scripts/render_systemd.py"),
-        "--program", str(program), "--out-dir", str(unit_dir), "--log-dir", str(log_dir),
-    ])
-    subprocess.check_call(["systemctl", "--user", "daemon-reload"])
-    for name in ("codex-reset-watch-daily.timer", "codex-reset-watch-monitor.timer"):
-        subprocess.check_call(["systemctl", "--user", "enable", "--now", name])
-
-
-def install_schtasks(program: pathlib.Path) -> None:
+def install_schtasks(program: pathlib.Path, cfg) -> None:
     # Task Scheduler has no per-task env-var slot; persist into the user's
     # environment instead of the task args, or the tokens would leak into
     # `schtasks /query /v` output.
-    for key in ("TG_BOT_TOKEN", "TG_CHAT_ID"):
+    for key in scheduler.SECRET_ENV_KEYS:
         value = os.environ.get(key)
         if value:
             subprocess.run(["setx", key, value], capture_output=True)
-    subprocess.check_call(schtasks.daily_task_command(str(program)))
-    subprocess.check_call(schtasks.monitor_task_command(str(program)))
+    scheduler.apply_schtasks(str(program), cfg)
 
 
 def main() -> int:
@@ -104,7 +69,7 @@ def main() -> int:
     dest = pathlib.Path(os.environ.get("CRW_INSTALL_DIR", str(REPO_ROOT))).expanduser()
     bin_dir = pathlib.Path(os.environ.get("CRW_BIN_DIR", str(pathlib.Path.home() / "scripts"))).expanduser()
     config_dir = paths.app_config_dir()
-    log_dir = paths.app_log_dir()
+    log_dir = config.log_dir(config.load())  # config file may not exist yet: defaults apply
     for d in (dest, bin_dir, config_dir, log_dir):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -126,18 +91,22 @@ def main() -> int:
     if not program.exists():
         sys.exit(f"ERROR: uv tool install completed but executable was not found at {program}")
 
+    cfg = config.load()  # re-read: config_path may have just been created above
     backend = backend_for(platform.system())
     if backend == "launchd":
-        install_launchd(uv, program, log_dir, python_version)
+        scheduler.apply_launchd(str(program), log_dir, cfg)
+        trim_launchd_logs(log_dir)
     elif backend == "systemd":
-        install_systemd(uv, program, log_dir, python_version)
+        scheduler.apply_systemd(str(program), log_dir, cfg)
     else:
-        install_schtasks(program)
+        install_schtasks(program, cfg)
 
-    print(f"✅ Codex Reset Watch installed with uv tool ({backend} scheduling).")
+    jobs = scheduler.enabled_jobs(cfg) or ("none",)
+    print(f"✅ Codex Reset Watch installed with uv tool ({backend} scheduling: {', '.join(jobs)}).")
     print(f"CLI:    {program}")
     print(f"Config: {config_path}")
     print(f"Logs:   {log_dir}")
+    print("Adjust timing/notifications anytime: crw config")
     return 0
 
 

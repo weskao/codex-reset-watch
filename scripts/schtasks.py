@@ -1,30 +1,16 @@
-"""Windows Task Scheduler command-building for the `schtasks` CLI.
-
-Kept separate from install.py so the argv-building logic is importable and
-unit-testable on every OS, even though the commands only run on Windows.
-Secrets are not passed as task arguments (they would leak into `schtasks
-/query /v` output); install.py persists TG_BOT_TOKEN/TG_CHAT_ID with `setx`
-into the user's environment instead, same as any other Windows scheduled task.
+"""Back-compat shim: the real command-building logic now lives in
+``codex_reset_watch.scheduler`` (config-driven — see there for the timing rules).
+Kept as a separate importable module because `install.py`/`uninstall.py` and
+their tests import ``scripts.schtasks`` directly.
 """
-DAILY_TASK_NAME = "CodexResetWatchDaily"
-MONITOR_TASK_NAME = "CodexResetWatchMonitor"
+import pathlib
+import sys
 
-
-def daily_task_command(program, task_name=DAILY_TASK_NAME):
-    return [
-        "schtasks", "/Create", "/F", "/TN", task_name,
-        "/TR", f'"{program}" daily',
-        "/SC", "DAILY", "/ST", "10:00",
-    ]
-
-
-def monitor_task_command(program, task_name=MONITOR_TASK_NAME):
-    return [
-        "schtasks", "/Create", "/F", "/TN", task_name,
-        "/TR", f'"{program}" monitor',
-        "/SC", "HOURLY", "/MO", "2", "/ST", "00:05",
-    ]
-
-
-def delete_task_command(task_name):
-    return ["schtasks", "/Delete", "/F", "/TN", task_name]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+from codex_reset_watch.scheduler import (  # noqa: E402,F401
+    DAILY_TASK_NAME,
+    MONITOR_TASK_NAME,
+    daily_task_command,
+    delete_task_command,
+    monitor_task_command,
+)

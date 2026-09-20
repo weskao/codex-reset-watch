@@ -46,6 +46,28 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("🔗 公告：https://x.com/thsottiaux/status/2101352781219258527", text)
         self.assertIn("🌐 Codex Resets：https://codex-resets.com/", text)
 
+    def test_fmt_local_honours_configured_timezone(self):
+        t = dt.datetime(2026, 9, 19, 13, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(crw.fmt_local(t, {"timezone": "UTC"}), "2026-09-19 13:00 UTC")
+        self.assertEqual(crw.fmt_local(t, {"timezone": "UTC-05:30"}), "2026-09-19 07:30 UTC-05:30")
+
+    def test_fmt_local_defaults_to_utc8_without_cfg(self):
+        t = dt.datetime(2026, 9, 19, 13, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(crw.fmt_local(t), crw.fmt_local(t, {"timezone": "UTC+8"}))
+
+    def test_format_manual_uses_configured_timezone(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        snapshot = crw.Snapshot(checked, None, None, True, True)
+        text = crw.format_manual(snapshot, {"timezone": "UTC"})
+        self.assertIn("2026-09-20 00:00 UTC", text)
+        self.assertNotIn("UTC+8", text)
+
+    def test_format_new_event_notice_uses_configured_timezone(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        event = crw.Event(event_id="e1", timestamp=checked, event_type="reset")
+        text = crw.format_new_event_notice(event, checked, {"timezone": "UTC"})
+        self.assertIn("2026-09-20 00:00 UTC", text)
+
     def test_tba_upcoming_notice_has_no_fake_countdown(self):
         checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
         upcoming = crw.Upcoming(

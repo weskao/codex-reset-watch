@@ -22,11 +22,11 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import filelock, paths, telegram_notify
+from . import config as cfgmod
+from . import filelock, scheduler, telegram_notify, ui
 
 APP_NAME = "codex-reset-watch"
-DEFAULT_API_BASE = "https://codex-resets.com"
-TZ8 = dt.timezone(dt.timedelta(hours=8), name="UTC+8")
+DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
 UTC = dt.timezone.utc
 
 
@@ -50,38 +50,11 @@ def display_path(value: Any) -> str:
     return raw
 
 
-def default_config_path() -> pathlib.Path:
-    override = os.environ.get("CRW_CONFIG")
-    return pathlib.Path(override) if override else paths.app_config_dir() / "config.json"
-
-
-def default_state_dir() -> pathlib.Path:
-    override = os.environ.get("CRW_STATE_DIR")
-    return pathlib.Path(override) if override else paths.app_state_dir()
-
-
-def default_log_dir() -> pathlib.Path:
-    override = os.environ.get("CRW_LOG_DIR")
-    return pathlib.Path(override) if override else paths.app_log_dir()
-
-
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "api_base": DEFAULT_API_BASE,
-    "status_path": "/api/v1/status",
-    "resets_path": "/api/v1/resets?limit=20&order=desc",
-    "timezone_label": "UTC+8",
-    "request_timeout_seconds": 15,
-    "request_retries": 3,
-    "daily_hour": 10,
-    "daily_minute": 0,
-    "daily_notify_when_unchanged": False,
-    "monitor_notify_when_unchanged": False,
-    "notify_new_reset_events": True,
-    "notify_upcoming_reset": True,
-    "max_log_bytes": 2 * 1024 * 1024,
-    "log_backups": 3,
-    "user_agent": "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)",
-}
+# Thin aliases kept for import-site stability: config.py owns the schema/paths now.
+default_config_path = cfgmod.config_path
+default_state_dir = cfgmod.state_dir
+default_log_dir = cfgmod.log_dir
+DEFAULT_CONFIG: Dict[str, Any] = cfgmod.DEFAULTS
 
 
 @dataclass
@@ -536,7 +509,7 @@ class RotatingJsonl:
 
 class Logger:
     def __init__(self, cfg: Dict[str, Any]):
-        self.log_dir = default_log_dir()
+        self.log_dir = default_log_dir(cfg)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         max_bytes = int(cfg.get("max_log_bytes", DEFAULT_CONFIG["max_log_bytes"]))
         backups = int(cfg.get("log_backups", DEFAULT_CONFIG["log_backups"]))
@@ -554,8 +527,8 @@ class Logger:
 
 
 class StateStore:
-    def __init__(self, state_dir: Optional[pathlib.Path] = None):
-        self.dir = state_dir or default_state_dir()
+    def __init__(self, state_dir: Optional[pathlib.Path] = None, cfg: Optional[Dict[str, Any]] = None):
+        self.dir = state_dir or default_state_dir(cfg)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.path = self.dir / "state.json"
         self.lock_path = self.dir / "run.lock"
@@ -646,22 +619,14 @@ class APIClient:
         )
 
 
-def load_config() -> Dict[str, Any]:
-    cfg = dict(DEFAULT_CONFIG)
-    path = default_config_path()
-    if path.exists():
-        with contextlib.suppress(Exception):
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                cfg.update(raw)
-    return cfg
+load_config = cfgmod.load
 
 
-def fmt_local(value: Optional[dt.datetime]) -> str:
+def fmt_local(value: Optional[dt.datetime], cfg: Optional[Dict[str, Any]] = None) -> str:
     if value is None:
         return "—"
-    local = value.astimezone(TZ8)
-    return local.strftime("%Y-%m-%d %H:%M UTC+8")
+    local = value.astimezone(cfgmod.tzinfo_for(cfg))
+    return local.strftime(f"%Y-%m-%d %H:%M {cfgmod.tz_label(cfg)}")
 
 
 def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = None) -> str:
@@ -713,14 +678,14 @@ def append_upcoming_links(lines: List[str], upcoming: Upcoming) -> None:
         lines.append(f"🌐 Codex Resets：{tracker}")
 
 
-def format_manual(snapshot: Snapshot) -> str:
+def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None) -> str:
     lines = ["🔎 Codex Reset 即時查詢", "━━━━━━━━━━━━━━"]
-    lines.append(f"🛰️ 檢查時間：{fmt_local(snapshot.checked_at)}")
+    lines.append(f"🛰️ 檢查時間：{fmt_local(snapshot.checked_at, cfg)}")
     if snapshot.latest:
         lines += [
             "",
             "✅ 最近一次 Reset",
-            f"🕒 時間：{fmt_local(snapshot.latest.timestamp)}",
+            f"🕒 時間：{fmt_local(snapshot.latest.timestamp, cfg)}",
             f"🏷️ 類型：{snapshot.latest.event_type or '未標示'}",
         ]
         if snapshot.latest.message:
@@ -739,7 +704,7 @@ def format_manual(snapshot: Snapshot) -> str:
             lines.append(f"🕒 時間：尚未公布（{u.time_text or 'Time to be announced'}）")
         else:
             label = "預告/估計時間" if u.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
-            lines.append(f"🕒 {label}：{fmt_local(u.timestamp)}")
+            lines.append(f"🕒 {label}：{fmt_local(u.timestamp, cfg)}")
             lines.append(f"⏳ 距離現在：{fmt_remaining(u.timestamp, snapshot.checked_at)}")
         if u.chance_percent is not None:
             lines.append(f"🎯 機率：{u.chance_percent:g}%")
@@ -760,7 +725,7 @@ def format_manual(snapshot: Snapshot) -> str:
     return "\n".join(lines)
 
 
-def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime) -> str:
+def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
     lines = [
         "🚨 Codex Reset Watch",
         "━━━━━━━━━━━━━━",
@@ -773,7 +738,7 @@ def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime) -> str:
         lines.append(f"🕒 時間：尚未公布（{upcoming.time_text or 'Time to be announced'}）")
     else:
         label = "預告/估計時間" if upcoming.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
-        lines.append(f"🕒 {label}：{fmt_local(upcoming.timestamp)}")
+        lines.append(f"🕒 {label}：{fmt_local(upcoming.timestamp, cfg)}")
         lines.append(f"⏳ 距離現在：{fmt_remaining(upcoming.timestamp, checked_at)}")
     if upcoming.chance_percent is not None:
         lines.append(f"🎯 機率：{upcoming.chance_percent:g}%")
@@ -785,25 +750,25 @@ def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime) -> str:
         lines.append(f"💬 訊號：{safe_text(upcoming.message)}")
     append_upcoming_links(lines, upcoming)
     lines += [
-        f"🛰️ 檢查時間：{fmt_local(checked_at)}",
+        f"🛰️ 檢查時間：{fmt_local(checked_at, cfg)}",
         "⚠️ 第三方公開追蹤/預測，不代表你的個人 Codex 額度一定會在該時間重置。",
     ]
     return "\n".join(lines)
 
 
-def format_new_event_notice(event: Event, checked_at: dt.datetime) -> str:
+def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
     lines = [
         "✅ Codex Reset 更新",
         "━━━━━━━━━━━━━━",
         "🎉 偵測到新的公開 Reset 事件/公告",
-        f"🕒 時間：{fmt_local(event.timestamp)}",
+        f"🕒 時間：{fmt_local(event.timestamp, cfg)}",
         f"🏷️ 類型：{event.event_type or '未標示'}",
     ]
     if event.message:
         lines.append(f"📝 公告：{safe_text(event.message)}")
     if event.source_url:
         lines.append(f"🔗 來源：{event.source_url}")
-    lines.append(f"🛰️ 檢查時間：{fmt_local(checked_at)}")
+    lines.append(f"🛰️ 檢查時間：{fmt_local(checked_at, cfg)}")
     return "\n".join(lines)
 
 
@@ -851,7 +816,7 @@ def is_recent_event(event: Event, checked_at: dt.datetime, hours: int = 12) -> b
 def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
     cfg = load_config()
     logger = Logger(cfg)
-    store = StateStore()
+    store = StateStore(cfg=cfg)
     with store.lock(blocking=(mode in ("manual", "daily"))) as acquired:
         if not acquired:
             logger.event("INFO", "skipped_locked", mode=mode)
@@ -860,11 +825,15 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
             return 0
 
         state = store.load()
-        local_now = now_utc().astimezone(TZ8)
+        local_now = now_utc().astimezone(cfgmod.tzinfo_for(cfg))
         today = local_now.date().isoformat()
         if mode == "daily" and not force_daily:
-            due = local_now.hour > int(cfg["daily_hour"]) or (
-                local_now.hour == int(cfg["daily_hour"]) and local_now.minute >= int(cfg["daily_minute"])
+            if not bool(cfg.get("daily_enabled", True)):
+                logger.event("INFO", "daily_disabled")
+                return 0
+            daily_hour, daily_minute = cfgmod.daily_hm(cfg)
+            due = local_now.hour > daily_hour or (
+                local_now.hour == daily_hour and local_now.minute >= daily_minute
             )
             if not due:
                 logger.event("INFO", "daily_not_due", local_time=local_now.isoformat())
@@ -879,7 +848,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
 
         if not snapshot.status_ok:
             if mode == "manual":
-                print(format_manual(snapshot))
+                print(format_manual(snapshot, cfg))
                 return 1
             logger.event("WARNING", "scheduled_status_api_failed", mode=mode, error=snapshot.status_error)
             if mode == "daily":
@@ -893,7 +862,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         messages: List[str] = []
 
         if mode == "manual":
-            text = format_manual(snapshot)
+            text = format_manual(snapshot, cfg)
             print(text)
             if notify:
                 send_telegram(cfg, text, logger)
@@ -902,12 +871,12 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                 changed = snapshot.latest.key != prev_latest
                 # First run establishes a baseline; only notify an already-existing event if very recent.
                 if changed and (not is_first or is_recent_event(snapshot.latest, snapshot.checked_at)):
-                    messages.append(format_new_event_notice(snapshot.latest, snapshot.checked_at))
+                    messages.append(format_new_event_notice(snapshot.latest, snapshot.checked_at, cfg))
             if snapshot.upcoming and bool(cfg.get("notify_upcoming_reset", True)):
                 changed = snapshot.upcoming.key != prev_upcoming
                 notify_unchanged = bool(cfg.get("monitor_notify_when_unchanged" if mode == "monitor" else "daily_notify_when_unchanged", False))
                 if changed or notify_unchanged:
-                    messages.append(format_upcoming_notice(snapshot.upcoming, snapshot.checked_at))
+                    messages.append(format_upcoming_notice(snapshot.upcoming, snapshot.checked_at, cfg))
             if notify:
                 for message in messages:
                     send_telegram(cfg, message, logger)
@@ -940,18 +909,24 @@ def doctor() -> int:
     client = APIClient(cfg, logger)
     status, err = client.get_json(str(cfg.get("status_path", "/api/v1/status")))
     checks.append(("Codex Resets status API", status is not None, "OK" if status is not None else err))
+    try:
+        backend = scheduler.current_backend()
+        checks.append((f"Scheduler ({backend})", True, ui.summary_line(cfg, paint=ui.Paint(False))))
+    except ValueError as exc:
+        checks.append(("Scheduler", False, str(exc)))
     print("🩺 Codex Reset Watch doctor\n")
     failed = False
     for name, ok, detail in checks:
         print(f"{'✅' if ok else '❌'} {name}: {detail}")
         failed = failed or not ok
-    print(f"\n📁 Logs: {display_path(default_log_dir())}")
-    print(f"💾 State: {display_path(default_state_dir() / 'state.json')}")
+    print(f"\n📁 Logs: {display_path(default_log_dir(cfg))}")
+    print(f"💾 State: {display_path(default_state_dir(cfg) / 'state.json')}")
     return 1 if failed else 0
 
 
 def tail_logs(n: int) -> int:
-    path = default_log_dir() / "events.jsonl"
+    cfg = load_config()
+    path = default_log_dir(cfg) / "events.jsonl"
     if not path.exists():
         print(f"尚無 log：{display_path(path)}")
         return 0
@@ -961,20 +936,69 @@ def tail_logs(n: int) -> int:
     return 0
 
 
+def apply_schedule_cmd() -> int:
+    cfg = load_config()
+    try:
+        backend, jobs = scheduler.apply(cfg=cfg)
+    except Exception as exc:  # noqa: BLE001 - report, don't crash a CLI invocation
+        print(f"❌ 排程套用失敗（{type(exc).__name__}: {exc}）")
+        return 1
+    listed = "、".join(jobs) if jobs else "（全部關閉）"
+    print(f"✅ 已重新套用 {backend} 排程：{listed}")
+    print(ui.summary_line(cfg, paint=ui.Paint(False)))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="codex-reset-watch", description="Monitor codex-resets.com and notify via Telegram.")
     sub = p.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", aliases=["update"], help="立即查詢、更新狀態、輸出到 Terminal，預設同時 Telegram 通知")
     check.add_argument("--no-notify", action="store_true", help="只顯示，不傳 Telegram")
-    mon = sub.add_parser("monitor", help="排程器每 2 小時背景掃描（只通知新資訊）")
+    mon = sub.add_parser("monitor", help="排程器背景掃描（間隔由 `crw config` 設定，只通知新資訊）")
     mon.add_argument("--no-notify", action="store_true")
-    daily = sub.add_parser("daily", help="10:00 daily/catch-up 檢查")
-    daily.add_argument("--force", action="store_true", help="忽略當日 10:00 gate，用於測試")
+    daily = sub.add_parser("daily", help="每日 catch-up 檢查（時間由 `crw config` 設定）")
+    daily.add_argument("--force", action="store_true", help="忽略當日時間 gate，用於測試")
     daily.add_argument("--no-notify", action="store_true")
-    sub.add_parser("doctor", help="檢查 Python/API/Telegram 設定")
+    sub.add_parser("doctor", help="檢查 Python/API/Telegram/排程設定")
     logs = sub.add_parser("logs", help="顯示最近事件 logs")
     logs.add_argument("-n", "--lines", type=int, default=30)
+    cfgp = sub.add_parser("config", help="互動式設定選單（排程時間、掃描間隔、通知、路徑…）")
+    cfgp.add_argument("--list", action="store_true", help="列出目前設定後結束，不進入選單")
+    cfgp.add_argument("--set", action="append", metavar="KEY=VALUE",
+                      help="非互動式修改一項設定，可重複；影響排程的鍵會自動重新套用")
+    cfgp.add_argument("--apply-schedule", action="store_true", help="搭配 --set 時，強制重新套用 OS 排程")
+    sub.add_parser("apply-schedule", help="依目前設定重新套用 OS 排程（launchd/systemd/schtasks）")
     return p
+
+
+def config_cmd(args: argparse.Namespace) -> int:
+    if args.list:
+        print(ui.render_settings(load_config()))
+        return 0
+    if args.set:
+        cfg = load_config()
+        schedule_dirty = False
+        for item in args.set:
+            if "=" not in item:
+                print(f"❌ 格式需為 KEY=VALUE：{item}")
+                return 2
+            key, _, value = item.partition("=")
+            key = key.strip()
+            try:
+                cfgmod.set_value(cfg, key, value)
+            except KeyError:
+                print(f"❌ 未知設定：{key}（可用鍵見 `crw config --list`）")
+                return 2
+            except ValueError as exc:
+                print(f"❌ {key}：{exc}")
+                return 2
+            schedule_dirty = schedule_dirty or key in cfgmod.SCHEDULE_KEYS
+        cfgmod.save(cfg)
+        print(f"✅ 已更新 {len(args.set)} 項設定並儲存：{cfgmod.config_path()}")
+        if schedule_dirty or args.apply_schedule:
+            return apply_schedule_cmd()
+        return 0
+    return ui.config_menu()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -989,6 +1013,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return doctor()
     if args.command == "logs":
         return tail_logs(max(1, args.lines))
+    if args.command == "config":
+        return config_cmd(args)
+    if args.command == "apply-schedule":
+        return apply_schedule_cmd()
     return 2
 
 
