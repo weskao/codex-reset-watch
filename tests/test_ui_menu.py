@@ -374,6 +374,32 @@ class ActionTests(unittest.TestCase):
         self.assertIsNone(state.pending_action)
 
 
+class WrapTests(unittest.TestCase):
+    """`_wrap` is what keeps footer messages readable without an ellipsis."""
+
+    def test_text_that_fits_is_a_single_line(self):
+        self.assertEqual(ui._wrap("hello", 20), ["hello"])
+
+    def test_long_text_wraps_at_a_word_boundary(self):
+        lines = ui._wrap("one two three four five", 11)
+        self.assertTrue(all(ui.width(line) <= 11 for line in lines))
+        self.assertEqual(" ".join(lines), "one two three four five")
+
+    def test_a_run_with_no_spaces_wider_than_one_line_is_hard_broken(self):
+        # A CJK sentence (no spaces) or a long path must still wrap, not overflow.
+        lines = ui._wrap("A" * 30, 10)
+        self.assertTrue(all(ui.width(line) <= 10 for line in lines))
+        self.assertEqual("".join(lines), "A" * 30)
+
+    def test_wrapping_counts_cjk_characters_as_two_columns(self):
+        lines = ui._wrap("設定" * 10, 10)
+        self.assertTrue(all(ui.width(line) <= 10 for line in lines))
+
+    def test_wrapping_is_capped_at_max_lines(self):
+        lines = ui._wrap("word " * 30, 6, max_lines=2)
+        self.assertEqual(len(lines), 2)
+
+
 class RenderTests(unittest.TestCase):
     def setUp(self):
         self.plain = ui.Paint(False)
@@ -471,6 +497,34 @@ class RenderTests(unittest.TestCase):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en",
                                prompt="export", prompt_buffer="/tmp/x.json")
         self.assertTrue(any("/tmp/x.json" in line for line in lines))
+
+    @staticmethod
+    def _message_lines(lines, marker):
+        start = next(i for i, l in enumerate(lines) if marker in l)
+        end = next(i for i in range(start + 1, len(lines)) if "↑↓" in lines[i])
+        return [l.strip().lstrip(marker).strip() for l in lines[start:end]]
+
+    def test_a_long_error_wraps_instead_of_being_cut_off(self):
+        # Clipping with "…" used to silently drop the back half of a long
+        # validation message; every word must survive, just on more lines.
+        message = ("This is a deliberately long error message that cannot fit on "
+                   "a single line of the panel and must wrap instead of being cut off")
+        lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en",
+                               error=message, height=44)
+        self.assertEqual(" ".join(self._message_lines(lines, "✗")), message)
+
+    def test_a_long_notice_wraps_instead_of_being_cut_off(self):
+        message = ("Imported forty-two settings from a path this test made deliberately "
+                   "long so the notice line cannot fit on one row of the panel")
+        lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en",
+                               notice=message, height=44)
+        self.assertEqual(" ".join(self._message_lines(lines, "✓")), message)
+
+    def test_wrapped_message_lines_stay_within_the_panel_width(self):
+        message = "word " * 30
+        for line in ui.render_menu(self.cfg, 0, paint=self.plain, lang="en",
+                                   error=message, height=44):
+            self.assertLessEqual(ui.width(line), ui.PANEL_WIDTH + 1, repr(line))
 
     def test_no_line_overflows_the_panel_width(self):
         cfg = dict(self.cfg, user_agent="codex-reset-watch/9.9 (+https://example.invalid/a/very/"

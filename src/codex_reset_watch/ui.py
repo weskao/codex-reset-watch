@@ -123,6 +123,47 @@ def _pad(text: str, columns: int) -> str:
     return text + " " * max(0, columns - width(text))
 
 
+def _slice_by_width(text: str, columns: int) -> Tuple[str, str]:
+    """*text* split into a prefix that fits *columns* display cells and the rest."""
+    used = 0
+    for i, ch in enumerate(text):
+        step = 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+        if used + step > columns:
+            return text[:i], text[i:]
+        used += step
+    return text, ""
+
+
+def _wrap(text: str, columns: int, max_lines: int = 3) -> List[str]:
+    """Word-wrap *text* to *columns* display cells instead of clipping it.
+
+    A footer message (help text, a validation error, an import summary) used
+    to lose its back half behind a single ``…`` — the fix is to keep every
+    word, just spread across more lines. A run with no spaces wider than one
+    line (a CJK sentence, a long path) is hard-broken since there is no word
+    boundary to break on. Capped at *max_lines* so one runaway message cannot
+    swallow the whole settings list; anything left over falls back to the old
+    ellipsis on the last line.
+    """
+    lines: List[str] = [""]
+    for word in text.split(" "):
+        candidate = f"{lines[-1]} {word}".strip() if lines[-1] else word
+        if width(candidate) <= columns:
+            lines[-1] = candidate
+            continue
+        if lines[-1]:
+            lines.append("")
+        while width(word) > columns:
+            head, word = _slice_by_width(word, columns)
+            lines[-1] = head
+            lines.append("")
+        lines[-1] = word
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = _clip(lines[-1], columns)
+    return lines
+
+
 def _clip(text: str, columns: int) -> str:
     """Truncate to *columns* display cells, with an ellipsis when it had to cut."""
     if width(text) <= columns:
@@ -363,7 +404,8 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
             # While typing, the format the field accepts is more useful than
             # the prose describing what the setting means.
             help_line = _format_hint(setting, lang) or help_line
-        foot.append(f"   {paint.muted}{_clip(help_line, PANEL_WIDTH - 3)}{paint.reset}")
+        for line in _wrap(help_line, PANEL_WIDTH - 3):
+            foot.append(f"   {paint.muted}{line}{paint.reset}")
         if setting.kind == "secret":
             # Say where the token actually lives — or that it cannot be stored
             # here at all, which is the one case the user must act on.
@@ -371,11 +413,16 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
                            backend=secrets_store.backend_label())
                     if secrets_store.available() else i18n.t("menu.no_secret_store", lang))
             colour = paint.muted if secrets_store.available() else paint.warn
-            foot.append(f"   {colour}{_clip(note, PANEL_WIDTH - 3)}{paint.reset}")
+            for line in _wrap(note, PANEL_WIDTH - 3):
+                foot.append(f"   {colour}{line}{paint.reset}")
     if error:
-        foot.append(f" {paint.err}✗ {_clip(error, PANEL_WIDTH - 3)}{paint.reset}")
+        wrapped = _wrap(error, PANEL_WIDTH - 3)
+        foot.append(f" {paint.err}✗ {wrapped[0]}{paint.reset}")
+        foot.extend(f"   {paint.err}{line}{paint.reset}" for line in wrapped[1:])
     if notice:
-        foot.append(f" {paint.ok}✓ {_clip(notice, PANEL_WIDTH - 3)}{paint.reset}")
+        wrapped = _wrap(notice, PANEL_WIDTH - 3)
+        foot.append(f" {paint.ok}✓ {wrapped[0]}{paint.reset}")
+        foot.extend(f"   {paint.ok}{line}{paint.reset}" for line in wrapped[1:])
     foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(config.SETTINGS)}"))
 
     blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer)
