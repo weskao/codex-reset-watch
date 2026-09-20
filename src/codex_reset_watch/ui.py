@@ -61,7 +61,41 @@ SEL_DOT = "\033[38;2;45;120;100m"
 
 GLYPH_MARK = "◆"
 GLYPH_GROUP = "▍"
-GLYPH_CURSOR = "▌"      # a solid bar reads as a cursor from across the room
+GLYPH_CURSOR = "▸"
+# The selected row's cursor breathes. Rotating it was tried and abandoned: a
+# terminal cell holds one glyph from the font, the font has no continuous
+# family of in-between shapes, so any "rotation" is a handful of visibly
+# different characters swapping in place — which reads as a flicker, not as
+# motion. Colour is the one axis a terminal *can* animate continuously, at
+# 24-bit depth, so the glyph never moves and never changes shape and only its
+# brightness ramps up and down.
+#
+# The dim end sits well clear of the selected row's band (rgb 20,74,62): a
+# cursor that fades into its own background is exactly the blink this avoids.
+CURSOR_PULSE_DIM = (70, 165, 135)
+CURSOR_PULSE_BRIGHT = (190, 255, 225)
+CURSOR_PULSE_INTERVAL = 0.1   # seconds per frame while a real terminal is idle
+
+
+def _pulse_frames(glyph: str, dim: Tuple[int, int, int],
+                  bright: Tuple[int, int, int], steps: int = 7) -> Tuple[str, ...]:
+    """The breathe cycle: *steps* colours from *bright* down to *dim* and back,
+    each an SGR prefix on *glyph*.
+
+    Frame 0 is the brightest, so a one-shot render that never touches the
+    animation shows a cursor at full strength. The endpoints are not repeated
+    on the way back up, so the cycle has no stutter at the turning points.
+    """
+    levels = [i / (steps - 1) for i in range(steps)]
+    frames = []
+    for level in levels[::-1] + levels[1:-1]:
+        rgb = tuple(round(d + (b - d) * level) for d, b in zip(dim, bright))
+        frames.append("\033[38;2;%d;%d;%dm%s" % (*rgb, glyph))
+    return tuple(frames)
+
+
+CURSOR_PULSE_FRAMES = _pulse_frames(
+    GLYPH_CURSOR, CURSOR_PULSE_DIM, CURSOR_PULSE_BRIGHT)
 GLYPH_PROMPT = "❱"
 GLYPH_CARET = "▏"
 GLYPH_CYCLE = "←→"      # this row changes with the arrow keys
@@ -231,13 +265,14 @@ def _format_hint(setting: config.Setting, lang: str) -> str:
 
 
 def _row(paint: Paint, index: int, setting: config.Setting, value: Any, lang: str,
-         *, selected: bool = False, editing: bool = False, edit_buffer: str = "") -> str:
+         *, selected: bool = False, editing: bool = False, edit_buffer: str = "",
+         cursor_glyph: str = GLYPH_CURSOR) -> str:
     """One settings line, laid out in fixed columns so nothing shifts::
 
-         ▌  4 Scan interval ···················· 45 minutes  ←→
+         ▶  4 Scan interval ···················· 45 minutes  ←→
         └┬┘└┬┘ └──── label ───┘└─ leader ─┘└─ value ─┘└ afford ┘
          │  └ number (2)                       right-aligned
-         └ cursor bar
+         └ cursor — breathes through CURSOR_PULSE_FRAMES while idle
 
     Every column — including the affordance hint — is reserved on *every* row,
     so moving the cursor changes colour and nothing else. A row whose value
@@ -255,7 +290,14 @@ def _row(paint: Paint, index: int, setting: config.Setting, value: Any, lang: st
         shown = config.render(setting, value, lang)
         colour = paint.sel_value if (selected and paint.sel) else _value_colour(paint, setting, value)
 
-    indent = 6            # " ▌ NN "
+    # The cursor field is as wide as the animation's frames: a one-cell glyph
+    # keeps the historic layout, while a style that needs room to move (a
+    # nudge, a growing tail) widens every row equally, so the columns still
+    # line up. A frame may carry its own SGR colour — dropped when colour is
+    # off, so piped output and the tests stay plain text.
+    glyph = cursor_glyph if paint.accent else strip_ansi(cursor_glyph)
+    cursor_width = width(strip_ansi(cursor_glyph))
+    indent = 5 + cursor_width   # " ▶ NN "
     tail = AFFORD_WIDTH   # the reserved hint column on the right
     # Budget: PANEL_WIDTH - indent - tail - label - (space + 2-cell minimum
     # leader + space). Clipping to anything wider makes the leader hit its
@@ -265,13 +307,13 @@ def _row(paint: Paint, index: int, setting: config.Setting, value: Any, lang: st
     leader = max(2, PANEL_WIDTH - indent - tail - width(label) - width(shown) - 2)
 
     if selected:
-        mark = f"{paint.accent}{GLYPH_CURSOR}{paint.reset}{paint.sel}"
+        mark = f"{paint.accent}{glyph}{paint.reset}{paint.sel}"
         label_text = f"{paint.bold}{paint.sel_text}{label}{paint.reset}{paint.sel}"
         number = f"{paint.sel_text}{index:>2}{paint.reset}{paint.sel}"
         dots = f"{paint.sel_dot}{'·' * leader}{paint.reset}{paint.sel}"
         hint = f"{paint.sel_text}{_pad(_affordance(setting), tail - 1)}{paint.reset}{paint.sel}"
     else:
-        mark = " "
+        mark = " " * cursor_width
         label_text = label
         number = f"{paint.muted}{index:>2}{paint.reset}"
         dots = f"{paint.frame}{paint.dim}{'·' * leader}{paint.reset}"
@@ -290,7 +332,8 @@ def _group_heading(paint: Paint, group: str, lang: str) -> str:
 
 
 def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Optional[int],
-                    editing: bool, edit_buffer: str) -> List[Tuple[Optional[int], str]]:
+                    editing: bool, edit_buffer: str,
+                    cursor_glyph: str = GLYPH_CURSOR) -> List[Tuple[Optional[int], str]]:
     """``(row index or None, line)`` for every group heading and settings row."""
     blocks: List[Tuple[Optional[int], str]] = []
     current_group = None
@@ -302,7 +345,8 @@ def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Option
         selected = cursor == index
         blocks.append((index, _row(
             paint, index + 1, setting, cfg.get(setting.key, setting.default), lang,
-            selected=selected, editing=selected and editing, edit_buffer=edit_buffer)))
+            selected=selected, editing=selected and editing, edit_buffer=edit_buffer,
+            cursor_glyph=cursor_glyph)))
     return blocks
 
 
@@ -382,8 +426,16 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
                 lang: Optional[str] = None, editing: bool = False, edit_buffer: str = "",
                 error: Optional[str] = None, notice: Optional[str] = None,
                 confirm_defaults: bool = False, prompt: Optional[str] = None,
-                prompt_buffer: str = "", height: Optional[int] = None) -> List[str]:
-    """Every line of one frame of the keyboard menu, already windowed to *height*."""
+                prompt_buffer: str = "", height: Optional[int] = None,
+                pulse_frame: int = 0) -> List[str]:
+    """Every line of one frame of the keyboard menu, already windowed to *height*.
+
+    *pulse_frame* selects the selected row's cursor colour from
+    :data:`CURSOR_PULSE_FRAMES` — :func:`run_menu` advances it on every idle
+    tick so the cursor breathes in place, at a fixed rate, while a real
+    terminal waits for a key. The glyph itself never changes, so no frame can
+    move a column.
+    """
     paint = paint or Paint(colour_enabled())
     lang = lang or i18n.current_language(cfg)
     height = height or shutil.get_terminal_size((80, 40)).lines
@@ -425,7 +477,8 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
         foot.extend(f"   {paint.ok}{line}{paint.reset}" for line in wrapped[1:])
     foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(config.SETTINGS)}"))
 
-    blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer)
+    cursor_glyph = CURSOR_PULSE_FRAMES[pulse_frame % len(CURSOR_PULSE_FRAMES)]
+    blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer, cursor_glyph)
     return head + _window(blocks, cursor, height - len(head) - len(foot), paint) + foot
 
 
@@ -792,6 +845,7 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
     paint = Paint(colour_enabled(out))
     state = MenuState(values=cfg, cursor=cursor)
     painted = 0
+    pulse_frame = 0
     with keys.raw_mode():
         while True:
             lang = i18n.current_language(state.values)
@@ -799,7 +853,15 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
                 state.values, state.cursor, paint=paint, lang=lang, editing=state.editing,
                 edit_buffer=state.edit_buffer, error=state.error, notice=state.notice,
                 confirm_defaults=state.confirm_defaults, prompt=state.prompt,
-                prompt_buffer=state.prompt_buffer, height=height), out, painted)
+                prompt_buffer=state.prompt_buffer, height=height,
+                pulse_frame=pulse_frame), out, painted)
+            if not keys.key_ready(CURSOR_PULSE_INTERVAL):
+                # Idle: advance the cursor's pulse frame and redraw, without
+                # ever reaching `step()` — an animation tick must never be
+                # mistaken for a real keypress (e.g. `_step_confirm` treats
+                # any non-"y" key as "cancel").
+                pulse_frame += 1
+                continue
             try:
                 event = read()
             except (KeyboardInterrupt, StopIteration):

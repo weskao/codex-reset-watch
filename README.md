@@ -240,9 +240,12 @@ all work too (see [§3](#--is-optional-everywhere)).
 | `e` / `i` | export / import settings — type a path, `Enter` |
 | `q` / `Ctrl-C` | quit |
 
-The selected row is a full-width highlighted band with a solid cursor bar, and it ends in the
+The selected row is a full-width highlighted band marked with a `▸` cursor, and it ends in the
 key that acts on it — `←→` when the row cycles, `⏎` when it opens an editor. That column is
-reserved on every row, so moving the cursor never shifts the value column. The row's help text
+reserved on every row, so moving the cursor never shifts the value column. While the menu waits
+for a key, that cursor breathes: the glyph stays put and only its colour ramps up and down, so
+the animation cannot move a column. It runs on a real terminal only — piped or redirected
+output never animates, and stays plain text. The row's help text
 appears below the list, and the bottom-right counter (`10/22`) says where you are; on a short
 terminal the list scrolls with `▴ N more` / `▾ N more` markers rather than silently hiding rows.
 

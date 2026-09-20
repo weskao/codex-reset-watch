@@ -105,6 +105,37 @@ def _read_byte(timeout: Optional[float] = None) -> Optional[bytes]:
     return _read_byte_posix(timeout)
 
 
+def key_ready(timeout: float) -> bool:
+    """True if a keypress is already waiting — peeks without consuming a byte.
+
+    Used by :func:`codex_reset_watch.ui.run_menu` to animate the selected
+    row's cursor while a real terminal is idle: block for at most *timeout*
+    seconds, then let the caller redraw the next animation frame instead of
+    read_key()'s indefinite block. A redirected/non-tty stdin (piped input,
+    tests) always reports ready immediately, so the animation branch never
+    fires — and never adds latency — outside a real keyboard menu.
+    """
+    if IS_WINDOWS:
+        import msvcrt
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if msvcrt.kbhit():
+                return True
+            time.sleep(0.01)
+        return False
+    import select
+
+    try:
+        fd = sys.stdin.fileno()
+        if not os.isatty(fd):
+            return True
+    except (OSError, ValueError):
+        return True
+    ready, _, _ = select.select([fd], [], [], timeout)
+    return bool(ready)
+
+
 _POSIX_ARROWS = {b"A": Key.UP, b"B": Key.DOWN, b"C": Key.RIGHT, b"D": Key.LEFT}
 _WINDOWS_ARROWS = {b"H": Key.UP, b"P": Key.DOWN, b"K": Key.LEFT, b"M": Key.RIGHT}
 
