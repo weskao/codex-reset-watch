@@ -3,7 +3,11 @@ from scripts import schtasks
 
 class SchtasksTests(unittest.TestCase):
     def test_daily_task_runs_once_a_day_at_ten(self):
-        cmd = schtasks.daily_task_command(r"C:\bin\codex-reset-watch.exe")
+        # "local" pins daily_time straight through, so the assertion holds on a
+        # UTC CI runner as well as a UTC+8 dev machine (see tests/test_config.py
+        # for the timezone conversion itself).
+        cmd = schtasks.daily_task_command(
+            r"C:\bin\codex-reset-watch.exe", {"daily_time": "10:00", "timezone": "local"})
         self.assertEqual(cmd, [
             "schtasks", "/Create", "/F", "/TN", "CodexResetWatchDaily",
             "/TR", r'"C:\bin\codex-reset-watch.exe" daily',

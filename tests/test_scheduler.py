@@ -145,7 +145,7 @@ class SystemdRenderTests(unittest.TestCase):
 
 class SchtasksCommandTests(unittest.TestCase):
     def test_default_daily_and_monitor_commands(self):
-        self.assertEqual(scheduler.daily_task_command(r"C:\bin\crw.exe"), [
+        self.assertEqual(scheduler.daily_task_command(r"C:\bin\crw.exe", cfg()), [
             "schtasks", "/Create", "/F", "/TN", "CodexResetWatchDaily",
             "/TR", r'"C:\bin\crw.exe" daily', "/SC", "DAILY", "/ST", "10:00",
         ])
