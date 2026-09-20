@@ -162,61 +162,122 @@ Run monitor path manually:
 crw monitor
 ```
 
-Adjust timing, notifications, or paths (see [§4](#4-configuration-crw-config)):
+Adjust timing, notifications, Telegram, or paths (see [§4](#4-configuration-crw-config)):
 
 ```bash
 crw config
 ```
 
+Print the running version:
+
+```bash
+crw --version
+```
+
+### `--` is optional everywhere
+
+Every subcommand may be written with or without leading dashes, and so may every one of its
+flags. These pairs are identical:
+
+| Either | Or |
+|---|---|
+| `crw config` | `crw --config` |
+| `crw config --list` | `crw config list` |
+| `crw config --set daily_time=09:00` | `crw config set daily_time=09:00` |
+| `crw config --export ~/crw.json` | `crw config export ~/crw.json` |
+| `crw check --no-notify` | `crw check no-notify` |
+| `crw daily --force` | `crw daily force` |
+| `crw logs --lines 50` | `crw logs lines 50` |
+
+A bare word is only read as a flag after the subcommand that actually declares it, so
+`crw config set export` still sets a key literally named `export`, and anything after a bare
+`--` is passed through exactly as typed.
+
 ## 4. Configuration (`crw config`)
 
 Every tunable value — whether the daily notification runs at all and at what time, how often the
-background scan runs, notification toggles, API endpoints/timeouts, and config/state/log folder
-locations — lives in one schema (`src/codex_reset_watch/config.py`) and is editable without hand-
-editing JSON:
+background scan runs, notification toggles, Telegram credentials, API endpoints/timeouts,
+interface language, and config/state/log folder locations — lives in one schema
+(`src/codex_reset_watch/config.py`) and is editable without hand-editing JSON:
 
 ```bash
-crw config              # interactive menu (arrow-free: type a number, Enter)
-crw config --list       # print current settings and exit
+crw config                     # interactive menu (arrow keys)
+crw config --list              # print current settings and exit
 crw config --set scan_interval_minutes=45m --set daily_time=09:30
+crw config --export ~/crw-settings.json    # portable backup, secrets excluded
+crw config --import ~/crw-settings.json    # apply a backup, all-or-nothing
 ```
+
+Remember that `--` is optional: `crw --config`, `crw config list` and `crw config export FILE`
+all work too (see [§3](#--is-optional-everywhere)).
+
+### The interactive menu
+
+`crw config` with no flags opens a keyboard-driven menu on a real terminal:
+
+| Key | Does |
+|---|---|
+| `↑` `↓` | move between rows |
+| `←` `→` | change a toggle (On/Off) or step through a choice (Language) |
+| `Enter` | toggle a switch, or open an inline editor for a typed value |
+| `Esc` | cancel the current edit (or quit from the row list) |
+| `a` | apply the OS schedule now |
+| `d` | restore every default (asks `y` to confirm) |
+| `e` / `i` | export / import settings — type a path, `Enter` |
+| `q` / `Ctrl-C` | quit |
+
+Each change saves immediately, the selected row explains itself on the line below the list, and
+a schedule-relevant change re-applies the OS schedule on quit automatically.
+
+When stdin or stdout is not a terminal (a pipe, CI, a test), the same schema is served by a
+numbered prompt instead — type the row number, `Enter` — so `crw config` never hangs waiting for
+a keypress that cannot arrive.
 
 `crw config --list` (values below are an example, not your real settings):
 
 ```text
-╭────────────────────────────────────────────────────────────────╮
-│ ◈ Codex Reset Watch · 設定                                    │
-│ ~/Library/Application Support/codex-reset-watch/config.json    │
-╰────────────────────────────────────────────────────────────────╯
+ ◆ Codex Reset Watch · Settings                                   v0.1.0
+   ~/Library/Application Support/codex-reset-watch/config.json
+ ────────────────────────────────────────────────────────────────────────
 
- ▎ 排程 Scheduling
-  1  每日通知 ················································ On
-  2  每日時間 ············································· 09:30
-  3  背景掃描 ················································ On
-  4  掃描間隔 ········································ 45 minutes
-  5  時區 ··········································· Asia/Taipei
+ ▍ Scheduling
+    1 Daily notification ············································ On
+    2 Daily time ················································· 09:30
+    3 Background scan ··············································· On
+    4 Scan interval ········································· 45 minutes
+    5 Timezone ············································· Asia/Taipei
 
- ▎ 通知 Notifications
-  6  新 Reset 事件 ··········································· On
-  7  未來 Reset 訊號 ········································· On
-  8  掃描無變化也通知 ······································· Off
-  9  每日無變化也通知 ········································ On
+ ▍ Notifications
+    6 New reset events ·············································· On
+    7 Upcoming reset signals ········································ On
+    8 Notify on unchanged scan ····································· Off
+    9 Notify on unchanged day ······································· On
 
- ▎ API
- 10  API 位址 ·························· https://codex-resets.com
- ...
+ ▍ Telegram
+   10 Bot token ·············································· (not set)
+   11 Chat ID ··········································· -1002847193056
 
- ▎ 位置 Storage
- 16  狀態資料夾 ···································· （系統預設）
- 17  Log 資料夾 ···································· （系統預設）
- 18  單一 log 上限 ········································ 2 MiB
- 19  Log 保留份數 ············································· 5
+ ▍ API
+   12 API base ································ https://codex-resets.com
+   13 status path ······································· /api/v1/status
+   14 resets path ··················· /api/v1/resets?limit=20&order=desc
+   15 Timeout (seconds) ············································· 15
+   16 Retries ························································ 3
+   17 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com/ap…
+
+ ▍ Storage
+   18 State folder ·································· (platform default)
+   19 Log folder ···································· (platform default)
+   20 Log size cap ··············································· 2 MiB
+   21 Log backups ···················································· 3
+
+ ▍ Interface
+   22 Language ·········································· auto (English)
+
+ Times shown in Asia/Taipei; the OS fires each job in its own local time.
 ```
 
-The interactive menu (`crw config`, no flags) renders the same panel in color, with numbered
-prompts for each row (type the number, `Enter` to edit; a bare `Enter` on a `true`/`false` row
-toggles it; `a` applies the schedule immediately, `d` restores defaults, `q` quits — a
-schedule-relevant change re-applies on quit automatically either way).
+### Settings
 
 | Setting | Meaning | Examples |
 |---|---|---|
@@ -227,14 +288,48 @@ schedule-relevant change re-applies on quit automatically either way).
 | `timezone` | Timezone `daily_time` and rendered timestamps use | `UTC+8`, `UTC-05:30`, `UTC`, `local`, or an IANA name (`Asia/Taipei`) |
 | `notify_new_reset_events` / `notify_upcoming_reset` | Which event types trigger a Telegram push | `on` / `off` |
 | `monitor_notify_when_unchanged` / `daily_notify_when_unchanged` | Push even when nothing changed since last check | `on` / `off` |
+| `telegram_bot_token` | Bot API token — **stored in the OS keychain, never in a file** (see [§8](#8-telegram)) | masked as `********WXYZ` |
+| `telegram_chat_id` | Chat that receives notifications | `-1002847193056` |
 | `api_base`, `status_path`, `resets_path` | codex-resets.com endpoints | — |
 | `request_timeout_seconds`, `request_retries` | HTTP client tuning | — |
 | `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
+| `language` | Menu and message language | `auto`, `en`, `zh-TW` |
 
-`crw config --set` validates every value the same way the interactive menu does (rejects an
-out-of-range interval, a malformed `HH:MM`, etc.) and reports which key failed. Changing any
-setting that affects the OS scheduler (`daily_enabled`, `daily_time`, `monitor_enabled`,
+### Language
+
+The menu, help text, validation errors and the `doctor` summary are available in English and
+Traditional Chinese. `auto` (the default) follows the system locale — `zh_TW`, `zh_HK`, `zh_Hant`
+and `zh_MO` resolve to 繁體中文, everything else to English. Pin it explicitly with:
+
+```bash
+crw config set language=zh-TW
+```
+
+`CRW_LANG=zh-TW crw config --list` overrides it for a single run without touching the config.
+
+### Export and import
+
+```bash
+crw config export ~/crw-settings.json   # or `-` for stdout, to pipe it somewhere
+crw config import ~/crw-settings.json
+```
+
+An export is a portable backup: it carries every declared **non-secret** setting and is written
+`0600`. The bot token is filtered out by its schema kind, not by a hand-kept list, so a secret
+added to the schema later cannot start leaking into export files by omission.
+
+An import is all-or-nothing and reports what it refused:
+
+- **Secrets are never imported.** An export has none, so a token in the file is either
+  hand-written or a pasted mask — writing either would destroy the real token on this machine.
+- **Unknown keys are left alone** rather than stored back as an unvalidated blob.
+- **One invalid value aborts the whole import** before the first write, so a half-applied config
+  can never be the outcome.
+
+`crw config --set` validates every value the same way the menu does (rejects an out-of-range
+interval, a malformed `HH:MM`, etc.) and reports which key failed. Changing any setting that
+affects the OS scheduler (`daily_enabled`, `daily_time`, `monitor_enabled`,
 `scan_interval_minutes`, `timezone`, `log_dir`) automatically re-renders and re-registers the
 scheduler job(s) for the current OS on exit/save — the same effect as running:
 
@@ -247,8 +342,8 @@ config-driven counterpart to `scripts/render_launchd.py` / `render_systemd.py` /
 which `scripts/install.py` also calls on first install — see [§7](#7-scheduler-jobs).
 
 Config file location, in priority order: `$CRW_CONFIG`, else the platform default from the
-[Installed paths](#installed-paths) table above. `config.example.json` documents every key with
-its default value.
+[Installed paths](#installed-paths) table above. `config.example.json` documents every
+file-backed key with its default value — the bot token is deliberately absent from it.
 
 ## 5. uv project commands
 
@@ -340,14 +435,67 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 ## 8. Telegram
 
-Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script dependency. Set both env vars before running:
+Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script
+dependency. There are two ways to supply the credentials, and the environment always wins.
+
+### Option A — configure them once (recommended)
+
+```bash
+crw config          # rows 10 and 11, under "Telegram"
+```
+
+or non-interactively:
+
+```bash
+crw config set telegram_bot_token=123456:ABC...
+crw config set telegram_chat_id=-1002847193056
+```
+
+**The bot token is never written to a file.** It goes into the operating system's own credential
+store, and the config file, exports, backups and screenshots never contain it:
+
+| OS | Where the token is kept | Via |
+|---|---|---|
+| macOS | Keychain (`codex-reset-watch` generic password) | `security` |
+| Linux | Secret Service — GNOME Keyring / KWallet | `secret-tool` (libsecret) |
+| Windows | DPAPI, encrypted for your user account | PowerShell |
+| none of the above | **nothing is stored** | — |
+
+That last row is deliberate. With no credential store available, `crw` refuses to persist the
+token rather than falling back to a plaintext file or to home-rolled obfuscation, and the menu
+says so on the token row. Use Option B there.
+
+Wherever it is displayed the token is masked (`********WXYZ`), it is never passed on a command
+line (the credential helpers read it on **stdin**, so it cannot surface in `ps` or shell
+history), and it is never written to the event log.
+
+To inspect or remove the stored item yourself on macOS:
+
+```bash
+security find-generic-password -s codex-reset-watch -a telegram_bot_token   # metadata only
+security delete-generic-password -s codex-reset-watch -a telegram_bot_token
+```
+
+### Option B — environment variables
 
 ```bash
 export TG_BOT_TOKEN="..."
 export TG_CHAT_ID="..."
 ```
 
-The project does not copy or hardcode credentials; both vars are read at runtime only. `crw doctor` reports whether they're set.
+These take precedence over the stored values, each falling back independently, so an existing
+install keeps behaving exactly as before. This is also what `scripts/install.py` bakes into the
+generated scheduler job (see [§7](#7-scheduler-jobs)) — though a token configured via Option A
+needs no such baking, because every scheduled run reads it from the credential store itself.
+
+`crw doctor` reports which store is in use and where each credential came from, showing the
+token masked:
+
+```text
+✅ Secret store: macOS Keychain
+✅ Telegram bot token: ********QrSt (macOS Keychain)
+✅ Telegram chat id: -1002847193056 (environment)
+```
 
 Then:
 
@@ -423,9 +571,15 @@ make test-unit
 make test-integration
 ```
 
-The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config` flows without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
+The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config` flows without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
 
-Every test that exercises `crw config`/`crw apply-schedule` mocks `scheduler.apply` — none of them call the real `launchctl`/`systemctl`/`schtasks` against whatever this machine actually has registered (`tests/test_ui.py`, `tests/test_cli_config.py`); the scheduler *rendering* logic itself (`tests/test_scheduler.py`, `tests/test_launchd.py`, `tests/test_systemd.py`) is exercised fully, just always against a throwaway output directory.
+Three families of side effect are mocked everywhere, for the same reason — a unit test must not touch what this machine actually has:
+
+- **The OS scheduler.** Every test that exercises `crw config` / `crw apply-schedule` mocks `scheduler.apply` (`tests/test_ui.py`, `tests/test_ui_menu.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`). The scheduler *rendering* logic itself (`tests/test_scheduler.py`, `tests/test_launchd.py`, `tests/test_systemd.py`) is exercised fully, always against a throwaway output directory.
+- **The credential store.** `tests/test_secrets_store.py` replaces the single subprocess funnel, so the macOS, Linux and Windows code paths are all covered on whatever machine runs the suite, and no real Keychain item is ever created.
+- **The terminal.** The keyboard menu's brain (`ui.step`) is a pure function of state and keypress, so `tests/test_ui_menu.py` drives the whole interaction with synthetic `KeyEvent`s, and `tests/test_keys.py` feeds raw escape-sequence bytes through a fake byte source — no TTY, no raw mode, nothing to restore.
+
+Language-dependent assertions always pin the language explicitly (`lang="en"` / `CRW_LANG=zh-TW`), so the suite gives the same result on a machine with any locale.
 
 ## 13. Scheduler status
 

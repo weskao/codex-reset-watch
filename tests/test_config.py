@@ -153,10 +153,18 @@ class CoercionTests(unittest.TestCase):
             config.coerce(s, "   ")
 
     def test_render_bool_and_interval_and_blank_path(self):
+        # No language argument renders English on purpose: a piped `--list`
+        # must not change shape with the machine's locale.
         self.assertEqual(config.render(config.BY_KEY["daily_enabled"], True), "On")
         self.assertEqual(config.render(config.BY_KEY["daily_enabled"], False), "Off")
         self.assertEqual(config.render(config.BY_KEY["scan_interval_minutes"], 120), "2 hours")
-        self.assertEqual(config.render(config.BY_KEY["log_dir"], ""), "（系統預設）")
+        self.assertEqual(config.render(config.BY_KEY["log_dir"], ""), "(platform default)")
+
+    def test_render_follows_the_requested_language(self):
+        self.assertEqual(config.render(config.BY_KEY["daily_enabled"], True, "zh-TW"), "開啟")
+        self.assertEqual(config.render(config.BY_KEY["log_dir"], "", "zh-TW"), "（系統預設）")
+        self.assertEqual(
+            config.render(config.BY_KEY["scan_interval_minutes"], 120, "zh-TW"), "2 小時")
 
 
 class SetValueTests(unittest.TestCase):

@@ -23,7 +23,7 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import config as cfgmod
-from . import filelock, scheduler, telegram_notify, ui
+from . import filelock, i18n, scheduler, secrets_store, telegram_notify, ui
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
@@ -773,8 +773,9 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
 
 
 def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
-    token = os.environ.get("TG_BOT_TOKEN", "")
-    chat_id = os.environ.get("TG_CHAT_ID", "")
+    # Environment first, then the keychain-backed config — see
+    # config.telegram_credentials. Neither value is ever logged.
+    token, chat_id = cfgmod.telegram_credentials(cfg)
     if not token or not chat_id:
         logger.event("ERROR", "telegram_credentials_missing")
         return False
@@ -894,6 +895,11 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         return 0
 
 
+def _credential_source(env_var: str) -> str:
+    """Where a credential came from, for ``doctor``. Never prints the value."""
+    return "environment" if os.environ.get(env_var, "").strip() else secrets_store.backend_label()
+
+
 def doctor() -> int:
     cfg = load_config()
     logger = Logger(cfg)
@@ -902,10 +908,13 @@ def doctor() -> int:
     checks.append(("Python >= 3.11", py_ok, f"{sys.version.split()[0]} ({display_path(sys.executable)})"))
     cfg_path = default_config_path()
     checks.append(("Config", cfg_path.exists(), display_path(cfg_path)))
-    has_token = bool(os.environ.get("TG_BOT_TOKEN"))
-    has_chat = bool(os.environ.get("TG_CHAT_ID"))
-    checks.append(("TG_BOT_TOKEN set", has_token, "set" if has_token else "unset"))
-    checks.append(("TG_CHAT_ID set", has_chat, "set" if has_chat else "unset"))
+    token, chat_id = cfgmod.telegram_credentials(cfg)
+    checks.append(("Secret store", secrets_store.available(), secrets_store.backend_label()))
+    checks.append(("Telegram bot token", bool(token),
+                   f"{cfgmod.mask_secret(token)} ({_credential_source('TG_BOT_TOKEN')})"
+                   if token else "unset"))
+    checks.append(("Telegram chat id", bool(chat_id),
+                   f"{chat_id} ({_credential_source('TG_CHAT_ID')})" if chat_id else "unset"))
     client = APIClient(cfg, logger)
     status, err = client.get_json(str(cfg.get("status_path", "/api/v1/status")))
     checks.append(("Codex Resets status API", status is not None, "OK" if status is not None else err))
@@ -951,6 +960,7 @@ def apply_schedule_cmd() -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="codex-reset-watch", description="Monitor codex-resets.com and notify via Telegram.")
+    p.add_argument("--version", "-V", action="version", version=f"%(prog)s {ui.package_version()}")
     sub = p.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", aliases=["update"], help="立即查詢、更新狀態、輸出到 Terminal，預設同時 Telegram 通知")
     check.add_argument("--no-notify", action="store_true", help="只顯示，不傳 Telegram")
@@ -967,34 +977,123 @@ def build_parser() -> argparse.ArgumentParser:
     cfgp.add_argument("--set", action="append", metavar="KEY=VALUE",
                       help="非互動式修改一項設定，可重複；影響排程的鍵會自動重新套用")
     cfgp.add_argument("--apply-schedule", action="store_true", help="搭配 --set 時，強制重新套用 OS 排程")
+    cfgp.add_argument("--export", metavar="FILE", help="把可攜設定寫成 JSON（`-` 代表標準輸出）；機密不會匯出")
+    cfgp.add_argument("--import", dest="import_file", metavar="FILE", help="從 JSON 匯入設定（全有全無）")
     sub.add_parser("apply-schedule", help="依目前設定重新套用 OS 排程（launchd/systemd/schtasks）")
     return p
 
 
+# ── `--`-optional syntax ─────────────────────────────────────────────────────
+# Every subcommand may be written `--config` as well as `config`, and every
+# flag `list` as well as `--list`. One pure rewrite of argv before argparse
+# sees it, rather than a second parser or a pile of aliases.
+
+SUBCOMMANDS: Tuple[str, ...] = (
+    "check", "update", "monitor", "daily", "doctor", "logs", "config", "apply-schedule",
+)
+
+#: Bare words that mean a flag, per subcommand. A name is only rewritten after
+#: the subcommand that actually declares it, so `check force` stays a
+#: positional argparse can complain about instead of a flag we invented.
+SUBCOMMAND_FLAGS: Dict[str, Tuple[str, ...]] = {
+    "check": ("no-notify",),
+    "update": ("no-notify",),
+    "monitor": ("no-notify",),
+    "daily": ("force", "no-notify"),
+    "logs": ("lines",),
+    "config": ("list", "set", "apply-schedule", "export", "import"),
+    "doctor": (),
+    "apply-schedule": (),
+}
+
+#: Flags whose next token is their value, so it is never itself rewritten —
+#: `config set export` sets a key literally called "export".
+VALUE_FLAGS = frozenset({"set", "lines", "export", "import"})
+
+
+def _normalize_argv(argv: Sequence[str]) -> List[str]:
+    """Rewrite *argv* so `--` is optional on subcommands and on their flags.
+
+    Pure and total: a token it does not recognise passes through untouched, so
+    argparse still produces its own error for a genuine typo. Everything after
+    a bare ``--`` is left exactly as typed.
+    """
+    out: List[str] = []
+    command: Optional[str] = None
+    take_value = False
+    for index, token in enumerate(argv):
+        if token == "--":  # POSIX end-of-options: the rest is verbatim
+            out.extend(argv[index:])
+            return out
+        if take_value:
+            out.append(token)
+            take_value = False
+            continue
+        bare = token.lstrip("-")
+        if token.startswith("-"):
+            if command is None and bare in SUBCOMMANDS:
+                command = bare
+                out.append(bare)  # `--config` → `config`
+                continue
+            out.append(token)
+            take_value = bare in VALUE_FLAGS or bare == "n"
+            continue
+        if command is None and token in SUBCOMMANDS:
+            command = token
+            out.append(token)
+            continue
+        if command is not None and token in SUBCOMMAND_FLAGS.get(command, ()):
+            out.append(f"--{token}")
+            take_value = token in VALUE_FLAGS
+            continue
+        out.append(token)
+    return out
+
+
 def config_cmd(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    lang = i18n.current_language(cfg)
+    if args.export:
+        ok, message = ui.export_settings(cfg, args.export, lang)
+        print(f"{'✅' if ok else '❌'} {message}")
+        if ok:
+            print("⚠️  " + i18n.t("menu.export_secrets", lang,
+                                  keys=", ".join(sorted(cfgmod.SECRET_KEYS))))
+        return 0 if ok else 1
+    if args.import_file:
+        ok, message = ui.import_settings(cfg, args.import_file, lang)
+        print(f"{'✅' if ok else '❌'} {message}")
+        if not ok:
+            return 1
+        cfgmod.save(cfg)
+        return apply_schedule_cmd()
     if args.list:
-        print(ui.render_settings(load_config()))
+        print(ui.render_settings(cfg))
         return 0
     if args.set:
-        cfg = load_config()
         schedule_dirty = False
         for item in args.set:
             if "=" not in item:
-                print(f"❌ 格式需為 KEY=VALUE：{item}")
+                print("❌ " + i18n.t("menu.set_format", lang, item=item))
                 return 2
             key, _, value = item.partition("=")
             key = key.strip()
             try:
                 cfgmod.set_value(cfg, key, value)
             except KeyError:
-                print(f"❌ 未知設定：{key}（可用鍵見 `crw config --list`）")
+                print("❌ " + i18n.t("menu.set_unknown_key", lang, key=key))
                 return 2
             except ValueError as exc:
                 print(f"❌ {key}：{exc}")
                 return 2
             schedule_dirty = schedule_dirty or key in cfgmod.SCHEDULE_KEYS
         cfgmod.save(cfg)
-        print(f"✅ 已更新 {len(args.set)} 項設定並儲存：{cfgmod.config_path()}")
+        unstored = cfgmod.save_secrets(cfg)
+        print("✅ " + i18n.t("menu.set_done", lang, count=len(args.set),
+                            path=cfgmod.config_path()))
+        if unstored:
+            print(f"⚠️  {', '.join(unstored)}: no OS credential store on this machine — "
+                  f"set TG_BOT_TOKEN in the environment instead")
         if schedule_dirty or args.apply_schedule:
             return apply_schedule_cmd()
         return 0
@@ -1002,7 +1101,8 @@ def config_cmd(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    args = build_parser().parse_args(_normalize_argv(raw))
     if args.command in ("check", "update"):
         return run_check("manual", notify=not args.no_notify)
     if args.command == "monitor":

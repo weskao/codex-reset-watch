@@ -8,6 +8,7 @@
   "notify_upcoming_reset": true,
   "monitor_notify_when_unchanged": false,
   "daily_notify_when_unchanged": false,
+  "telegram_chat_id": "",
   "api_base": "https://codex-resets.com",
   "status_path": "/api/v1/status",
   "resets_path": "/api/v1/resets?limit=20&order=desc",
@@ -17,5 +18,6 @@
   "state_dir": "",
   "log_dir": "",
   "max_log_bytes": 2097152,
-  "log_backups": 3
+  "log_backups": 3,
+  "language": "auto"
 }

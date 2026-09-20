@@ -1,5 +1,6 @@
 import io
 import unittest
+import unittest.mock as mock
 
 from codex_reset_watch import config, ui
 
@@ -48,26 +49,31 @@ class RenderSettingsTests(unittest.TestCase):
         self.cfg = dict(config.DEFAULTS)
 
     def test_plain_render_has_no_escape_codes(self):
-        text = ui.render_settings(self.cfg, paint=self.plain)
+        text = ui.render_settings(self.cfg, paint=self.plain, lang="en")
         self.assertNotIn("\033", text)
 
     def test_every_setting_label_appears(self):
-        text = ui.render_settings(self.cfg, paint=self.plain)
+        text = ui.render_settings(self.cfg, paint=self.plain, lang="en")
         for setting in config.SETTINGS:
-            self.assertIn(setting.label, text)
+            self.assertIn(config.label(setting, "en"), text)
 
     def test_current_values_are_rendered(self):
         self.cfg["scan_interval_minutes"] = 45
-        text = ui.render_settings(self.cfg, paint=self.plain)
+        text = ui.render_settings(self.cfg, paint=self.plain, lang="en")
         self.assertIn("45 minutes", text)
 
     def test_group_headings_appear_once_each(self):
-        # A group name can also appear inside a row's own label/help text (e.g.
-        # "API" inside "API 位址"), so match the heading's own glyph prefix
-        # rather than a bare substring count.
-        text = ui.render_settings(self.cfg, paint=self.plain)
+        # A group name can also appear inside a row's own label or help text
+        # ("API" inside "API base"), so match the heading's own glyph prefix
+        # rather than counting a bare substring.
+        text = ui.render_settings(self.cfg, paint=self.plain, lang="en")
         for group in config.GROUPS:
-            self.assertEqual(text.count(f"{ui.GLYPH_GROUP} {group}"), 1)
+            heading = f"{ui.GLYPH_GROUP} {config.group_label(group, 'en')}"
+            self.assertEqual(text.count(heading), 1, heading)
+
+    def test_headings_follow_the_requested_language(self):
+        text = ui.render_settings(self.cfg, paint=self.plain, lang="zh-TW")
+        self.assertIn(f"{ui.GLYPH_GROUP} 排程", text)
 
 
 class SummaryLineTests(unittest.TestCase):
@@ -80,6 +86,12 @@ class SummaryLineTests(unittest.TestCase):
     def test_shows_disabled_jobs(self):
         cfg = dict(config.DEFAULTS, daily_enabled=False, monitor_enabled=False)
         line = ui.summary_line(cfg, paint=ui.Paint(False))
+        self.assertIn("Daily off", line)
+        self.assertIn("Scan off", line)
+
+    def test_disabled_jobs_in_chinese(self):
+        cfg = dict(config.DEFAULTS, daily_enabled=False, monitor_enabled=False)
+        line = ui.summary_line(cfg, paint=ui.Paint(False), lang="zh-TW")
         self.assertIn("每日 關閉", line)
         self.assertIn("掃描 關閉", line)
 
@@ -174,7 +186,14 @@ class ConfigMenuTests(unittest.TestCase):
         out = io.StringIO()
         ui.config_menu(io.StringIO("1\nq\n"), out)  # daily_enabled is a SCHEDULE_KEYS member
         self.mock_apply.assert_called_once()
-        self.assertIn("✓ 已重新套用", out.getvalue())
+        self.assertIn("✓ Re-applied the launchd schedule", out.getvalue())
+
+    def test_the_reapply_notice_follows_the_configured_language(self):
+        import os
+        with mock.patch.dict(os.environ, {"CRW_LANG": "zh-TW"}):
+            out = io.StringIO()
+            ui.config_menu(io.StringIO("1\nq\n"), out)
+        self.assertIn("✓ 已重新套用 launchd 排程", out.getvalue())
 
     def test_non_schedule_change_does_not_reapply(self):
         out = io.StringIO()

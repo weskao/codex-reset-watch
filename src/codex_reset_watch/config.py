@@ -2,13 +2,26 @@
 
 Everything the user may tune lives in :data:`SETTINGS` — one :class:`Setting`
 per row. The CLI menu (``crw config``), ``config.example.json``, the
-non-interactive ``--set`` path and the validation rules are all derived from
-that tuple, so adding a knob means appending one entry and nothing else.
+non-interactive ``--set`` path, export/import and the validation rules are all
+derived from that tuple, so adding a knob means appending one entry and nothing
+else.
+
+``label``/``help`` hold the **English** source text; every other language comes
+from :mod:`codex_reset_watch.i18n` under the ids ``setting.<key>.label`` /
+``setting.<key>.help``, and ``group`` is an id translated the same way. A
+message that was never translated therefore still renders its English source
+rather than a raw id.
 
 Config file location: ``$CRW_CONFIG``, else ``<platform config dir>/config.json``.
 State and log directories additionally honour the ``state_dir``/``log_dir``
 settings; the environment overrides (``CRW_STATE_DIR``/``CRW_LOG_DIR``) still
 win over both so a test or a one-off run can redirect them.
+
+Telegram credentials live here too, but the environment still wins: an
+existing install that exports ``TG_BOT_TOKEN``/``TG_CHAT_ID`` keeps working
+untouched, and the config file is the fallback rather than the override (see
+:func:`telegram_credentials`). The token is a ``secret`` kind, which means it
+renders masked and is never written to an export file.
 """
 from __future__ import annotations
 
@@ -19,9 +32,9 @@ import os
 import pathlib
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from . import paths
+from . import i18n, paths, secrets_store
 
 DEFAULT_API_BASE = "https://codex-resets.com"
 MIN_INTERVAL_MINUTES = 1
@@ -31,56 +44,79 @@ FALLBACK_TZ = dt.timezone(dt.timedelta(hours=8), name="UTC+8")
 
 @dataclass(frozen=True)
 class Setting:
-    """One tunable value. ``kind`` picks the parser, renderer and menu editor."""
+    """One tunable value. ``kind`` picks the parser, renderer and menu editor.
+
+    ``label``/``help`` are the English source text (see the module docstring);
+    ``group`` is a group id, not a heading. ``choices``, when present, makes a
+    row cyclable in the menu — left/right steps through the allowed values —
+    and is what ``choice`` kinds validate against.
+    """
 
     key: str
-    kind: str  # bool | int | text | time | interval | path | tz
+    kind: str  # bool | int | text | time | interval | path | tz | choice | secret
     default: Any
     group: str
     label: str
     help: str
     minimum: Optional[int] = None
     maximum: Optional[int] = None
+    choices: Optional[Tuple[str, ...]] = None
 
 
 SETTINGS: Tuple[Setting, ...] = (
-    # ── 排程 ─────────────────────────────────────────────────────────────
-    Setting("daily_enabled", "bool", True, "排程 Scheduling", "每日通知",
-            "每天固定時間送一次總覽。關閉後安裝器不會建立 daily 排程。"),
-    Setting("daily_time", "time", "10:00", "排程 Scheduling", "每日時間",
-            "HH:MM，依下方時區解讀（例：10:00）。"),
-    Setting("monitor_enabled", "bool", True, "排程 Scheduling", "背景掃描",
-            "定期掃描 API，只在有新資訊時通知。關閉後不建立 monitor 排程。"),
-    Setting("scan_interval_minutes", "interval", 120, "排程 Scheduling", "掃描間隔",
-            "最小 1 分鐘、最大 1 天。可輸入 30m / 2h / 1d 或純數字（分鐘）。",
+    # ── scheduling ───────────────────────────────────────────────────────
+    Setting("daily_enabled", "bool", True, "scheduling", "Daily notification",
+            "Send one overview at a fixed time each day."),
+    Setting("daily_time", "time", "10:00", "scheduling", "Daily time",
+            "HH:MM, read in the timezone below (e.g. 10:00)."),
+    Setting("monitor_enabled", "bool", True, "scheduling", "Background scan",
+            "Scan the API periodically, notifying only on new information."),
+    Setting("scan_interval_minutes", "interval", 120, "scheduling", "Scan interval",
+            "Minimum 1 minute, maximum 1 day. Accepts 30m / 2h / 1d or a number of minutes.",
             MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES),
-    Setting("timezone", "tz", "UTC+8", "排程 Scheduling", "時區",
-            "UTC+8、UTC-05:30、UTC、local，或 IANA 名稱（Asia/Taipei）。"),
-    # ── 通知 ─────────────────────────────────────────────────────────────
-    Setting("notify_new_reset_events", "bool", True, "通知 Notifications", "新 Reset 事件",
-            "偵測到新的已發生 Reset 公告時通知。"),
-    Setting("notify_upcoming_reset", "bool", True, "通知 Notifications", "未來 Reset 訊號",
-            "偵測到尚未發生的預告／預測訊號時通知。"),
-    Setting("monitor_notify_when_unchanged", "bool", False, "通知 Notifications", "掃描無變化也通知",
-            "開啟會在每次背景掃描都推播，即使內容沒變。"),
-    Setting("daily_notify_when_unchanged", "bool", False, "通知 Notifications", "每日無變化也通知",
-            "開啟會在每日排程都推播，即使內容沒變。"),
+    Setting("timezone", "tz", "UTC+8", "scheduling", "Timezone",
+            "UTC+8, UTC-05:30, UTC, local, or an IANA name (Asia/Taipei)."),
+    # ── notifications ────────────────────────────────────────────────────
+    Setting("notify_new_reset_events", "bool", True, "notifications", "New reset events",
+            "Notify when a newly published reset announcement is detected."),
+    Setting("notify_upcoming_reset", "bool", True, "notifications", "Upcoming reset signals",
+            "Notify when a not-yet-happened forecast or prediction signal is detected."),
+    Setting("monitor_notify_when_unchanged", "bool", False, "notifications",
+            "Notify on unchanged scan",
+            "Push on every background scan, even when nothing changed."),
+    Setting("daily_notify_when_unchanged", "bool", False, "notifications",
+            "Notify on unchanged day",
+            "Push on every daily run, even when nothing changed."),
+    # ── telegram ─────────────────────────────────────────────────────────
+    Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
+            "Bot API token. Kept in the OS keychain, never in a file; TG_BOT_TOKEN wins."),
+    Setting("telegram_chat_id", "text_optional", "", "telegram", "Chat ID",
+            "Telegram chat that receives the notifications; TG_CHAT_ID wins."),
     # ── API ──────────────────────────────────────────────────────────────
-    Setting("api_base", "text", DEFAULT_API_BASE, "API", "API 位址", "追蹤來源的 base URL。"),
-    Setting("status_path", "text", "/api/v1/status", "API", "status 路徑", "狀態端點（必要）。"),
-    Setting("resets_path", "text", "/api/v1/resets?limit=20&order=desc", "API", "resets 路徑",
-            "歷史事件端點（非必要，失敗不影響主流程）。"),
-    Setting("request_timeout_seconds", "int", 15, "API", "逾時秒數", "單次 HTTP 請求逾時。", 1, 300),
-    Setting("request_retries", "int", 3, "API", "重試次數", "可重試錯誤（429/5xx/連線）的嘗試上限。", 1, 10),
+    Setting("api_base", "text", DEFAULT_API_BASE, "api", "API base",
+            "Base URL of the tracked source."),
+    Setting("status_path", "text", "/api/v1/status", "api", "status path",
+            "Status endpoint (required)."),
+    Setting("resets_path", "text", "/api/v1/resets?limit=20&order=desc", "api", "resets path",
+            "History endpoint (optional; a failure here does not stop the main flow)."),
+    Setting("request_timeout_seconds", "int", 15, "api", "Timeout (seconds)",
+            "Per-request HTTP timeout.", 1, 300),
+    Setting("request_retries", "int", 3, "api", "Retries",
+            "Attempt limit for retryable errors (429/5xx/connection).", 1, 10),
     Setting("user_agent", "text", "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)",
-            "API", "User-Agent", "送出的 User-Agent 標頭。"),
-    # ── 位置與 log ───────────────────────────────────────────────────────
-    Setting("state_dir", "path", "", "位置 Storage", "狀態資料夾", "留空＝系統預設位置。"),
-    Setting("log_dir", "path", "", "位置 Storage", "Log 資料夾",
-            "留空＝系統預設位置。變更後需重新套用排程（排程會寫入這個資料夾）。"),
-    Setting("max_log_bytes", "int", 2 * 1024 * 1024, "位置 Storage", "單一 log 上限",
-            "超過就輪替（bytes）。", 64 * 1024, 512 * 1024 * 1024),
-    Setting("log_backups", "int", 3, "位置 Storage", "Log 保留份數", "輪替時保留幾個歷史檔。", 0, 20),
+            "api", "User-Agent", "User-Agent header sent with each request."),
+    # ── storage ──────────────────────────────────────────────────────────
+    Setting("state_dir", "path", "", "storage", "State folder", "Blank = platform default."),
+    Setting("log_dir", "path", "", "storage", "Log folder",
+            "Blank = platform default. Changing it needs the schedule re-applied."),
+    Setting("max_log_bytes", "int", 2 * 1024 * 1024, "storage", "Log size cap",
+            "Rotate once a log passes this size (bytes).", 64 * 1024, 512 * 1024 * 1024),
+    Setting("log_backups", "int", 3, "storage", "Log backups",
+            "How many rotated files to keep.", 0, 20),
+    # ── interface ────────────────────────────────────────────────────────
+    Setting("language", "choice", "auto", "interface", "Language",
+            "Language for the menu and messages. auto follows the system locale.",
+            choices=(i18n.AUTO,) + i18n.LANGUAGE_CODES),
 )
 
 BY_KEY: Dict[str, Setting] = {s.key: s for s in SETTINGS}
@@ -92,6 +128,30 @@ SCHEDULE_KEYS = frozenset({
     "daily_enabled", "daily_time", "monitor_enabled", "scan_interval_minutes",
     "timezone", "log_dir",
 })
+
+#: Read off the kind, never hand-listed: a secret added to :data:`SETTINGS` must
+#: not start leaking into export files just because this line was not updated.
+SECRET_KEYS = frozenset(s.key for s in SETTINGS if s.kind == "secret")
+
+#: Environment variables that outrank the stored Telegram credentials.
+TELEGRAM_ENV = {"telegram_bot_token": "TG_BOT_TOKEN", "telegram_chat_id": "TG_CHAT_ID"}
+
+
+# ── translated text ──────────────────────────────────────────────────────────
+
+def label(setting: Setting, lang: Optional[str] = None) -> str:
+    """The row label in *lang*, falling back to the English source text."""
+    return i18n.t(f"setting.{setting.key}.label", lang, default=setting.label)
+
+
+def help_text(setting: Setting, lang: Optional[str] = None) -> str:
+    """The row's one-line explanation in *lang*, falling back to English."""
+    return i18n.t(f"setting.{setting.key}.help", lang, default=setting.help)
+
+
+def group_label(group: str, lang: Optional[str] = None) -> str:
+    """The heading for a group id in *lang*, falling back to the id itself."""
+    return i18n.t(f"group.{group}", lang, default=group)
 
 
 # ── parsing helpers ──────────────────────────────────────────────────────────
@@ -107,37 +167,42 @@ _OFFSET_RE = re.compile(r"^(?:UTC|GMT)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?$", re
 def parse_interval(raw: Any) -> int:
     """``"2h"`` / ``"90"`` / ``"1d"`` → minutes, clamped to the offered range."""
     if isinstance(raw, bool):
-        raise ValueError("間隔必須是時間長度，例如 30m / 2h / 1d")
+        raise ValueError(i18n.t("error.interval_type"))
     if isinstance(raw, (int, float)):
         minutes = int(raw)
     else:
         m = _INTERVAL_RE.match(str(raw))
         if not m:
-            raise ValueError("看不懂的間隔；請用 30m / 2h / 1d 或純數字（分鐘）")
+            raise ValueError(i18n.t("error.interval_format"))
         minutes = int(m.group(1)) * _UNIT_MINUTES[(m.group(2) or "m").lower()]
     if not MIN_INTERVAL_MINUTES <= minutes <= MAX_INTERVAL_MINUTES:
-        raise ValueError(f"間隔需在 {MIN_INTERVAL_MINUTES} 分鐘 ~ 1 天（{MAX_INTERVAL_MINUTES} 分鐘）之間")
+        raise ValueError(i18n.t("error.interval_range",
+                                low=MIN_INTERVAL_MINUTES, high=MAX_INTERVAL_MINUTES))
     return minutes
 
 
-def format_interval(minutes: int) -> str:
+def format_interval(minutes: int, lang: Optional[str] = None) -> str:
+    """``120`` → ``"2 hours"``. Defaults to English so machine-facing callers
+    (``--list`` piped to a file, tests) do not depend on the machine's locale;
+    the menu passes the language it is rendering in."""
+    lang = lang or i18n.FALLBACK
     if minutes % 1440 == 0:
         n = minutes // 1440
-        return f"{n} day" + ("s" if n != 1 else "")
+        return i18n.t("interval.day" if n == 1 else "interval.days", lang, n=n)
     if minutes % 60 == 0:
         n = minutes // 60
-        return f"{n} hour" + ("s" if n != 1 else "")
-    return f"{minutes} minute" + ("s" if minutes != 1 else "")
+        return i18n.t("interval.hour" if n == 1 else "interval.hours", lang, n=n)
+    return i18n.t("interval.minute" if minutes == 1 else "interval.minutes", lang, n=minutes)
 
 
 def parse_hhmm(raw: Any) -> str:
     """``"9"`` / ``"9:5"``… → canonical ``"HH:MM"``. Raises on an impossible time."""
     m = _TIME_RE.match(str(raw))
     if not m:
-        raise ValueError("時間格式需為 HH:MM（例：10:00）")
+        raise ValueError(i18n.t("error.time_format"))
     hour, minute = int(m.group(1)), int(m.group(2) or 0)
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise ValueError("時間需在 00:00 ~ 23:59 之間")
+        raise ValueError(i18n.t("error.time_range"))
     return f"{hour:02d}:{minute:02d}"
 
 
@@ -205,6 +270,13 @@ _TRUE = {"1", "true", "yes", "y", "on", "開", "是"}
 _FALSE = {"0", "false", "no", "n", "off", "關", "否"}
 
 
+def mask_secret(secret: str) -> str:
+    """Stars, plus at most the last 4 characters — never enough to reuse."""
+    if not secret:
+        return ""
+    return "*" * 8 + secret[-4:] if len(secret) > 12 else "*" * 8
+
+
 def coerce(setting: Setting, raw: Any) -> Any:
     """Turn user/file input into the stored type. Raises ValueError with a message."""
     if setting.kind == "bool":
@@ -215,7 +287,7 @@ def coerce(setting: Setting, raw: Any) -> Any:
             return True
         if text in _FALSE:
             return False
-        raise ValueError("請輸入 on/off（或 true/false、1/0）")
+        raise ValueError(i18n.t("error.bool"))
     if setting.kind == "interval":
         return parse_interval(raw)
     if setting.kind == "time":
@@ -224,11 +296,11 @@ def coerce(setting: Setting, raw: Any) -> Any:
         try:
             value = int(str(raw).strip())
         except (TypeError, ValueError):
-            raise ValueError("請輸入整數") from None
+            raise ValueError(i18n.t("error.int")) from None
         if setting.minimum is not None and value < setting.minimum:
-            raise ValueError(f"不得小於 {setting.minimum}")
+            raise ValueError(i18n.t("error.min", minimum=setting.minimum))
         if setting.maximum is not None and value > setting.maximum:
-            raise ValueError(f"不得大於 {setting.maximum}")
+            raise ValueError(i18n.t("error.max", maximum=setting.maximum))
         return value
     if setting.kind == "path":
         text = str(raw).strip().strip('"').strip("'")
@@ -236,22 +308,44 @@ def coerce(setting: Setting, raw: Any) -> Any:
     if setting.kind == "tz":
         text = str(raw).strip()
         if not text:
-            raise ValueError("時區不可留空")
+            raise ValueError(i18n.t("error.tz_blank"))
         return text
+    if setting.kind == "choice":
+        text = str(raw).strip()
+        if setting.choices and text not in setting.choices:
+            raise ValueError(i18n.t("error.choice", choices=", ".join(setting.choices)))
+        return text
+    if setting.kind in ("secret", "text_optional"):
+        # Blank is a legitimate value here: it is how a stored token or chat id
+        # is cleared. Stripping matters — these are pasted, and a trailing
+        # newline in a bot token is a 404 nobody enjoys debugging.
+        return str(raw).strip()
     text = str(raw).strip()
     if not text:
-        raise ValueError("不可留空")
+        raise ValueError(i18n.t("error.blank"))
     return text
 
 
-def render(setting: Setting, value: Any) -> str:
-    """Human-readable form of a stored value, for the menu and ``--list``."""
+def render(setting: Setting, value: Any, lang: Optional[str] = None) -> str:
+    """Human-readable form of a stored value, for the menu and ``--list``.
+
+    Defaults to English for the same reason as :func:`format_interval`: a
+    piped ``--list`` must not change shape with the machine's locale.
+    """
+    lang = lang or i18n.FALLBACK
     if setting.kind == "bool":
-        return "On" if value else "Off"
+        return i18n.t("value.on" if value else "value.off", lang)
     if setting.kind == "interval":
-        return format_interval(int(value))
+        return format_interval(int(value), lang)
     if setting.kind == "path":
-        return str(value) if value else "（系統預設）"
+        return str(value) if value else i18n.t("value.platform_default", lang)
+    if setting.kind == "secret":
+        return mask_secret(str(value)) if value else i18n.t("value.unset", lang)
+    if setting.kind == "text_optional":
+        return str(value) if value else i18n.t("value.unset", lang)
+    if setting.kind == "choice":
+        return i18n.language_labels().get(str(value), str(value)) \
+            if setting.key == "language" else str(value)
     if setting.key == "max_log_bytes":
         return f"{int(value) / 1024 / 1024:g} MiB"
     return str(value)
@@ -276,8 +370,13 @@ def _migrate(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load() -> Dict[str, Any]:
-    """Defaults, overlaid with the config file. Unreadable/invalid values are
-    dropped rather than fatal — a scheduled run must never die on a typo."""
+    """Defaults, overlaid with the config file, plus secrets from the keychain.
+
+    Unreadable or invalid values are dropped rather than fatal — a scheduled
+    run must never die on a typo. A plaintext secret found in the file (only
+    possible if someone hand-wrote one) is migrated into the keychain and
+    scrubbed from disk on the spot; see :func:`_rescue_plaintext_secrets`.
+    """
     cfg = dict(DEFAULTS)
     path = config_path()
     raw: Dict[str, Any] = {}
@@ -285,6 +384,7 @@ def load() -> Dict[str, Any]:
         parsed = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(parsed, dict):
             raw = _migrate(parsed)
+    leaked = {k: v for k, v in raw.items() if k in SECRET_KEYS and v}
     for key, value in raw.items():
         setting = BY_KEY.get(key)
         if setting is None:
@@ -294,20 +394,62 @@ def load() -> Dict[str, Any]:
             cfg[key] = coerce(setting, value)
         except ValueError:
             pass
+    for key in SECRET_KEYS:
+        stored = secrets_store.get(key)
+        if stored:
+            cfg[key] = stored
+    if leaked:
+        _rescue_plaintext_secrets(cfg, raw, path)
     return cfg
 
 
+def _rescue_plaintext_secrets(cfg: Dict[str, Any], raw: Dict[str, Any],
+                              path: pathlib.Path) -> None:
+    """Move a plaintext secret out of *path* and into the keychain.
+
+    Only reachable when someone hand-wrote a token into ``config.json``: this
+    program never puts one there. The value is kept in *cfg* either way, so a
+    machine with no credential store keeps working for this run — it just gets
+    rewritten without the secret, which is the point.
+    """
+    for key in SECRET_KEYS:
+        if raw.get(key):
+            secrets_store.set(key, str(raw[key]))
+    with contextlib.suppress(OSError):
+        save(cfg, path)
+
+
+def save_secrets(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+    """Push every secret in *cfg* to the keychain. Returns the keys that failed.
+
+    A non-empty result means "this machine has no credential store" (or it
+    refused), and the caller should say so rather than pretending the token was
+    saved — it is never silently written to the config file instead.
+    """
+    failed = [key for key in sorted(SECRET_KEYS)
+              if not secrets_store.set(key, str(cfg.get(key, "") or "")) and cfg.get(key)]
+    return tuple(failed)
+
+
 def save(cfg: Dict[str, Any], path: Optional[pathlib.Path] = None) -> pathlib.Path:
-    """Atomically write the whole config, 0600. Returns the path written."""
+    """Atomically write the config, 0600, and route secrets to the keychain.
+
+    Secret-kind settings are filtered out of the JSON payload entirely — the
+    file never holds one, so neither does a backup, a sync folder or a
+    screenshot of it.
+    """
     path = path or config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {s.key: cfg.get(s.key, s.default) for s in SETTINGS}
-    payload.update({k: v for k, v in cfg.items() if k not in BY_KEY})
+    payload = {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.kind != "secret"}
+    payload.update({k: v for k, v in cfg.items()
+                    if k not in BY_KEY and k not in SECRET_KEYS})
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     with contextlib.suppress(OSError):
         os.chmod(tmp, 0o600)
     tmp.replace(path)
+    save_secrets(cfg)
+    i18n.forget_stored_language()  # the file this cache mirrors just changed
     return path
 
 
@@ -317,7 +459,65 @@ def set_value(cfg: Dict[str, Any], key: str, raw: Any) -> Any:
     if setting is None:
         raise KeyError(key)
     cfg[key] = coerce(setting, raw)
+    if key == "language":
+        i18n.forget_stored_language()
     return cfg[key]
+
+
+# ── Telegram credentials ─────────────────────────────────────────────────────
+
+def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+    """``(token, chat_id)``: the environment first, then the config file.
+
+    The environment wins deliberately — an install that already exports
+    ``TG_BOT_TOKEN``/``TG_CHAT_ID`` (including one whose launchd plist or
+    systemd unit carries them) keeps behaving exactly as before, and the
+    config file is what fills the gap for everyone else. Each credential
+    falls back on its own, so a half-set environment still works. An empty
+    environment variable counts as unset rather than as an override.
+    """
+    cfg = cfg or {}
+    return tuple(  # type: ignore[return-value]
+        os.environ.get(env, "").strip() or str(cfg.get(key, "") or "").strip()
+        for key, env in TELEGRAM_ENV.items()
+    )
+
+
+# ── export / import ──────────────────────────────────────────────────────────
+
+def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """The portable settings in *cfg* — i.e. every declared non-secret one.
+
+    Secrets are filtered by ``kind``, never by a hand-kept key list, so a
+    secret added to :data:`SETTINGS` cannot start leaking into export files
+    because this function was not updated.
+    """
+    return {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.kind != "secret"}
+
+
+def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]]:
+    """``(updates, skipped)`` for the settings in *raw*. All or nothing.
+
+    Three things are never written, and each is reported rather than dropped
+    silently:
+
+    * **Secrets.** An export carries none, so a value here is either
+      hand-written or a mask someone pasted — writing either would destroy the
+      real token already stored on this machine.
+    * **Unknown keys.** A key from a newer build is left alone instead of being
+      stored back as an unvalidated blob.
+    * **Anything invalid** raises before the first write, so a half-applied
+      config can never be the outcome.
+    """
+    updates: Dict[str, Any] = {}
+    skipped: List[str] = []
+    for key, value in raw.items():
+        setting = BY_KEY.get(key)
+        if setting is None or key in SECRET_KEYS:
+            skipped.append(key)
+            continue
+        updates[key] = coerce(setting, value)  # raises ValueError → caller aborts
+    return updates, tuple(skipped)
 
 
 # ── directories ──────────────────────────────────────────────────────────────
