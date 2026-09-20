@@ -1,8 +1,16 @@
 """The OS-keychain secret store.
 
-No test touches a real keychain: every one replaces the single subprocess
-funnel (``secrets_store._run``) and the platform probe, so the macOS, Linux and
-Windows paths are all exercised on whatever machine runs the suite.
+Almost no test touches a real keychain: nearly every one replaces the single
+subprocess funnel (``secrets_store._run``) and the platform probe, so the
+macOS, Linux and Windows paths are all exercised on whatever machine runs the
+suite.
+
+``RoundTripTests`` is the deliberate exception, and it exists because mocking
+that funnel is exactly what hid a real bug: ``add-generic-password -w`` never
+reads stdin — it prompts /dev/tty — so the old write stored an empty item and
+still exited 0. Every mocked assertion passed while the feature was inert. A
+contract test cannot catch a tool ignoring the contract; only a real write
+followed by a real read can.
 """
 import unittest
 import unittest.mock as mock
@@ -80,9 +88,13 @@ class KeychainTests(unittest.TestCase):
         run = Recorder((0, ""))
         with backend("keychain", run):
             self.assertTrue(store.set("telegram_bot_token", "abc"))
-        argv = run.calls[0][0]
-        self.assertIn("add-generic-password", argv)
-        self.assertIn("-U", argv)  # update in place rather than duplicate
+        argv, stdin = run.calls[0]
+        # Batch mode, never `add-generic-password -w`: that flag prompts
+        # /dev/tty instead of reading stdin, storing an empty item and exiting 0.
+        self.assertEqual(argv, ["security", "-i"])
+        self.assertIn("add-generic-password", stdin)
+        self.assertIn("-U", stdin)  # update in place rather than duplicate
+        self.assertIn("-X", stdin)  # hex-encoded payload, not a -w tty prompt
 
     def test_the_secret_is_passed_on_stdin_not_in_the_command_line(self):
         run = Recorder((0, ""))
@@ -90,7 +102,14 @@ class KeychainTests(unittest.TestCase):
             store.set("telegram_bot_token", "super-secret")
         argv, stdin = run.calls[0]
         self.assertNotIn("super-secret", " ".join(argv))
-        self.assertIn("super-secret", stdin or "")
+        # -X hex-encodes it, so the plaintext is not even in the stdin stream.
+        self.assertNotIn("super-secret", stdin)
+        self.assertIn("super-secret".encode().hex(), stdin)
+
+    def test_a_newline_in_an_identifier_is_refused_not_injected(self):
+        with backend("keychain", Recorder((0, ""))):
+            with self.assertRaises(ValueError):
+                store._batch_quote("svc\nadd-generic-password -s evil")
 
     def test_delete_removes_the_item(self):
         run = Recorder((0, ""))
@@ -154,6 +173,30 @@ class FailureTests(unittest.TestCase):
     def test_trailing_newline_is_stripped_from_a_read_secret(self):
         with backend("keychain", Recorder((0, "token-with-newline\n"))):
             self.assertEqual(store.get("k"), "token-with-newline")
+
+
+class RoundTripTests(unittest.TestCase):
+    """Against the machine's real credential store — see the module docstring."""
+
+    PROBE_KEY = "_roundtrip_probe"
+
+    @unittest.skipUnless(store.available(), "no credential store on this machine")
+    def test_a_stored_secret_reads_back_identical(self):
+        self.addCleanup(store.delete, self.PROBE_KEY)
+        secret = "sentinel:AAH-x_9/+aB=" * 2  # ':' and '/' exercise the encoding
+        if not store.set(self.PROBE_KEY, secret):
+            self.skipTest("credential store present but refused the write")
+        # The assertion that matters: set() returning True must mean the secret
+        # is actually retrievable, not merely that the helper exited 0.
+        self.assertEqual(store.get(self.PROBE_KEY), secret)
+
+    @unittest.skipUnless(store.available(), "no credential store on this machine")
+    def test_deleting_leaves_nothing_behind(self):
+        self.addCleanup(store.delete, self.PROBE_KEY)
+        if not store.set(self.PROBE_KEY, "to-be-removed"):
+            self.skipTest("credential store present but refused the write")
+        store.delete(self.PROBE_KEY)
+        self.assertEqual(store.get(self.PROBE_KEY), "")
 
 
 if __name__ == "__main__":

@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import platform
+import re
 import shutil
 import subprocess
 from typing import Optional, Tuple
@@ -58,6 +59,32 @@ def _run(argv, stdin: Optional[str] = None) -> Tuple[int, str]:
         timeout=TIMEOUT_SECONDS, check=False,
     )
     return completed.returncode, completed.stdout
+
+
+def _unhex(secret: str) -> str:
+    """Undo the hex encoding ``security -w`` applies to "non-clean" secrets.
+
+    It decides that per item, so the shape of the output is the only signal.
+    A secret that is itself pure hex stays as-is unless it also decodes to
+    valid UTF-8 — Telegram tokens contain ``:`` so they never take that path.
+    """
+    if not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", secret):
+        return secret
+    try:
+        return bytes.fromhex(secret).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return secret
+
+
+def _batch_quote(value: str) -> str:
+    """Escape a value for a double-quoted argument in ``security -i`` batch mode.
+
+    Rejects newlines outright: batch mode is line-oriented, so an embedded one
+    would end the command and let the rest be read as a second one.
+    """
+    if "\n" in value or "\r" in value:
+        raise ValueError("security batch argument contains a newline")
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _detect_backend() -> Optional[str]:
@@ -104,6 +131,8 @@ def get(key: str) -> str:
         if active == "keychain":
             code, out = _run(["security", "find-generic-password",
                               "-s", SERVICE, "-a", key, "-w"])
+            if code == 0:
+                return _unhex(out.strip())
         elif active == "libsecret":
             code, out = _run(["secret-tool", "lookup", "service", SERVICE, "account", key])
         else:  # dpapi
@@ -134,10 +163,16 @@ def set(key: str, value: str) -> bool:  # noqa: A001 - the store's verb, not the
         return False  # refuse rather than write plaintext; see the module docstring
     with contextlib.suppress(Exception):
         if active == "keychain":
-            # -U updates in place instead of stacking duplicate items; -w with
-            # no argument makes `security` read the secret from stdin.
-            code, _ = _run(["security", "add-generic-password", "-U",
-                            "-s", SERVICE, "-a", key, "-w"], stdin=value)
+            # `add-generic-password -w` with no argument does NOT read stdin — it
+            # opens /dev/tty and prompts, so piping the secret there stored an
+            # empty item and still exited 0. Batch mode (`security -i`) takes the
+            # whole command on stdin, which keeps the secret out of every argv
+            # (i.e. out of `ps`), and -X hex-encodes it past the tokenizer's
+            # quoting and newline rules. -U updates in place rather than stacking
+            # duplicate items.
+            command = 'add-generic-password -U -s "{}" -a "{}" -X {}\n'.format(
+                _batch_quote(SERVICE), _batch_quote(key), value.encode("utf-8").hex())
+            code, _ = _run(["security", "-i"], stdin=command)
         elif active == "libsecret":
             code, _ = _run(["secret-tool", "store", "--label", f"{SERVICE} {key}",
                             "service", SERVICE, "account", key], stdin=value)
@@ -185,8 +220,13 @@ def demo() -> None:
                              _detect_backend=lambda: "keychain", _run=fake):
         assert get("tok") == "stored-token"
         assert set("tok", "s3cret") is True
-        assert "s3cret" not in " ".join(calls[-1][0])  # never in argv
-        assert calls[-1][1] == "s3cret"                 # always on stdin
+        argv, stdin = calls[-1]
+        assert "s3cret" not in " ".join(argv)              # never in argv
+        assert argv == ["security", "-i"]                  # batch mode, not -w
+        assert "s3cret" not in stdin                       # hex-encoded, not literal
+        assert "s3cret".encode().hex() in stdin            # ...but it is in there
+    assert _unhex("68690a") == "hi\n"      # security's hex output is decoded
+    assert _unhex("nothex") == "nothex"    # ...and anything else is left alone
     print("secrets_store.demo: ok")
 
 
