@@ -202,6 +202,10 @@ class LoadSaveTests(unittest.TestCase):
         self.assertEqual(reloaded["scan_interval_minutes"], 30)
         self.assertEqual(reloaded["daily_time"], "08:15")
 
+    @unittest.skipIf(os.name == "nt",
+                     "Windows chmod only toggles the read-only bit, so a POSIX mode "
+                     "cannot be asserted; there the per-user AppData ACL is the guard "
+                     "(and save() keeps secrets in the keychain, not this file).")
     def test_save_is_0600(self):
         with isolated_config() as path:
             config.save(config.load())
@@ -245,12 +249,14 @@ class DirectoryResolutionTests(unittest.TestCase):
                 os.environ.pop("CRW_STATE_DIR", None)
             else:
                 os.environ["CRW_STATE_DIR"] = old
-        self.assertEqual(str(result), "/env/wins")
+        # Compared as Paths, not strings: str(Path("/env/wins")) renders with
+        # the platform separator, so a string assertion only holds on POSIX.
+        self.assertEqual(result, pathlib.Path("/env/wins"))
 
     def test_configured_value_used_when_no_env_override(self):
         os.environ.pop("CRW_STATE_DIR", None)
         result = config.state_dir({"state_dir": "/configured/path"})
-        self.assertEqual(str(result), "/configured/path")
+        self.assertEqual(result, pathlib.Path("/configured/path"))
 
     def test_blank_configured_value_falls_back_to_platform_default(self):
         os.environ.pop("CRW_LOG_DIR", None)

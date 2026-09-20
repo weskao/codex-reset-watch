@@ -23,6 +23,13 @@ def no_ambient_telegram_env():
                 os.environ[k] = v
 
 
+def abs_fixture(posix: str) -> str:
+    """A POSIX fixture path made absolute on this platform. program_path() runs
+    the result through os.path.abspath(), which on Windows would prepend the
+    current drive to a bare "/opt/..." and break the round-trip assertion."""
+    return "C:" + posix.replace("/", "\\") if os.name == "nt" else posix
+
+
 def cfg(**overrides):
     d = dict(config.DEFAULTS)
     # "local" makes daily_time pass straight through into Hour/Minute (no
@@ -199,21 +206,26 @@ class ProgramPathTests(unittest.TestCase):
             exe = bin_dir / "codex-reset-watch"
             exe.write_text("#!/bin/sh\n")
             os.environ["CRW_BIN_DIR"] = str(bin_dir)
-            with unittest.mock.patch("shutil.which", return_value="/some/other/venv/codex-reset-watch"):
+            # Pin a POSIX host: on Windows program_path() looks for the .exe
+            # suffix instead, which test_windows_looks_for_the_exe_suffix covers.
+            with unittest.mock.patch("platform.system", return_value="Darwin"), \
+                 unittest.mock.patch("shutil.which", return_value=abs_fixture("/some/other/venv/codex-reset-watch")):
                 self.assertEqual(scheduler.program_path(), str(exe))
 
     def test_falls_back_to_which_when_bin_dir_has_no_executable(self):
+        expected = abs_fixture("/opt/homebrew/bin/codex-reset-watch")
         with tempfile.TemporaryDirectory() as d:
             os.environ["CRW_BIN_DIR"] = str(d)  # exists, but empty
-            with unittest.mock.patch("shutil.which", return_value="/opt/homebrew/bin/codex-reset-watch"):
-                self.assertEqual(scheduler.program_path(), "/opt/homebrew/bin/codex-reset-watch")
+            with unittest.mock.patch("shutil.which", return_value=expected):
+                self.assertEqual(scheduler.program_path(), expected)
 
     def test_falls_back_to_argv0_when_nothing_else_is_found(self):
+        expected = abs_fixture("/abs/path/to/some-shim")
         with tempfile.TemporaryDirectory() as d:
             os.environ["CRW_BIN_DIR"] = str(d)
             with unittest.mock.patch("shutil.which", return_value=None), \
-                 unittest.mock.patch("sys.argv", ["/abs/path/to/some-shim"]):
-                self.assertEqual(scheduler.program_path(), "/abs/path/to/some-shim")
+                 unittest.mock.patch("sys.argv", [expected]):
+                self.assertEqual(scheduler.program_path(), expected)
 
     def test_windows_looks_for_the_exe_suffix(self):
         with tempfile.TemporaryDirectory() as d:

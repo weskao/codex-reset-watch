@@ -533,11 +533,13 @@ class RenderTests(unittest.TestCase):
             self.assertLessEqual(ui.width(line), ui.PANEL_WIDTH + 1, repr(line))
 
     def test_the_home_directory_is_shortened_in_the_path_line(self):
+        import os
         import pathlib
         with mock.patch.object(ui.config, "config_path",
                                return_value=pathlib.Path.home() / "cfg" / "config.json"):
             lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
-        self.assertTrue(any("~/cfg/config.json" in line for line in lines))
+        shortened = "~" + os.sep + "cfg" + os.sep + "config.json"
+        self.assertTrue(any(shortened in line for line in lines))
         self.assertFalse(any(str(pathlib.Path.home()) in line for line in lines))
 
     def test_the_token_row_names_the_store_holding_it(self):
