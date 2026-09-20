@@ -67,48 +67,62 @@ uv --version
 
 ## 2. Install Codex Reset Watch
 
-Export Telegram credentials first — `scripts/install.py` bakes them into the generated scheduler job (macOS/Linux) or persists them into your user environment via `setx` (Windows), since none of the three schedulers inherit your shell env:
+One command per OS — run these in order from the extracted project folder. The installer asks
+for your Telegram bot token and chat id interactively partway through (step 3 below); nothing
+needs to be exported beforehand.
+
+**macOS / Linux:**
 
 ```bash
-export TG_BOT_TOKEN="..."
-export TG_CHAT_ID="..."
+make test       # 1. run the suite before touching anything installed
+make install    # 2. install as a uv tool + register the OS scheduler
+                # 3. ↳ prompts for Telegram here — see below
+crw doctor      # 4. verify
+crw check       # 5. first real run
 ```
+
+**Windows (PowerShell, no `make` required):**
 
 ```powershell
-$env:TG_BOT_TOKEN = "..."
-$env:TG_CHAT_ID = "..."
+uv run python -m unittest discover -s tests -v   # 1.
+uv run python scripts/install.py                 # 2. + 3. (same prompt)
+crw doctor                                        # 4.
+crw check                                         # 5.
 ```
 
-From the extracted project folder, macOS/Linux:
+### Step 3: the Telegram prompt
 
-```bash
-make test
-make install
+```text
+Set up Telegram notifications now?
+  You'll need a bot token from @BotFather and the chat id it should message.
+  Set up now? [Y/n]: y
+  Telegram chat id: -1002847193056
+  Telegram bot token (hidden):
+  ✅ Saved. Bot token stored in macOS Keychain; chat id in ~/Library/Application Support/codex-reset-watch/config.json.
 ```
 
-Windows (no `make` required):
+The token is typed **with echo off** — nothing appears on screen as you type it, the same way a
+terminal hides a `sudo` password. This works identically on macOS, Linux and Windows because
+it's one call to Python's standard `getpass` module rather than a hand-rolled `stty -echo` /
+`read -s` script: `getpass` already knows how to suppress terminal echo on all three (via
+`termios` on POSIX, `msvcrt` on Windows) and always restores it afterward, Ctrl-C included, with
+no `trap`/cleanup code of our own to get wrong.
 
-```powershell
-uv run python -m unittest discover -s tests -v
-uv run python scripts/install.py
-```
+The prompt is skipped automatically — silently, so re-running the installer is a no-op here —
+when either credential is already reachable (stored from a previous install, or set as
+`TG_BOT_TOKEN`/`TG_CHAT_ID` in the environment) or when stdin isn't a terminal (CI, a piped
+install: there's no one to answer it). Configure or change it anytime afterward with
+`crw config` (see [§4](#4-configuration-crw-config)) or [§8](#8-telegram) for the environment-variable
+alternative.
 
-`scripts/install.py` will:
+`scripts/install.py` also:
 
-1. copy the project to `$CRW_INSTALL_DIR` (default `~/Documents/Workspace/codex-reset-watch`)
-2. run `uv python install 3.13`
-3. install the package as a persistent isolated uv tool
-4. put `codex-reset-watch` and `crw` in `~/scripts` (`%USERPROFILE%\scripts` on Windows); on macOS, also symlink both into `/opt/homebrew/bin` (already on `PATH`, no `~/.zshrc` edit needed)
-5. create config/state/log directories
-6. register the native scheduler job for the current OS (launchd / systemd --user timers / Task Scheduler)
-
-Verify:
-
-```bash
-uv tool list
-crw doctor
-crw check
-```
+1. copies the project to `$CRW_INSTALL_DIR` (default `~/Documents/Workspace/codex-reset-watch`)
+2. runs `uv python install 3.13`
+3. installs the package as a persistent isolated uv tool
+4. puts `codex-reset-watch` and `crw` in `~/scripts` (`%USERPROFILE%\scripts` on Windows); on macOS, also symlinks both into `/opt/homebrew/bin` (already on `PATH`, no `~/.zshrc` edit needed)
+5. creates config/state/log directories
+6. registers the native scheduler job for the current OS (launchd / systemd --user timers / Task Scheduler)
 
 Expected `uv tool list` entry:
 
@@ -226,8 +240,31 @@ all work too (see [§3](#--is-optional-everywhere)).
 | `e` / `i` | export / import settings — type a path, `Enter` |
 | `q` / `Ctrl-C` | quit |
 
-Each change saves immediately, the selected row explains itself on the line below the list, and
-a schedule-relevant change re-applies the OS schedule on quit automatically.
+The selected row is a full-width highlighted band with a solid cursor bar, and it ends in the
+key that acts on it — `←→` when the row cycles, `⏎` when it opens an editor. That column is
+reserved on every row, so moving the cursor never shifts the value column. The row's help text
+appears below the list, and the bottom-right counter (`10/22`) says where you are; on a short
+terminal the list scrolls with `▴ N more` / `▾ N more` markers rather than silently hiding rows.
+
+Each change saves immediately, and a schedule-relevant change re-applies the OS schedule on
+quit automatically.
+
+### Input is constrained at the keystroke, not just validated on save
+
+A field only accepts what it can legally hold, so an invalid value cannot be typed in the first
+place — the schema check on commit is the backstop, not the first line of defence:
+
+| Field kind | What the editor accepts |
+|---|---|
+| Time (`daily_time`) | Digits only; the `:` is inserted after the hour; a lone `9` becomes `09:`; an hour past 23 or a minute past 59 is refused as you type; stops at 4 digits |
+| Interval (`scan_interval_minutes`) | Digits, then at most one unit (`m`/`h`/`d`) — `2h5` and `2hd` are impossible |
+| Integers | Digits only, capped to as many digits as the maximum needs and clamped to it live (`99` in a 1–10 field shows `10`) |
+| Choice (`language`) / toggles | Not typed at all — `←→` steps through the allowed values |
+| Secret (`telegram_bot_token`) | Any character; opens empty, and committing it empty keeps the stored token |
+
+While an editor is open, the help line shows the accepted format rather than the setting's
+description — `HH:MM · digits only, the colon is added for you (00:00–23:59)`,
+`Digits, then a unit: 30m · 2h · 1d`, `Whole number, 1–10`.
 
 When stdin or stdout is not a terminal (a pipe, CI, a test), the same schema is served by a
 numbered prompt instead — type the row number, `Enter` — so `crw config` never hangs waiting for
@@ -437,6 +474,8 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script
 dependency. There are two ways to supply the credentials, and the environment always wins.
+The installer ([§2](#2-install-codex-reset-watch)) already walks through Option A on first
+install with the token entered echo-off; this section is for setting it up later or changing it.
 
 ### Option A — configure them once (recommended)
 
@@ -571,7 +610,7 @@ make test-unit
 make test-integration
 ```
 
-The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config` flows without contacting the production API. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
+The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`, `tests/test_install_telegram.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config`/installer-prompt flows without contacting the production API or a real terminal. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
 
 Three families of side effect are mocked everywhere, for the same reason — a unit test must not touch what this machine actually has:
 

@@ -105,9 +105,12 @@ class EditingTests(unittest.TestCase):
         self.assertEqual(state.edit_buffer, "10:00")
 
     def test_typing_appends_to_the_buffer(self):
-        state = self._open("daily_time")
-        state = ui.step(state, char("9"), SETTINGS)
-        self.assertEqual(state.edit_buffer, "10:009")
+        # A free-text field takes the character as typed. (A time field does
+        # not — see InputConstraintTests: its editor is digit-filtered.)
+        state = self._open("api_base")
+        before = state.edit_buffer
+        state = ui.step(state, char("/"), SETTINGS)
+        self.assertEqual(state.edit_buffer, before + "/")
 
     def test_backspace_deletes_the_last_character(self):
         state = self._open("daily_time")
@@ -139,8 +142,8 @@ class EditingTests(unittest.TestCase):
         state = ui.step(state, press(keys.Key.ENTER), SETTINGS)
         for _ in range(10):
             state = ui.step(state, press(keys.Key.BACKSPACE), SETTINGS)
-        for c in "9 weeks":
-            state = ui.step(state, char(c), SETTINGS)
+        # 0 passes the keystroke filter (a digit) but fails the schema's range.
+        state = ui.step(state, char("0"), SETTINGS)
         state = ui.step(state, press(keys.Key.ENTER), SETTINGS)
         self.assertTrue(state.editing)
         self.assertIsNotNone(state.error)
@@ -173,6 +176,145 @@ class EditingTests(unittest.TestCase):
         moved = ui.step(state, press(keys.Key.DOWN), SETTINGS)
         self.assertEqual(moved.cursor, state.cursor)
         self.assertEqual(moved.edit_buffer, state.edit_buffer)
+
+
+class InputConstraintTests(unittest.TestCase):
+    """Typing an invalid value should be impossible, not merely rejected later.
+
+    Commit-time schema validation stays as the backstop; these tests cover the
+    keystroke filter in front of it, so the editor can never *display* a value
+    the schema would refuse.
+    """
+
+    def _editor(self, key, buffer=""):
+        index = SETTINGS.index(config.BY_KEY[key])
+        return ui.MenuState(values=dict(config.DEFAULTS), cursor=index,
+                            editing=True, edit_buffer=buffer)
+
+    def _type(self, state, text):
+        for c in text:
+            state = ui.step(state, char(c), SETTINGS)
+        return state
+
+    # ── integers ────────────────────────────────────────────────────────────
+    def test_an_int_field_ignores_letters(self):
+        state = self._type(self._editor("request_retries", ""), "5abc")
+        self.assertEqual(state.edit_buffer, "5")
+
+    def test_an_int_field_ignores_punctuation(self):
+        state = self._type(self._editor("request_timeout_seconds", ""), "1.5")
+        self.assertEqual(state.edit_buffer, "15")
+
+    def test_an_int_field_clamps_to_its_maximum_while_typing(self):
+        # request_retries maxes at 10; "99" can never be shown.
+        state = self._type(self._editor("request_retries", ""), "99")
+        self.assertEqual(state.edit_buffer, "10")
+
+    def test_a_fresh_digit_replaces_a_lone_leading_zero(self):
+        state = self._type(self._editor("request_retries", ""), "06")
+        self.assertEqual(state.edit_buffer, "6")
+
+    def test_an_int_field_caps_the_digit_count_at_its_maximum(self):
+        # max 300 is 3 digits wide, so the 4th and 5th keystroke do nothing.
+        state = self._type(self._editor("request_timeout_seconds", ""), "12345")
+        self.assertEqual(state.edit_buffer, "123")
+
+    def test_a_typed_int_still_commits(self):
+        state = self._type(self._editor("request_retries", ""), "7")
+        state = ui.step(state, press(keys.Key.ENTER), SETTINGS)
+        self.assertEqual(state.values["request_retries"], 7)
+
+    # ── intervals ───────────────────────────────────────────────────────────
+    def test_an_interval_accepts_digits_and_one_unit_letter(self):
+        state = self._type(self._editor("scan_interval_minutes", ""), "45m")
+        self.assertEqual(state.edit_buffer, "45m")
+
+    def test_an_interval_rejects_a_second_unit_letter(self):
+        state = self._type(self._editor("scan_interval_minutes", ""), "2hd")
+        self.assertEqual(state.edit_buffer, "2h")
+
+    def test_an_interval_rejects_digits_after_the_unit(self):
+        state = self._type(self._editor("scan_interval_minutes", ""), "2h5")
+        self.assertEqual(state.edit_buffer, "2h")
+
+    def test_an_interval_rejects_an_unknown_unit(self):
+        state = self._type(self._editor("scan_interval_minutes", ""), "2w")
+        self.assertEqual(state.edit_buffer, "2")
+
+    def test_a_typed_interval_still_commits(self):
+        state = self._type(self._editor("scan_interval_minutes", ""), "90")
+        state = ui.step(state, press(keys.Key.ENTER), SETTINGS)
+        self.assertEqual(state.values["scan_interval_minutes"], 90)
+
+    # ── times ───────────────────────────────────────────────────────────────
+    def test_a_time_field_inserts_the_colon_automatically(self):
+        state = self._type(self._editor("daily_time", ""), "0930")
+        self.assertEqual(state.edit_buffer, "09:30")
+
+    def test_a_time_field_rejects_an_impossible_leading_hour_digit(self):
+        state = self._type(self._editor("daily_time", ""), "9")
+        self.assertEqual(state.edit_buffer, "09:")  # 9 can only mean 09
+
+    def test_a_time_field_rejects_an_hour_past_23(self):
+        state = self._type(self._editor("daily_time", ""), "25")
+        self.assertEqual(state.edit_buffer, "2")
+
+    def test_a_time_field_rejects_a_minute_past_59(self):
+        # 7 is refused as the minutes-tens digit; the 5 after it is accepted.
+        state = self._type(self._editor("daily_time", ""), "1075")
+        self.assertEqual(state.edit_buffer, "10:5")
+
+    def test_a_time_field_stops_at_four_digits(self):
+        state = self._type(self._editor("daily_time", ""), "093045")
+        self.assertEqual(state.edit_buffer, "09:30")
+
+    def test_a_time_field_ignores_letters(self):
+        state = self._type(self._editor("daily_time", ""), "0h9")
+        self.assertEqual(state.edit_buffer, "09:")
+
+    def test_backspace_removes_the_auto_inserted_colon_with_the_digit(self):
+        state = self._type(self._editor("daily_time", ""), "093")
+        state = ui.step(state, press(keys.Key.BACKSPACE), SETTINGS)
+        state = ui.step(state, press(keys.Key.BACKSPACE), SETTINGS)
+        self.assertEqual(state.edit_buffer, "0")
+
+    def test_a_typed_time_still_commits(self):
+        state = self._type(self._editor("daily_time", ""), "0715")
+        state = ui.step(state, press(keys.Key.ENTER), SETTINGS)
+        self.assertEqual(state.values["daily_time"], "07:15")
+
+    # ── free-text fields keep accepting anything ────────────────────────────
+    def test_a_text_field_accepts_any_character(self):
+        state = self._type(self._editor("api_base", ""), "https://a.b/?x=1")
+        self.assertEqual(state.edit_buffer, "https://a.b/?x=1")
+
+    def test_a_secret_field_accepts_any_character(self):
+        state = self._type(self._editor("telegram_bot_token", ""), "123:AAH_x-Y")
+        self.assertEqual(state.edit_buffer, "123:AAH_x-Y")
+
+
+class EditorHintTests(unittest.TestCase):
+    """While editing, the help line states the expected format and range."""
+
+    def setUp(self):
+        self.plain = ui.Paint(False)
+        self.cfg = dict(config.DEFAULTS)
+
+    def _hint(self, key):
+        index = SETTINGS.index(config.BY_KEY[key])
+        lines = ui.render_menu(self.cfg, index, paint=self.plain, lang="en",
+                               editing=True, edit_buffer="")
+        return "\n".join(lines)
+
+    def test_a_time_editor_states_the_format(self):
+        self.assertIn("HH:MM", self._hint("daily_time"))
+
+    def test_an_int_editor_states_its_range(self):
+        self.assertIn("1–10", self._hint("request_retries"))
+
+    def test_an_interval_editor_states_its_units(self):
+        hint = self._hint("scan_interval_minutes")
+        self.assertIn("30m", hint)
 
 
 class RestoreDefaultsTests(unittest.TestCase):
@@ -249,6 +391,40 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(len(marked), 1)
         self.assertIn("Daily notification", marked[0])
 
+    def test_the_selected_row_is_a_full_width_highlighted_band(self):
+        colour = ui.Paint(True)
+        lines = ui.render_menu(self.cfg, 2, paint=colour, lang="en", height=44)
+        band = [line for line in lines if ui.SEL in line]
+        self.assertEqual(len(band), 1, "exactly one row is highlighted")
+        # The band must reach the full panel width, not stop after the text.
+        visible = ui.width(ui.strip_ansi(band[0]))
+        self.assertGreaterEqual(visible, ui.PANEL_WIDTH)
+
+    def test_unselected_rows_carry_no_highlight(self):
+        colour = ui.Paint(True)
+        lines = ui.render_menu(self.cfg, 2, paint=colour, lang="en", height=44)
+        rows = [line for line in lines if "Daily time" in line]
+        self.assertTrue(rows and all(ui.SEL not in line for line in rows))
+
+    def test_a_toggle_row_advertises_the_arrow_keys_when_selected(self):
+        lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")  # bool row
+        selected = next(line for line in lines if ui.GLYPH_CURSOR in line)
+        self.assertIn("←→", selected)
+
+    def test_a_typed_row_advertises_enter_when_selected(self):
+        index = SETTINGS.index(config.BY_KEY["daily_time"])
+        lines = ui.render_menu(self.cfg, index, paint=self.plain, lang="en")
+        selected = next(line for line in lines if ui.GLYPH_CURSOR in line)
+        self.assertIn("⏎", selected)
+
+    def test_the_affordance_column_is_reserved_so_values_stay_aligned(self):
+        # The value column must not shift when the cursor lands on a row.
+        away = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=44)
+        onto = ui.render_menu(self.cfg, 1, paint=self.plain, lang="en", height=44)
+        row_away = next(line for line in away if "Daily time" in line)
+        row_onto = next(line for line in onto if "Daily time" in line)
+        self.assertEqual(row_away.index("10:00"), row_onto.index("10:00"))
+
     def test_the_selected_rows_help_is_shown(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
         self.assertTrue(any("Send one overview" in line for line in lines))
@@ -268,6 +444,18 @@ class RenderTests(unittest.TestCase):
         text = "\n".join(ui.render_menu(cfg, 0, paint=self.plain, lang="en"))
         self.assertNotIn("SUPERSECRETVALUE", text)
         self.assertNotIn("123456789", text)
+
+    def test_a_secret_buffer_is_masked_while_typing(self):
+        # The raw keyboard menu echoes each keystroke itself (it owns the
+        # terminal in cbreak mode) — a bot token must never appear in that
+        # echo, only bullets standing in for the character count.
+        index = SETTINGS.index(config.BY_KEY["telegram_bot_token"])
+        lines = ui.render_menu(self.cfg, index, paint=self.plain, lang="en",
+                               editing=True, edit_buffer="123456:REALSECRET")
+        text = "\n".join(lines)
+        self.assertNotIn("123456", text)
+        self.assertNotIn("REALSECRET", text)
+        self.assertIn("•" * len("123456:REALSECRET"), text)
 
     def test_the_edit_buffer_is_shown_while_editing(self):
         index = SETTINGS.index(config.BY_KEY["daily_time"])
@@ -310,6 +498,37 @@ class RenderTests(unittest.TestCase):
         with mock.patch.object(ui.secrets_store, "available", return_value=False):
             lines = ui.render_menu(self.cfg, index, paint=self.plain, lang="en")
         self.assertTrue(any("TG_BOT_TOKEN" in line for line in lines))
+
+    def test_every_row_occupies_exactly_the_panel_width(self):
+        # Including the rows whose value had to be clipped: a row one cell wide
+        # or narrow than its neighbours puts the value column out of alignment.
+        import re
+        cfg = dict(self.cfg, timezone="Asia/Taipei", telegram_chat_id="-1002847193056")
+        for lang in ("en", "zh-TW"):
+            for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=44):
+                plain = ui.strip_ansi(line)
+                if re.match(r"^ .\s*\d+ ", plain):
+                    self.assertEqual(ui.width(plain), ui.PANEL_WIDTH, f"{lang}: {plain!r}")
+
+    def test_the_frame_shows_where_the_cursor_is_in_the_list(self):
+        lines = ui.render_menu(self.cfg, 3, paint=self.plain, lang="en", height=44)
+        self.assertTrue(any(f"4/{len(SETTINGS)}" in line for line in lines))
+
+    def test_a_clipped_list_says_there_is_more_below(self):
+        # A dedicated glyph, not "↓": the hint bar already prints ↑↓ for "move",
+        # so asserting on that would pass without any scroll marker existing.
+        lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=20)
+        self.assertTrue(any(ui.GLYPH_MORE_BELOW in line for line in lines))
+
+    def test_a_clipped_list_says_there_is_more_above(self):
+        lines = ui.render_menu(self.cfg, len(SETTINGS) - 1, paint=self.plain, lang="en", height=20)
+        self.assertTrue(any(ui.GLYPH_MORE_ABOVE in line for line in lines))
+
+    def test_an_unclipped_list_shows_no_scroll_markers(self):
+        lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=60)
+        text = "\n".join(lines)
+        self.assertNotIn(ui.GLYPH_MORE_ABOVE, text)
+        self.assertNotIn(ui.GLYPH_MORE_BELOW, text)
 
     def test_the_view_fits_the_terminal_height(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=20)

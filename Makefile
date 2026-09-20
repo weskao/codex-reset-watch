@@ -71,7 +71,7 @@ test-unit:
 
 test-integration:
 	$(UV) run python -m unittest tests.test_integration tests.test_run_check tests.test_cli_config \
-		tests.test_cli_syntax -v
+		tests.test_cli_syntax tests.test_install tests.test_install_telegram -v
 
 test: lint
 	$(UV) run python -m unittest discover -s tests -v

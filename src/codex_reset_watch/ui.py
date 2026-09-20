@@ -30,6 +30,7 @@ import importlib.metadata
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
 import unicodedata
@@ -46,21 +47,39 @@ DIM = "\033[2m"
 ACCENT = "\033[38;2;16;163;127m"   # #10A37F — the one brand colour
 TITLE = "\033[38;2;25;195;125m"    # #19C37D — a step brighter, for headings
 OK = "\033[38;2;25;195;125m"
-SEL = "\033[48;2;12;46;38m"        # selected row backing, same hue at 12% value
 FRAME = "\033[38;5;239m"
 MUTED = "\033[38;5;245m"
 WARN = "\033[38;5;179m"
 ERR = "\033[38;5;203m"
+# The selected row: a saturated band, near-white label, bright value. Dark
+# enough to keep green text legible, light enough to find at a glance — the
+# earlier 12%-value backing was effectively invisible on a dim display.
+SEL = "\033[48;2;20;74;62m"
+SEL_TEXT = "\033[38;2;236;253;245m"
+SEL_VALUE = "\033[38;2;110;231;183m"
+SEL_DOT = "\033[38;2;45;120;100m"
 
 GLYPH_MARK = "◆"
 GLYPH_GROUP = "▍"
-GLYPH_CURSOR = "▸"
+GLYPH_CURSOR = "▌"      # a solid bar reads as a cursor from across the room
 GLYPH_PROMPT = "❱"
 GLYPH_CARET = "▏"
+GLYPH_CYCLE = "←→"      # this row changes with the arrow keys
+GLYPH_ENTER = "⏎"       # this row opens an editor
+GLYPH_MORE_ABOVE = "▴"  # the list is scrolled: more rows off-screen that way
+GLYPH_MORE_BELOW = "▾"
 PANEL_WIDTH = 72
+AFFORD_WIDTH = 3        # reserved on EVERY row so values never shift
 
 _PAINT_NAMES = ("RESET", "BOLD", "DIM", "ACCENT", "TITLE", "OK", "SEL",
-                "FRAME", "MUTED", "WARN", "ERR")
+                "SEL_TEXT", "SEL_VALUE", "SEL_DOT", "FRAME", "MUTED", "WARN", "ERR")
+
+_ANSI = re.compile(r"\033\[[0-9;]*m")
+
+
+def strip_ansi(text: str) -> str:
+    """*text* with every SGR escape removed — what the terminal actually shows."""
+    return _ANSI.sub("", text)
 
 
 @functools.lru_cache(maxsize=1)
@@ -100,6 +119,10 @@ def width(text: str) -> int:
 
 
 
+def _pad(text: str, columns: int) -> str:
+    return text + " " * max(0, columns - width(text))
+
+
 def _clip(text: str, columns: int) -> str:
     """Truncate to *columns* display cells, with an ellipsis when it had to cut."""
     if width(text) <= columns:
@@ -135,10 +158,6 @@ def _header(paint: Paint, lang: str) -> List[str]:
     ]
 
 
-def _leader(label: str, shown: str, *, indent: int) -> int:
-    return max(2, PANEL_WIDTH - indent - width(label) - width(shown) - 2)
-
-
 def _value_colour(paint: Paint, setting: config.Setting, value: Any) -> str:
     if setting.kind == "bool":
         return paint.ok if value else paint.muted
@@ -147,28 +166,80 @@ def _value_colour(paint: Paint, setting: config.Setting, value: Any) -> str:
     return paint.title
 
 
+def _affordance(setting: config.Setting) -> str:
+    """What the selected row responds to: ``←→`` to cycle, ``⏎`` to edit."""
+    return GLYPH_CYCLE if _cycle_options(setting) is not None else GLYPH_ENTER
+
+
+def _format_hint(setting: config.Setting, lang: str) -> str:
+    """What this field will accept, shown while its editor is open.
+
+    Stating the shape up front is the other half of the keystroke filter: the
+    filter makes a bad value impossible to type, this says what a good one
+    looks like, so nobody has to discover the rule by being refused.
+    """
+    if setting.kind == "time":
+        return i18n.t("hint.time", lang)
+    if setting.kind == "interval":
+        return i18n.t("hint.interval", lang)
+    if setting.kind == "int" and setting.minimum is not None and setting.maximum is not None:
+        return i18n.t("hint.range", lang, low=setting.minimum, high=setting.maximum)
+    if setting.kind == "secret":
+        return i18n.t("menu.secret_hint", lang)
+    return ""
+
+
 def _row(paint: Paint, index: int, setting: config.Setting, value: Any, lang: str,
          *, selected: bool = False, editing: bool = False, edit_buffer: str = "") -> str:
-    """One settings line: ``▸  4 Scan interval ······· 2 hours``."""
+    """One settings line, laid out in fixed columns so nothing shifts::
+
+         ▌  4 Scan interval ···················· 45 minutes  ←→
+        └┬┘└┬┘ └──── label ───┘└─ leader ─┘└─ value ─┘└ afford ┘
+         │  └ number (2)                       right-aligned
+         └ cursor bar
+
+    Every column — including the affordance hint — is reserved on *every* row,
+    so moving the cursor changes colour and nothing else. A row whose value
+    would overflow is clipped, never wrapped: a wrapped row would desynchronise
+    the in-place repaint.
+    """
     label = config.label(setting, lang)
     if editing:
-        shown = f"{edit_buffer}{GLYPH_CARET}"
-        colour = paint.ok
+        # The menu owns the terminal in cbreak mode and echoes each keystroke
+        # itself — a secret must never appear in that echo, so a bot token is
+        # shown as bullets, never the characters typed.
+        visible = "•" * len(edit_buffer) if setting.kind == "secret" else edit_buffer
+        shown, colour = f"{visible}{GLYPH_CARET}", paint.ok
     else:
         shown = config.render(setting, value, lang)
-        colour = _value_colour(paint, setting, value)
-    # A long value (a user agent, a query string) is clipped rather than
-    # allowed to wrap: a wrapped row would break the in-place repaint.
-    # 10 = " ▸ NN " (6) + the space, 2-cell minimum leader and space after it.
-    shown = _clip(shown, max(8, PANEL_WIDTH - 10 - width(label)))
-    mark = f"{paint.accent}{GLYPH_CURSOR}{paint.reset}" if selected else " "
-    number = f"{paint.muted}{index:>2}{paint.reset}"
-    body = f"{label} {paint.frame}{paint.dim}{'·' * _leader(label, shown, indent=6)}{paint.reset} "
-    line = f" {mark} {number} {body}{colour}{shown}{paint.reset}"
+        colour = paint.sel_value if (selected and paint.sel) else _value_colour(paint, setting, value)
+
+    indent = 6            # " ▌ NN "
+    tail = AFFORD_WIDTH   # the reserved hint column on the right
+    # Budget: PANEL_WIDTH - indent - tail - label - (space + 2-cell minimum
+    # leader + space). Clipping to anything wider makes the leader hit its
+    # floor and pushes the row past the panel edge, which knocks the value
+    # column out of alignment on exactly the longest rows.
+    shown = _clip(shown, max(8, PANEL_WIDTH - indent - tail - width(label) - 4))
+    leader = max(2, PANEL_WIDTH - indent - tail - width(label) - width(shown) - 2)
+
+    if selected:
+        mark = f"{paint.accent}{GLYPH_CURSOR}{paint.reset}{paint.sel}"
+        label_text = f"{paint.bold}{paint.sel_text}{label}{paint.reset}{paint.sel}"
+        number = f"{paint.sel_text}{index:>2}{paint.reset}{paint.sel}"
+        dots = f"{paint.sel_dot}{'·' * leader}{paint.reset}{paint.sel}"
+        hint = f"{paint.sel_text}{_pad(_affordance(setting), tail - 1)}{paint.reset}{paint.sel}"
+    else:
+        mark = " "
+        label_text = label
+        number = f"{paint.muted}{index:>2}{paint.reset}"
+        dots = f"{paint.frame}{paint.dim}{'·' * leader}{paint.reset}"
+        hint = " " * (tail - 1)
+
+    line = (f" {mark} {number} {label_text} {dots} "
+            f"{colour}{shown}{paint.reset}{paint.sel if selected else ''} {hint}")
     if selected and paint.sel:
-        # Back the whole row, not just the text, so the cursor reads as a band.
-        plain_len = 6 + width(label) + 1 + _leader(label, shown, indent=6) + 1 + width(shown)
-        line = f"{paint.sel}{line}{' ' * max(0, PANEL_WIDTH - plain_len)}{paint.reset}"
+        return f"{paint.sel}{line}{paint.reset}"
     return line
 
 
@@ -195,13 +266,25 @@ def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Option
 
 
 def _window(blocks: Sequence[Tuple[Optional[int], str]], cursor: Optional[int],
-            budget: int) -> List[str]:
-    """The slice of *blocks* that fits *budget* lines and still shows the cursor."""
+            budget: int, paint: Optional[Paint] = None) -> List[str]:
+    """The slice of *blocks* that fits *budget* lines and still shows the cursor.
+
+    When the list does not fit, the first and last line of the slice become
+    scroll markers, so a short terminal never silently hides rows — the reason
+    a marker glyph of its own exists rather than reusing the hint bar's ``↑↓``.
+    """
     if budget <= 0 or len(blocks) <= budget:
         return [line for _, line in blocks]
+    paint = paint or Paint(False)
     position = next((i for i, (row, _) in enumerate(blocks) if row == cursor), 0)
     start = max(0, min(position - budget // 2, len(blocks) - budget))
-    return [line for _, line in blocks[start:start + budget]]
+    end = start + budget
+    lines = [line for _, line in blocks[start:end]]
+    if start > 0:
+        lines[0] = f" {paint.muted}{GLYPH_MORE_ABOVE} {start} more{paint.reset}"
+    if end < len(blocks):
+        lines[-1] = f" {paint.muted}{GLYPH_MORE_BELOW} {len(blocks) - end} more{paint.reset}"
+    return lines
 
 
 def render_settings(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
@@ -229,8 +312,8 @@ def summary_line(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
     return f"{paint.accent}{GLYPH_MARK}{paint.reset} {daily}  {paint.muted}·{paint.reset}  {monitor}"
 
 
-def _hint_bars(paint: Paint, lang: str) -> List[str]:
-    """Two fixed lines — navigation, then actions.
+def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
+    """Two fixed lines — navigation (with the position counter), then actions.
 
     Always two, never one wrapped line: the frame's height must not change with
     the language, or the in-place repaint would leave orphan rows behind.
@@ -241,8 +324,14 @@ def _hint_bars(paint: Paint, lang: str) -> List[str]:
     def bar(parts: List[str]) -> str:
         return " " + f" {paint.frame}·{paint.reset} ".join(parts)
 
+    nav = bar([key("↑↓", "menu.move"), key("←→", "menu.change"), key("⏎", "menu.edit")])
+    if position:
+        # Right-aligned on the nav line: which row of how many, so the cursor's
+        # place in the list is readable even when the view is scrolled.
+        pad = PANEL_WIDTH - width(strip_ansi(nav)) - width(position)
+        nav += " " * max(1, pad) + f"{paint.muted}{position}{paint.reset}"
     return [
-        bar([key("↑↓", "menu.move"), key("←→", "menu.change"), key("⏎", "menu.edit")]),
+        nav,
         bar([key("a", "menu.apply"), key("d", "menu.defaults"), key("e", "menu.export"),
              key("i", "menu.import"), key("q", "menu.quit")]),
     ]
@@ -270,8 +359,10 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
                     f"{paint.muted}{i18n.t('menu.cancel_hint', lang)}{paint.reset}")
     else:
         help_line = config.help_text(setting, lang)
-        if editing and setting.kind == "secret":
-            help_line = i18n.t("menu.secret_hint", lang)
+        if editing:
+            # While typing, the format the field accepts is more useful than
+            # the prose describing what the setting means.
+            help_line = _format_hint(setting, lang) or help_line
         foot.append(f"   {paint.muted}{_clip(help_line, PANEL_WIDTH - 3)}{paint.reset}")
         if setting.kind == "secret":
             # Say where the token actually lives — or that it cannot be stored
@@ -285,10 +376,10 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
         foot.append(f" {paint.err}✗ {_clip(error, PANEL_WIDTH - 3)}{paint.reset}")
     if notice:
         foot.append(f" {paint.ok}✓ {_clip(notice, PANEL_WIDTH - 3)}{paint.reset}")
-    foot.extend(_hint_bars(paint, lang))
+    foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(config.SETTINGS)}"))
 
     blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer)
-    return head + _window(blocks, cursor, height - len(head) - len(foot)) + foot
+    return head + _window(blocks, cursor, height - len(head) - len(foot), paint) + foot
 
 
 # ── state machine (pure) ─────────────────────────────────────────────────────
@@ -359,13 +450,99 @@ def _seed_buffer(state: MenuState, setting: config.Setting) -> str:
     return str(state.values.get(setting.key, setting.default))
 
 
+INTERVAL_UNITS = "mhd"
+
+
+def _typed_int(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
+    """Calculator-style digit entry: digits only, live-clamped to the maximum.
+
+    A fresh digit replaces a lone leading zero (``0`` then ``6`` is ``6``, never
+    a displayed ``06``), the buffer holds at most as many digits as the field's
+    own maximum needs, and a value that would exceed that maximum is clamped on
+    the spot — so the editor can never show a number the schema would reject.
+    """
+    if not ch.isdigit():
+        return None
+    buffer = "" if buffer == "0" else buffer
+    cap = len(str(setting.maximum)) if setting.maximum is not None else None
+    if cap is not None and len(buffer) >= cap:
+        return None
+    candidate = buffer + ch
+    if setting.maximum is not None and int(candidate) > setting.maximum:
+        return str(setting.maximum)
+    return candidate
+
+
+def _typed_interval(buffer: str, ch: str) -> Optional[str]:
+    """Digits, then at most one unit letter — ``45m`` / ``2h`` / ``1d``.
+
+    Once a unit is present the value is complete, so further keys are ignored
+    rather than building ``2h5`` for the parser to reject later.
+    """
+    if buffer and buffer[-1] in INTERVAL_UNITS:
+        return None
+    if ch.isdigit():
+        return buffer + ch if len(buffer) < 4 else None
+    if ch.lower() in INTERVAL_UNITS and buffer:
+        return buffer + ch.lower()
+    return None
+
+
+def _typed_time(buffer: str, ch: str) -> Optional[str]:
+    """``HH:MM`` entry that cannot express an impossible time.
+
+    Digits only; the colon is inserted automatically after the hour; a first
+    digit above 2 is read as ``0H`` (typing ``9`` means 09:00, which is what
+    someone reaching for a single-digit hour meant); an hour above 23 or a
+    minute above 59 is refused at the keystroke.
+    """
+    if not ch.isdigit():
+        return None
+    digits = buffer.replace(":", "")
+    if len(digits) >= 4:
+        return None
+    digits += ch
+    if len(digits) == 1:
+        # 0-2 could still grow into a two-digit hour; 3-9 can only be 0H.
+        return f"{digits}" if ch in "012" else f"0{ch}:"
+    if len(digits) == 2:
+        if int(digits) > 23:
+            return None
+        return f"{digits}:"
+    if len(digits) == 3 and int(ch) > 5:  # minute tens
+        return None
+    return f"{digits[:2]}:{digits[2:]}"
+
+
+def _typed(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
+    """The buffer after typing *ch*, or ``None`` when the key is not allowed here.
+
+    One funnel for every per-kind input rule, so "which characters may this
+    field contain?" is answered in exactly one place — and the commit-time
+    schema check stays as the backstop rather than the first line of defence.
+    """
+    if setting.kind == "int":
+        return _typed_int(setting, buffer, ch)
+    if setting.kind == "interval":
+        return _typed_interval(buffer, ch)
+    if setting.kind == "time":
+        return _typed_time(buffer, ch)
+    return buffer + ch
+
+
 def _step_editing(state: MenuState, event: keys.KeyEvent, setting: config.Setting) -> MenuState:
     if event.key is keys.Key.ESCAPE:
         return replace(state, editing=False, edit_buffer="", error=None)
     if event.key is keys.Key.BACKSPACE:
-        return replace(state, edit_buffer=state.edit_buffer[:-1])
+        # Drop an auto-inserted separator along with the digit it followed,
+        # so backspace undoes exactly what the last keystroke produced.
+        trimmed = state.edit_buffer[:-1]
+        if trimmed.endswith(":"):
+            trimmed = trimmed[:-1]
+        return replace(state, edit_buffer=trimmed)
     if event.key is keys.Key.CHAR and event.char:
-        return replace(state, edit_buffer=state.edit_buffer + event.char)
+        candidate = _typed(setting, state.edit_buffer, event.char)
+        return state if candidate is None else replace(state, edit_buffer=candidate)
     if event.key is keys.Key.ENTER:
         if setting.kind == "secret" and not state.edit_buffer:
             # An empty commit on a secret means CANCEL: writing "" here would

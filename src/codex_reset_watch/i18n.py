@@ -140,6 +140,19 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "Environment TG_BOT_TOKEN wins. Store: {backend}",
         "zh-TW": "環境變數 TG_BOT_TOKEN 優先。儲存位置：{backend}",
     },
+    # ── editor format hints (shown while a field is being typed into) ───────
+    "hint.time": {
+        "en": "HH:MM · digits only, the colon is added for you (00:00–23:59)",
+        "zh-TW": "HH:MM · 只能輸入數字，冒號會自動補上（00:00–23:59）",
+    },
+    "hint.interval": {
+        "en": "Digits, then a unit: 30m · 2h · 1d (1 minute – 1 day)",
+        "zh-TW": "數字加單位：30m · 2h · 1d（1 分鐘 – 1 天）",
+    },
+    "hint.range": {
+        "en": "Whole number, {low}–{high}",
+        "zh-TW": "整數，{low}–{high}",
+    },
     "menu.no_secret_store": {
         "en": "No OS credential store here — set TG_BOT_TOKEN in the environment instead",
         "zh-TW": "這台機器沒有系統金鑰圈，請改用環境變數 TG_BOT_TOKEN",
