@@ -231,6 +231,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.export": {"en": "export", "zh-TW": "匯出"},
     "menu.import": {"en": "import", "zh-TW": "匯入"},
     "menu.quit": {"en": "quit", "zh-TW": "離開"},
+    "cli.cancelled": {"en": "Cancelled (Ctrl-C)", "zh-TW": "已取消（Ctrl-C）"},
     "menu.cancel_hint": {"en": "Esc cancels", "zh-TW": "Esc 取消"},
     "menu.number_hint": {"en": "Type a number to edit", "zh-TW": "輸入編號修改"},
     "menu.current": {"en": "Current:", "zh-TW": "目前："},

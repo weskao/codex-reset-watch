@@ -1105,21 +1105,30 @@ def config_cmd(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(_normalize_argv(raw))
-    if args.command in ("check", "update"):
-        return run_check("manual", notify=not args.no_notify)
-    if args.command == "monitor":
-        return run_check("monitor", notify=not args.no_notify)
-    if args.command == "daily":
-        return run_check("daily", notify=not args.no_notify, force_daily=args.force)
-    if args.command == "doctor":
-        return doctor()
-    if args.command == "logs":
-        return tail_logs(max(1, args.lines))
-    if args.command == "config":
-        return config_cmd(args)
-    if args.command == "apply-schedule":
-        return apply_schedule_cmd()
-    return 2
+    try:
+        if args.command in ("check", "update"):
+            return run_check("manual", notify=not args.no_notify)
+        if args.command == "monitor":
+            return run_check("monitor", notify=not args.no_notify)
+        if args.command == "daily":
+            return run_check("daily", notify=not args.no_notify, force_daily=args.force)
+        if args.command == "doctor":
+            return doctor()
+        if args.command == "logs":
+            return tail_logs(max(1, args.lines))
+        if args.command == "config":
+            return config_cmd(args)
+        if args.command == "apply-schedule":
+            return apply_schedule_cmd()
+        return 2
+    except KeyboardInterrupt:
+        # Every subcommand — not just the `config` menu, which handles its own
+        # Ctrl-C in-place — must exit on Ctrl-C rather than dump a traceback;
+        # 130 is the conventional shell exit code for SIGINT.
+        paint = ui.Paint(ui.colour_enabled(sys.stderr))
+        print(f"\n{paint.warn}{i18n.t('cli.cancelled', i18n.current_language())}{paint.reset}",
+              file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":
