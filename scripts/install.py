@@ -21,6 +21,11 @@ import subprocess
 import sys
 from typing import Any, Callable, Dict, IO
 
+try:  # stdlib on macOS/Linux; absent on Windows, where the console
+    import readline  # noqa: F401  (imported for its input() line-editing side effect)
+except ImportError:
+    pass
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from codex_reset_watch import config, paths, scheduler  # noqa: E402
