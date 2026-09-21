@@ -1,9 +1,29 @@
+## [0.4.0] - 2026-09-21
+
+### 🚀 Features
+
+- **ui:** Add Basic/Advanced settings mode with tab switching
+
+### 🐛 Bug Fixes
+
+- Detect shadowed cli commands
+- Notify on unchanged daily runs
+- Only re-apply schedule when a value actually changes
+
+### 📚 Documentation
+
+- **readme:** Add crw --config telegram notification example
+- **readme:** Move telegram example nearer the top
 ## [0.3.1] - 2026-09-21
 
 ### 🐛 Bug Fixes
 
 - Align scheduler with uv bin path
 - **ui:** Enable ansi color on windows console
+
+### 📚 Documentation
+
+- **changelog:** Release v0.3.1
 
 ### ⚙️ Miscellaneous Tasks
 
