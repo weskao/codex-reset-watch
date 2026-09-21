@@ -1087,7 +1087,7 @@ def config_cmd(args: argparse.Namespace) -> int:
         print(ui.render_settings(cfg))
         return 0
     if args.set:
-        schedule_dirty = False
+        before = dict(cfg)
         for item in args.set:
             if "=" not in item:
                 print("❌ " + i18n.t("menu.set_format", lang, item=item))
@@ -1102,7 +1102,6 @@ def config_cmd(args: argparse.Namespace) -> int:
             except ValueError as exc:
                 print(f"❌ {key}：{exc}")
                 return 2
-            schedule_dirty = schedule_dirty or key in cfgmod.SCHEDULE_KEYS
         cfgmod.save(cfg)
         unstored = cfgmod.save_secrets(cfg)
         print("✅ " + i18n.t("menu.set_done", lang, count=len(args.set),
@@ -1110,7 +1109,7 @@ def config_cmd(args: argparse.Namespace) -> int:
         if unstored:
             print(f"⚠️  {', '.join(unstored)}: no OS credential store on this machine — "
                   f"set TG_BOT_TOKEN in the environment instead")
-        if schedule_dirty or args.apply_schedule:
+        if args.apply_schedule or cfgmod.schedule_changed(before, cfg):
             return apply_schedule_cmd()
         return 0
     return ui.config_menu()

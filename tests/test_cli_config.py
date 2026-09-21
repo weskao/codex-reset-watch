@@ -60,6 +60,13 @@ class ConfigSetTests(unittest.TestCase):
             crw.config_cmd(args)
         mock_apply.assert_called_once()
 
+    def test_setting_a_schedule_key_to_its_current_value_does_not_reapply(self, mock_apply):
+        with isolated_config():
+            current = config.load()["daily_time"]
+            args = crw.build_parser().parse_args(["config", "--set", f"daily_time={current}"])
+            crw.config_cmd(args)
+        mock_apply.assert_not_called()
+
     def test_non_schedule_set_does_not_reapply(self, mock_apply):
         with isolated_config():
             args = crw.build_parser().parse_args(["config", "--set", "notify_upcoming_reset=off"])

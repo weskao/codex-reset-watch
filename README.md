@@ -6,6 +6,13 @@ Example Telegram notification (`crw --config`):
 
 ![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
 
+Everything is tuned through one keyboard-driven menu, `crw config`. It opens on the **Basic**
+tab (the settings most people touch); `Tab` switches to **Advanced** (every setting). Both tabs
+are always on screen with their row counts, and the rule underlines the one you are on.
+Full reference: [§4](#4-configuration-crw-config).
+
+![crw config — Basic mode](docs/images/crw-config-basic-mode.png)
+
 This version is **uv-native**:
 
 - project/dependency metadata: `pyproject.toml`
@@ -242,6 +249,7 @@ all work too (see [§3](#--is-optional-everywhere)).
 | `←` `→` | change a toggle (On/Off) or step through a choice (Language) |
 | `Enter` | toggle a switch, or open an inline editor for a typed value |
 | `Esc` | cancel the current edit (or quit from the row list) |
+| `Tab` | switch Basic ↔ Advanced mode (`m` in the numbered fallback menu) |
 | `a` | apply the OS schedule now |
 | `d` | restore every default (asks `y` to confirm) |
 | `e` / `i` | export / import settings — type a path, `Enter` |
@@ -253,11 +261,34 @@ reserved on every row, so moving the cursor never shifts the value column. While
 for a key, that cursor breathes: the glyph stays put and only its colour ramps up and down, so
 the animation cannot move a column. It runs on a real terminal only — piped or redirected
 output never animates, and stays plain text. The row's help text
-appears below the list, and the bottom-right counter (`10/22`) says where you are; on a short
-terminal the list scrolls with `▴ N more` / `▾ N more` markers rather than silently hiding rows.
+appears below the list, and the bottom-right counter (e.g. `4/11` in Basic mode, `4/23` in
+Advanced) says where you are; on a short terminal the list scrolls with `▴ N more` / `▾ N more`
+markers rather than silently hiding rows.
 
 Each change saves immediately, and a schedule-relevant change re-applies the OS schedule on
-quit automatically.
+quit automatically. "Change" means the value actually differs from the one the schedule was
+built from — re-typing the same time, or toggling a row off and back on, re-applies nothing.
+The same holds for `crw config --set` (use `--apply-schedule` to force one).
+
+### Basic and Advanced mode
+
+The menu shows a curated **Basic** subset by default — the settings most people actually touch
+(scheduling, notification toggles, Telegram, language). **Advanced** adds everything else: the
+API/HTTP tuning and the storage-path rows.
+
+Both modes sit in the header as two tabs, with how many rows each one holds, and the panel's
+hairline thickens under the active one — so which view you are in, what the other one would
+give you, and the key that gets you there are all on screen at once:
+
+```text
+   Basic 11   Advanced 23                                ⇥ Tab to switch
+ ──━━━━━━━━──────────────────────────────────────────────────────────────
+```
+
+`Tab` switches (`m` in the numbered fallback menu, which shows a badge instead — there is no
+key to press there). The underline marks the active tab even with `NO_COLOR` or piped output.
+The choice is just another setting (`ui_mode`), so it is remembered across runs; a fresh
+install starts in Basic — see the screenshot at the top of this README.
 
 Colour is dropped whenever stdout isn't a real terminal or `NO_COLOR` is set. On the classic
 `cmd.exe`/conhost window it stays on: the first colour print flips that console into ANSI mode
@@ -288,46 +319,50 @@ a keypress that cannot arrive.
 `crw config --list` (values below are an example, not your real settings):
 
 ```text
- ◆ Codex Reset Watch · Settings                                   v0.1.0
+ ◆ Codex Reset Watch · Settings                     Advanced mode v0.3.1
    ~/Library/Application Support/codex-reset-watch/config.json
  ────────────────────────────────────────────────────────────────────────
 
  ▍ Scheduling
-    1 Daily notification ············································ On
-    2 Daily time ················································· 09:30
-    3 Background scan ··············································· On
-    4 Scan interval ········································· 45 minutes
-    5 Timezone ············································· Asia/Taipei
+    1 Daily notification ········································· On
+    2 Daily time ·············································· 09:30
+    3 Background scan ············································ On
+    4 Scan interval ······································ 45 minutes
+    5 Timezone ·········································· Asia/Taipei
 
  ▍ Notifications
-    6 New reset events ·············································· On
-    7 Upcoming reset signals ········································ On
-    8 Notify on unchanged scan ····································· Off
-    9 Notify on unchanged day ······································· On
+    6 New reset events ··········································· On
+    7 Upcoming reset signals ····································· On
+    8 Notify on unchanged scan ··································· On
+    9 Notify on unchanged day ···································· On
 
  ▍ Telegram
-   10 Bot token ·············································· (not set)
-   11 Chat ID ··········································· -1002847193056
+   10 Bot token ··········································· (not set)
+   11 Chat ID ········································ -1002847193056
 
  ▍ API
-   12 API base ································ https://codex-resets.com
-   13 status path ······································· /api/v1/status
-   14 resets path ··················· /api/v1/resets?limit=20&order=desc
-   15 Timeout (seconds) ············································· 15
-   16 Retries ························································ 3
-   17 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com/ap…
+   12 API base ····························· https://codex-resets.com
+   13 status path ···································· /api/v1/status
+   14 resets path ················ /api/v1/resets?limit=20&order=desc
+   15 Timeout (seconds) ·········································· 15
+   16 Retries ····················································· 3
+   17 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com…
 
  ▍ Storage
-   18 State folder ·································· (platform default)
-   19 Log folder ···································· (platform default)
-   20 Log size cap ··············································· 2 MiB
-   21 Log backups ···················································· 3
+   18 State folder ······························· (platform default)
+   19 Log folder ································· (platform default)
+   20 Log size cap ············································ 2 MiB
+   21 Log backups ················································· 3
 
  ▍ Interface
-   22 Language ·········································· auto (English)
+   22 Language ······································· auto (English)
+   23 Mode ···················································· Basic
 
  Times shown in Asia/Taipei; the OS fires each job in its own local time.
 ```
+
+`--list` always shows the full (Advanced) schema, regardless of the stored mode — the badge and
+`23 Mode` row make that explicit.
 
 ### Settings
 
@@ -347,6 +382,7 @@ a keypress that cannot arrive.
 | `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu and message language | `auto`, `en`, `zh-TW` |
+| `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
 
 ### Language
 

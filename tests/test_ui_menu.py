@@ -83,6 +83,12 @@ class ToggleTests(unittest.TestCase):
         state = ui.step(fresh(), press(keys.Key.RIGHT), SETTINGS)  # daily_enabled
         self.assertTrue(state.schedule_dirty)
 
+    def test_cycling_a_schedule_key_back_leaves_the_schedule_clean(self):
+        state = ui.step(fresh(), press(keys.Key.RIGHT), SETTINGS)   # daily_enabled off
+        state = ui.step(state, press(keys.Key.RIGHT), SETTINGS)     # and back on
+        self.assertEqual(state.values["daily_enabled"], config.DEFAULTS["daily_enabled"])
+        self.assertFalse(state.schedule_dirty)
+
     def test_toggling_a_non_schedule_key_leaves_the_schedule_clean(self):
         index = SETTINGS.index(config.BY_KEY["notify_upcoming_reset"])
         state = ui.step(fresh(cursor=index), press(keys.Key.RIGHT), SETTINGS)
@@ -298,7 +304,9 @@ class EditorHintTests(unittest.TestCase):
 
     def setUp(self):
         self.plain = ui.Paint(False)
-        self.cfg = dict(config.DEFAULTS)
+        # Advanced: these index by position in the full SETTINGS tuple, and
+        # exercise rows (request_retries, api_base, …) Basic mode hides.
+        self.cfg = {**config.DEFAULTS, "ui_mode": "advanced"}
 
     def _hint(self, key):
         index = SETTINGS.index(config.BY_KEY[key])
@@ -339,6 +347,10 @@ class RestoreDefaultsTests(unittest.TestCase):
     def test_a_restore_marks_the_schedule_dirty(self):
         state = fresh(values=dict(config.DEFAULTS, daily_time="03:00"), confirm_defaults=True)
         self.assertTrue(ui.step(state, char("y"), SETTINGS).schedule_dirty)
+
+    def test_a_restore_with_defaults_already_in_place_leaves_the_schedule_clean(self):
+        state = fresh(values=dict(config.DEFAULTS), confirm_defaults=True)
+        self.assertFalse(ui.step(state, char("y"), SETTINGS).schedule_dirty)
 
 
 class ActionTests(unittest.TestCase):
@@ -403,7 +415,10 @@ class WrapTests(unittest.TestCase):
 class RenderTests(unittest.TestCase):
     def setUp(self):
         self.plain = ui.Paint(False)
-        self.cfg = dict(config.DEFAULTS)
+        # Advanced: several of these index by position in the full SETTINGS
+        # tuple (SETTINGS.index(...), len(SETTINGS) - 1) or target rows
+        # (telegram_bot_token, request_retries, api_base) Basic mode hides.
+        self.cfg = {**config.DEFAULTS, "ui_mode": "advanced"}
 
     def test_the_frame_has_no_box_drawing_borders(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
