@@ -566,6 +566,10 @@ Then:
 crw check
 ```
 
+Example Telegram notification (`crw --config`):
+
+![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
+
 ## 9. Timezone and countdown
 
 Upcoming reset information is rendered in the configured `timezone` (default `UTC+8` — see
