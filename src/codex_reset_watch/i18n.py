@@ -209,6 +209,11 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "Language for the menu and messages. auto follows the system locale.",
         "zh-TW": "選單與訊息的語言。auto 會跟隨系統語系。",
     },
+    "setting.ui_mode.label": {"en": "Mode", "zh-TW": "模式"},
+    "setting.ui_mode.help": {
+        "en": "Basic shows the common settings; Advanced shows everything.",
+        "zh-TW": "一般模式只顯示常用設定；進階模式顯示全部設定。",
+    },
 
     # ── values ──────────────────────────────────────────────────────────────
     "value.on": {"en": "On", "zh-TW": "開啟"},
@@ -216,6 +221,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "value.platform_default": {"en": "(platform default)", "zh-TW": "（系統預設）"},
     "value.unset": {"en": "(not set)", "zh-TW": "（未設定）"},
     "value.from_env": {"en": "(from environment)", "zh-TW": "（來自環境變數）"},
+    "value.mode.basic": {"en": "Basic", "zh-TW": "一般"},
+    "value.mode.advanced": {"en": "Advanced", "zh-TW": "進階"},
 
     # ── menu chrome ─────────────────────────────────────────────────────────
     "menu.title": {"en": "Codex Reset Watch · Settings", "zh-TW": "Codex Reset Watch · 設定"},
@@ -226,11 +233,20 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.move": {"en": "move", "zh-TW": "移動"},
     "menu.change": {"en": "change", "zh-TW": "切換"},
     "menu.edit": {"en": "edit", "zh-TW": "編輯"},
+    "menu.mode": {"en": "mode", "zh-TW": "模式"},
     "menu.apply": {"en": "apply schedule", "zh-TW": "套用排程"},
     "menu.defaults": {"en": "defaults", "zh-TW": "還原預設"},
     "menu.export": {"en": "export", "zh-TW": "匯出"},
     "menu.import": {"en": "import", "zh-TW": "匯入"},
     "menu.quit": {"en": "quit", "zh-TW": "離開"},
+    "menu.badge_basic": {"en": "Basic mode", "zh-TW": "一般模式"},
+    "menu.badge_advanced": {"en": "Advanced mode", "zh-TW": "進階模式"},
+    # The tab bar: two short names, and a hint that names the key out loud —
+    # a tab nobody knows how to reach is just a label.
+    "menu.tab_basic": {"en": "Basic", "zh-TW": "一般"},
+    "menu.tab_advanced": {"en": "Advanced", "zh-TW": "進階"},
+    "menu.tab_hint": {"en": "Tab to switch", "zh-TW": "按 Tab 切換"},
+    "menu.switch_mode": {"en": "switch mode", "zh-TW": "切換模式"},
     "cli.cancelled": {"en": "Cancelled (Ctrl-C)", "zh-TW": "已取消（Ctrl-C）"},
     "menu.cancel_hint": {"en": "Esc cancels", "zh-TW": "Esc 取消"},
     "menu.number_hint": {"en": "Type a number to edit", "zh-TW": "輸入編號修改"},
@@ -265,8 +281,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "確定要把所有設定還原成預設值？y 確認，其他鍵取消",
     },
     "menu.invalid_choice": {
-        "en": "Enter 1-{count}, or a / d / e / i / q",
-        "zh-TW": "請輸入 1-{count}，或 a / d / e / i / q",
+        "en": "Enter 1-{count}, or a / d / e / i / m / q",
+        "zh-TW": "請輸入 1-{count}，或 a / d / e / i / m / q",
     },
     "menu.export_prompt": {"en": "Export to file:", "zh-TW": "匯出到檔案："},
     "menu.import_prompt": {"en": "Import from file:", "zh-TW": "從檔案匯入："},

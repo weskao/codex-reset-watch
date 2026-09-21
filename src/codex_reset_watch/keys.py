@@ -48,6 +48,7 @@ class Key(enum.Enum):
     LEFT = "left"
     RIGHT = "right"
     ENTER = "enter"
+    TAB = "tab"
     ESCAPE = "escape"
     BACKSPACE = "backspace"
     CTRL_C = "ctrl_c"
@@ -149,6 +150,8 @@ def read_key() -> KeyEvent:
         return KeyEvent(Key.CTRL_C)
     if first in (b"\r", b"\n"):
         return KeyEvent(Key.ENTER)
+    if first == b"\t":
+        return KeyEvent(Key.TAB)
     if first in (b"\x7f", b"\x08"):
         return KeyEvent(Key.BACKSPACE)
 

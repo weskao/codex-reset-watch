@@ -67,7 +67,7 @@ lint:
 test-unit:
 	$(UV) run python -m unittest tests.test_parser tests.test_formatting tests.test_state tests.test_config \
 		tests.test_config_extras tests.test_i18n tests.test_keys tests.test_secrets_store \
-		tests.test_scheduler tests.test_ui tests.test_ui_menu tests.test_launchd -v
+		tests.test_scheduler tests.test_ui tests.test_ui_menu tests.test_ui_mode tests.test_launchd -v
 
 test-integration:
 	$(UV) run python -m unittest tests.test_integration tests.test_run_check tests.test_cli_config \

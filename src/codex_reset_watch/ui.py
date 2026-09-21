@@ -102,7 +102,11 @@ GLYPH_CYCLE = "←→"      # this row changes with the arrow keys
 GLYPH_ENTER = "⏎"       # this row opens an editor
 GLYPH_MORE_ABOVE = "▴"  # the list is scrolled: more rows off-screen that way
 GLYPH_MORE_BELOW = "▾"
+GLYPH_TAB = "⇥"         # the key that switches mode, named on the tab row
+GLYPH_TAB_RULE = "━"    # heavy run: the hairline thickened under the active tab
 PANEL_WIDTH = 72
+TAB_INDENT = 3          # tabs line up with the config path above them
+TAB_GAP = 3             # space between the two tabs
 AFFORD_WIDTH = 3        # reserved on EVERY row so values never shift
 
 _PAINT_NAMES = ("RESET", "BOLD", "DIM", "ACCENT", "TITLE", "OK", "SEL",
@@ -243,15 +247,76 @@ def _tilde(path: Any) -> str:
     return "~" + text[len(home):] if text.startswith(home) else text
 
 
-def _header(paint: Paint, lang: str) -> List[str]:
+def _header(paint: Paint, lang: str, mode: Optional[str] = None,
+            rule: bool = True) -> List[str]:
+    """The top of the panel — title, config path, and (by default) the hairline.
+
+    *mode* adds a badge between the title and the version, for the surfaces
+    that have no tab bar to carry it (``--list``, which prints the full schema
+    and offers no key to press). The keyboard menu passes ``mode=None`` and
+    ``rule=False`` instead, and follows this with :func:`_tab_bar`, whose own
+    rule replaces the hairline — so the menu gains one line, not two.
+    """
     title = i18n.t("menu.title", lang)
     version = f"v{package_version()}"
-    gap = PANEL_WIDTH - 3 - width(title) - width(version)
-    return [
+    badge_text = i18n.t(f"menu.badge_{mode}", lang) if mode else ""
+    badge_colour = paint.warn if mode == "advanced" else paint.accent
+    tail = f"{paint.muted}{version}{paint.reset}"
+    if badge_text:
+        tail = f"{badge_colour}{badge_text}{paint.reset} {tail}"
+    gap = (PANEL_WIDTH - 3 - width(title) - width(version)
+           - (width(badge_text) + 1 if badge_text else 0))
+    lines = [
         f" {paint.accent}{GLYPH_MARK}{paint.reset} {paint.bold}{paint.title}{title}{paint.reset}"
-        f"{' ' * max(1, gap)}{paint.muted}{version}{paint.reset}",
+        f"{' ' * max(1, gap)}{tail}",
         f"   {paint.muted}{_clip(_tilde(config.config_path()), PANEL_WIDTH - 3)}{paint.reset}",
-        f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}",
+    ]
+    if rule:
+        lines.append(f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}")
+    return lines
+
+
+def _tab_bar(paint: Paint, lang: str, mode: str) -> List[str]:
+    """The two mode tabs, and the rule that underlines the active one.
+
+    Both modes are always on screen with the size of each list, so switching
+    is a visible choice between two things rather than a hidden toggle, and
+    the row names the key out loud (``⇥ Tab to switch``) — a tab nobody knows
+    how to reach is just a label.
+
+    The underline *is* the panel's hairline: only the active tab's own columns
+    thicken to ``━`` and turn accent. That is what makes two words read as two
+    tabs without a single box-drawing corner, and it survives ``NO_COLOR`` —
+    with colour off the heavy run still marks the active tab.
+    """
+    labels = [(m, f"{i18n.t(f'menu.tab_{m}', lang)} {len(config.visible_settings(m))}")
+              for m in config.UI_MODES]
+    cells: List[str] = []
+    column = TAB_INDENT          # where the next tab's text starts
+    active = (column, 0)         # (start column, width) of the selected tab
+    for name, text in labels:
+        if name == mode:
+            active = (column, width(text))
+            cells.append(f"{paint.bold}{paint.title}{text}{paint.reset}")
+        else:
+            cells.append(f"{paint.muted}{text}{paint.reset}")
+        column += width(text) + TAB_GAP
+    row = " " * TAB_INDENT + (" " * TAB_GAP).join(cells)
+
+    hint_text = i18n.t("menu.tab_hint", lang)
+    pad = PANEL_WIDTH - width(strip_ansi(row)) - width(GLYPH_TAB) - 1 - width(hint_text)
+    row += (" " * max(1, pad) + f"{paint.accent}{GLYPH_TAB}{paint.reset} "
+            f"{paint.muted}{hint_text}{paint.reset}")
+
+    # The rule starts at line column 1 (after the leading space), so the
+    # column a tab sits at is `start` characters into the rule's own run.
+    start, span = active
+    before = "─" * max(0, start - 1)
+    after = "─" * max(0, PANEL_WIDTH - len(before) - span)
+    return [
+        row,
+        f" {paint.frame}{before}{paint.reset}{paint.accent}{GLYPH_TAB_RULE * span}"
+        f"{paint.reset}{paint.frame}{after}{paint.reset}",
     ]
 
 
@@ -354,12 +419,17 @@ def _group_heading(paint: Paint, group: str, lang: str) -> str:
 
 
 def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Optional[int],
-                    editing: bool, edit_buffer: str,
-                    cursor_glyph: str = GLYPH_CURSOR) -> List[Tuple[Optional[int], str]]:
-    """``(row index or None, line)`` for every group heading and settings row."""
+                    editing: bool, edit_buffer: str, cursor_glyph: str = GLYPH_CURSOR,
+                    settings: Sequence[config.Setting] = config.SETTINGS,
+                    ) -> List[Tuple[Optional[int], str]]:
+    """``(row index or None, line)`` for every group heading and settings row.
+
+    *settings* is whichever rows the current mode shows — ``cursor`` and every
+    row number are positions in *that* sequence, not in :data:`config.SETTINGS`.
+    """
     blocks: List[Tuple[Optional[int], str]] = []
     current_group = None
-    for index, setting in enumerate(config.SETTINGS):
+    for index, setting in enumerate(settings):
         if setting.group != current_group:
             current_group = setting.group
             blocks.append((None, ""))
@@ -395,12 +465,23 @@ def _window(blocks: Sequence[Tuple[Optional[int], str]], cursor: Optional[int],
 
 
 def render_settings(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
-                    lang: Optional[str] = None) -> str:
-    """The whole settings panel as one string — what ``crw config --list`` prints."""
+                    lang: Optional[str] = None,
+                    settings: Optional[Sequence[config.Setting]] = None,
+                    mode: Optional[str] = None) -> str:
+    """The whole settings panel as one string.
+
+    With no *settings*/*mode*, this is ``crw config --list``: every setting,
+    Advanced badge, regardless of the stored mode — a full dump is what that
+    flag is for. :func:`fallback_menu` passes both explicitly to show the
+    current mode's own filtered view instead.
+    """
     paint = paint or Paint(colour_enabled())
     lang = lang or i18n.current_language(cfg)
-    lines = _header(paint, lang)
-    lines += [line for _, line in _setting_blocks(cfg, paint, lang, None, False, "")]
+    settings = config.SETTINGS if settings is None else settings
+    mode = mode or "advanced"
+    lines = _header(paint, lang, mode)
+    lines += [line for _, line in _setting_blocks(cfg, paint, lang, None, False, "",
+                                                   settings=settings)]
     lines.append("")
     lines.append(f" {paint.muted}{i18n.t('menu.tz_note', lang, tz=config.tz_label(cfg))}{paint.reset}")
     return "\n".join(lines)
@@ -431,6 +512,8 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
     def bar(parts: List[str]) -> str:
         return " " + f" {paint.frame}·{paint.reset} ".join(parts)
 
+    # No ⇥ here: the tab bar above the list names that key itself, and one
+    # key stated twice reads as two different things.
     nav = bar([key("↑↓", "menu.move"), key("←→", "menu.change"), key("⏎", "menu.edit")])
     if position:
         # Right-aligned on the nav line: which row of how many, so the cursor's
@@ -449,7 +532,8 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
                 error: Optional[str] = None, notice: Optional[str] = None,
                 confirm_defaults: bool = False, prompt: Optional[str] = None,
                 prompt_buffer: str = "", height: Optional[int] = None,
-                pulse_frame: int = 0) -> List[str]:
+                pulse_frame: int = 0,
+                settings: Optional[Sequence[config.Setting]] = None) -> List[str]:
     """Every line of one frame of the keyboard menu, already windowed to *height*.
 
     *pulse_frame* selects the selected row's cursor colour from
@@ -457,13 +541,19 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     tick so the cursor breathes in place, at a fixed rate, while a real
     terminal waits for a key. The glyph itself never changes, so no frame can
     move a column.
+
+    *settings* defaults to whatever ``cfg["ui_mode"]`` shows — :func:`run_menu`
+    passes it explicitly since it also hands the same sequence to :func:`step`,
+    and the two must agree on what row ``cursor`` points at.
     """
     paint = paint or Paint(colour_enabled())
     lang = lang or i18n.current_language(cfg)
+    mode = config.current_ui_mode(cfg)
+    settings = config.visible_settings(mode) if settings is None else settings
     height = height or shutil.get_terminal_size((80, 40)).lines
 
-    head = _header(paint, lang)
-    setting = config.SETTINGS[cursor]
+    head = _header(paint, lang, rule=False) + _tab_bar(paint, lang, mode)
+    setting = settings[cursor]
     foot: List[str] = [f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}"]
     if confirm_defaults:
         foot.append(f" {paint.warn}{i18n.t('menu.confirm_defaults', lang)}{paint.reset}")
@@ -497,10 +587,10 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
         wrapped = _wrap(notice, PANEL_WIDTH - 3)
         foot.append(f" {paint.ok}✓ {wrapped[0]}{paint.reset}")
         foot.extend(f"   {paint.ok}{line}{paint.reset}" for line in wrapped[1:])
-    foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(config.SETTINGS)}"))
+    foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(settings)}"))
 
     cursor_glyph = CURSOR_PULSE_FRAMES[pulse_frame % len(CURSOR_PULSE_FRAMES)]
-    blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer, cursor_glyph)
+    blocks = _setting_blocks(cfg, paint, lang, cursor, editing, edit_buffer, cursor_glyph, settings)
     return head + _window(blocks, cursor, height - len(head) - len(foot), paint) + foot
 
 
@@ -527,8 +617,20 @@ class MenuState:
     prompt_buffer: str = ""
     pending_save: bool = False
     pending_action: Optional[str] = None  # "apply" | "export" | "import"
-    schedule_dirty: bool = False
+    #: The values the OS schedule was last built from. Defaults to the values
+    #: the menu opened with, and moves forward on a successful apply.
+    applied: Optional[Dict[str, Any]] = None
     quitting: bool = False
+
+    def __post_init__(self) -> None:
+        if self.applied is None:
+            object.__setattr__(self, "applied", dict(self.values))
+
+    @property
+    def schedule_dirty(self) -> bool:
+        """Derived, never accumulated: toggling a row off and back on again is
+        not a change, so it must not trigger a re-apply on quit."""
+        return config.schedule_changed(self.applied, self.values)
 
 
 def _cycle_options(setting: config.Setting) -> Optional[Tuple[Any, ...]]:
@@ -545,7 +647,6 @@ def _touched(state: MenuState, setting: config.Setting, value: Any, **extra: Any
         state,
         values={**state.values, setting.key: value},
         pending_save=True,
-        schedule_dirty=state.schedule_dirty or setting.key in config.SCHEDULE_KEYS,
         error=None,
         notice=None,
         **extra,
@@ -713,14 +814,28 @@ def _step_confirm(state: MenuState, event: keys.KeyEvent) -> MenuState:
         values={**state.values, **config.DEFAULTS},
         confirm_defaults=False,
         pending_save=True,
-        schedule_dirty=True,
         error=None,
         notice=i18n.t("menu.defaults_done", i18n.current_language(state.values)),
     )
 
 
+def _toggle_mode(state: MenuState, settings: Sequence[config.Setting]) -> MenuState:
+    """Flip Basic/Advanced. Keeps the same row selected if it stays visible in
+    the new mode (e.g. any Basic-tier row survives either way); otherwise
+    lands on the first row rather than leaving the cursor pointing past the
+    end of a shorter list."""
+    new_mode = "advanced" if config.current_ui_mode(state.values) == "basic" else "basic"
+    selected_key = settings[state.cursor].key if settings else None
+    new_settings = config.visible_settings(new_mode)
+    new_cursor = next((i for i, s in enumerate(new_settings) if s.key == selected_key), 0)
+    return _touched(state, config.BY_KEY["ui_mode"], new_mode,
+                    cursor=new_cursor, editing=False, edit_buffer="")
+
+
 def _step_browsing(state: MenuState, event: keys.KeyEvent,
                    settings: Sequence[config.Setting]) -> MenuState:
+    if event.key is keys.Key.TAB:
+        return _toggle_mode(state, settings)
     if event.key is keys.Key.CHAR:
         if event.char == "q":
             return replace(state, quitting=True)
@@ -830,13 +945,13 @@ def _perform(state: MenuState, cfg: Dict[str, Any], lang: str) -> MenuState:
     action = state.pending_action
     if action == "apply":
         ok, message = _apply_schedule(cfg, lang)
-        state = replace(state, schedule_dirty=False) if ok else state
+        state = replace(state, applied=dict(cfg)) if ok else state
     elif action == "export":
         ok, message = export_settings(cfg, state.prompt_buffer, lang)
     elif action == "import":
         ok, message = import_settings(cfg, state.prompt_buffer, lang)
         if ok:
-            state = replace(state, values=dict(cfg), pending_save=True, schedule_dirty=True)
+            state = replace(state, values=dict(cfg), pending_save=True)
     else:
         return replace(state, pending_action=None)
     return replace(state, pending_action=None, prompt_buffer="",
@@ -873,12 +988,13 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
     with keys.raw_mode():
         while True:
             lang = i18n.current_language(state.values)
+            settings = config.visible_settings(config.current_ui_mode(state.values))
             painted = _draw(render_menu(
                 state.values, state.cursor, paint=paint, lang=lang, editing=state.editing,
                 edit_buffer=state.edit_buffer, error=state.error, notice=state.notice,
                 confirm_defaults=state.confirm_defaults, prompt=state.prompt,
                 prompt_buffer=state.prompt_buffer, height=height,
-                pulse_frame=pulse_frame), out, painted)
+                pulse_frame=pulse_frame, settings=settings), out, painted)
             try:
                 if not keys.key_ready(CURSOR_PULSE_INTERVAL):
                     # Idle: advance the cursor's pulse frame and redraw,
@@ -895,7 +1011,7 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
                 # read(), so both must be inside this one try. A drained fake
                 # source (tests) ends the loop the same way.
                 break
-            state = step(state, event)
+            state = step(state, event, settings)
             if state.pending_save:
                 config.save(state.values)
                 state = replace(state, pending_save=False)
@@ -962,15 +1078,19 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
     """The numbered menu: same schema and validation, no keyboard required."""
     paint = Paint(colour_enabled(out))
     cfg = config.load()
-    schedule_dirty = False
+    applied = dict(cfg)   # what the OS schedule currently reflects
     while True:
         lang = i18n.current_language(cfg)
-        print("\n" + render_settings(cfg, paint=paint, lang=lang), file=out)
+        mode = config.current_ui_mode(cfg)
+        settings = config.visible_settings(mode)
+        print("\n" + render_settings(cfg, paint=paint, lang=lang, settings=settings, mode=mode),
+              file=out)
         print(f"\n {paint.muted}{i18n.t('menu.number_hint', lang)}{paint.reset}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}a{paint.reset} {i18n.t('menu.apply', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}d{paint.reset} {i18n.t('menu.defaults', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}e{paint.reset} {i18n.t('menu.export', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}i{paint.reset} {i18n.t('menu.import', lang)}  "
+              f"{paint.muted}·{paint.reset}  {paint.accent}m{paint.reset} {i18n.t('menu.switch_mode', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}q{paint.reset} {i18n.t('menu.quit', lang)}", file=out)
         print(f" {paint.accent}{GLYPH_PROMPT}{paint.reset} ", end="", file=out, flush=True)
         choice = _read_line(stdin)
@@ -980,17 +1100,23 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
         if not choice:
             continue
         lowered = choice.lower()
+        if lowered == "m":
+            new_mode = "advanced" if mode == "basic" else "basic"
+            config.set_value(cfg, "ui_mode", new_mode)
+            config.save(cfg)
+            print(f" {paint.ok}✓ {i18n.t(f'menu.badge_{new_mode}', lang)}{paint.reset}", file=out)
+            continue
         if lowered == "a":
             config.save(cfg)
             ok, message = _apply_schedule(cfg, lang)
             print(f" {paint.ok if ok else paint.err}{'✓' if ok else '✗'} {message}{paint.reset}", file=out)
             print(" " + summary_line(cfg, paint=paint, lang=lang), file=out)
-            schedule_dirty = schedule_dirty and not ok
+            if ok:
+                applied = dict(cfg)
             continue
         if lowered == "d":
             cfg = dict(config.DEFAULTS)
             config.save(cfg)
-            schedule_dirty = True
             print(f" {paint.ok}✓ {i18n.t('menu.defaults_done', lang)}{paint.reset}", file=out)
             continue
         if lowered in ("e", "i"):
@@ -1005,21 +1131,19 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
             print(f" {paint.ok if ok else paint.err}{'✓' if ok else '✗'} {message}{paint.reset}", file=out)
             if ok and action == "import":
                 config.save(cfg)
-                schedule_dirty = True
             if ok and action == "export":
                 print(f" {paint.warn}⚠ {i18n.t('menu.export_secrets', lang, keys=', '.join(sorted(config.SECRET_KEYS)))}{paint.reset}", file=out)
             continue
-        if not choice.isdigit() or not 1 <= int(choice) <= len(config.SETTINGS):
-            print(f" {paint.err}✗ {i18n.t('menu.invalid_choice', lang, count=len(config.SETTINGS))}"
+        if not choice.isdigit() or not 1 <= int(choice) <= len(settings):
+            print(f" {paint.err}✗ {i18n.t('menu.invalid_choice', lang, count=len(settings))}"
                   f"{paint.reset}", file=out)
             continue
-        setting = config.SETTINGS[int(choice) - 1]
+        setting = settings[int(choice) - 1]
         if _edit(setting, cfg, paint, stdin, out, lang):
             config.save(cfg)
-            schedule_dirty = schedule_dirty or setting.key in config.SCHEDULE_KEYS
             print(f" {paint.ok}✓ {i18n.t('menu.saved', i18n.current_language(cfg), label=config.label(setting, i18n.current_language(cfg)), value=config.render(setting, cfg[setting.key], i18n.current_language(cfg)))}{paint.reset}", file=out)
     lang = i18n.current_language(cfg)
-    if schedule_dirty:
+    if config.schedule_changed(applied, cfg):
         print(f"\n {paint.warn}{i18n.t('menu.schedule_dirty', lang)}{paint.reset}", file=out)
         ok, message = _apply_schedule(cfg, lang)
         print(f" {paint.ok if ok else paint.err}{'✓' if ok else '✗'} {message}{paint.reset}", file=out)

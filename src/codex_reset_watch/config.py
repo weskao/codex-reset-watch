@@ -32,7 +32,7 @@ import os
 import pathlib
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from . import i18n, paths, secrets_store
 
@@ -61,26 +61,38 @@ class Setting:
     minimum: Optional[int] = None
     maximum: Optional[int] = None
     choices: Optional[Tuple[str, ...]] = None
+    #: "basic" rows are the curated subset Basic mode shows; everything else
+    #: ("advanced", the default) is hidden there and shown only in Advanced
+    #: mode. A row added to SETTINGS with no explicit tier is advanced-only,
+    #: so it never appears in Basic mode by accident.
+    tier: str = "advanced"
 
+
+#: The two menu modes. Basic is the default: the curated subset most people
+#: need. Advanced is the full schema — what `--list` and the old single-mode
+#: menu always showed.
+UI_MODES: Tuple[str, ...] = ("basic", "advanced")
+DEFAULT_UI_MODE = "basic"
 
 SETTINGS: Tuple[Setting, ...] = (
     # ── scheduling ───────────────────────────────────────────────────────
     Setting("daily_enabled", "bool", True, "scheduling", "Daily notification",
-            "Send one overview at a fixed time each day."),
+            "Send one overview at a fixed time each day.", tier="basic"),
     Setting("daily_time", "time", "10:00", "scheduling", "Daily time",
-            "HH:MM, read in the timezone below (e.g. 10:00)."),
+            "HH:MM, read in the timezone below (e.g. 10:00).", tier="basic"),
     Setting("monitor_enabled", "bool", True, "scheduling", "Background scan",
-            "Scan the API periodically, notifying only on new information."),
+            "Scan the API periodically, notifying only on new information.", tier="basic"),
     Setting("scan_interval_minutes", "interval", 120, "scheduling", "Scan interval",
             "Minimum 1 minute, maximum 1 day. Accepts 30m / 2h / 1d or a number of minutes.",
-            MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES),
+            MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, tier="basic"),
     Setting("timezone", "tz", "UTC+8", "scheduling", "Timezone",
-            "UTC+8, UTC-05:30, UTC, local, or an IANA name (Asia/Taipei)."),
+            "UTC+8, UTC-05:30, UTC, local, or an IANA name (Asia/Taipei).", tier="basic"),
     # ── notifications ────────────────────────────────────────────────────
     Setting("notify_new_reset_events", "bool", True, "notifications", "New reset events",
-            "Notify when a newly published reset announcement is detected."),
+            "Notify when a newly published reset announcement is detected.", tier="basic"),
     Setting("notify_upcoming_reset", "bool", True, "notifications", "Upcoming reset signals",
-            "Notify when a not-yet-happened forecast or prediction signal is detected."),
+            "Notify when a not-yet-happened forecast or prediction signal is detected.",
+            tier="basic"),
     Setting("monitor_notify_when_unchanged", "bool", True, "notifications",
             "Notify on unchanged scan",
             "Push on every background scan, even when nothing changed."),
@@ -89,9 +101,11 @@ SETTINGS: Tuple[Setting, ...] = (
             "Push on every daily run, even when nothing changed."),
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
-            "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN."),
+            "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN.",
+            tier="basic"),
     Setting("telegram_chat_id", "text_optional", "", "telegram", "Chat ID",
-            "Telegram chat that receives the notifications; used ahead of TG_CHAT_ID."),
+            "Telegram chat that receives the notifications; used ahead of TG_CHAT_ID.",
+            tier="basic"),
     # ── API ──────────────────────────────────────────────────────────────
     Setting("api_base", "text", DEFAULT_API_BASE, "api", "API base",
             "Base URL of the tracked source."),
@@ -116,18 +130,49 @@ SETTINGS: Tuple[Setting, ...] = (
     # ── interface ────────────────────────────────────────────────────────
     Setting("language", "choice", "auto", "interface", "Language",
             "Language for the menu and messages. auto follows the system locale.",
-            choices=(i18n.AUTO,) + i18n.LANGUAGE_CODES),
+            choices=(i18n.AUTO,) + i18n.LANGUAGE_CODES, tier="basic"),
+    Setting("ui_mode", "choice", DEFAULT_UI_MODE, "interface", "Mode",
+            "Basic shows the common settings; Advanced shows everything.",
+            choices=UI_MODES, tier="basic"),
 )
 
 BY_KEY: Dict[str, Setting] = {s.key: s for s in SETTINGS}
 DEFAULTS: Dict[str, Any] = {s.key: s.default for s in SETTINGS}
 GROUPS: Tuple[str, ...] = tuple(dict.fromkeys(s.group for s in SETTINGS))
 
+_BASIC_SETTINGS: Tuple[Setting, ...] = tuple(s for s in SETTINGS if s.tier == "basic")
+
+
+def current_ui_mode(cfg: Optional[Dict[str, Any]] = None) -> str:
+    """The active menu mode: whatever ``cfg`` has, defaulting to Basic.
+
+    A junk value (hand-edited config, an older/newer build) falls back to
+    Basic rather than raising — same policy as :func:`i18n.resolve_language`.
+    """
+    value = str((cfg or {}).get("ui_mode", DEFAULT_UI_MODE))
+    return value if value in UI_MODES else DEFAULT_UI_MODE
+
+
+def visible_settings(mode: str) -> Tuple[Setting, ...]:
+    """Which rows *mode* shows: every row for ``"advanced"``, otherwise the
+    curated ``tier="basic"`` subset — same safe-default policy as
+    :func:`current_ui_mode`, so an unrecognised mode never over-shares."""
+    return SETTINGS if mode == "advanced" else _BASIC_SETTINGS
+
 #: Changing any of these means the OS scheduler entries are now stale.
 SCHEDULE_KEYS = frozenset({
     "daily_enabled", "daily_time", "monitor_enabled", "scan_interval_minutes",
     "timezone", "log_dir",
 })
+
+
+def schedule_changed(before: Mapping[str, Any], after: Mapping[str, Any]) -> bool:
+    """True only when a schedule key's *value* actually differs.
+
+    Touching a schedule row is not a change: re-typing the same time, or
+    cycling a toggle back to where it started, must not trigger a re-apply.
+    """
+    return any(before.get(k) != after.get(k) for k in SCHEDULE_KEYS)
 
 #: Read off the kind, never hand-listed: a secret added to :data:`SETTINGS` must
 #: not start leaking into export files just because this line was not updated.
@@ -344,8 +389,11 @@ def render(setting: Setting, value: Any, lang: Optional[str] = None) -> str:
     if setting.kind == "text_optional":
         return str(value) if value else i18n.t("value.unset", lang)
     if setting.kind == "choice":
-        return i18n.language_labels().get(str(value), str(value)) \
-            if setting.key == "language" else str(value)
+        if setting.key == "language":
+            return i18n.language_labels().get(str(value), str(value))
+        if setting.key == "ui_mode":
+            return i18n.t(f"value.mode.{value}", lang, default=str(value))
+        return str(value)
     if setting.key == "max_log_bytes":
         return f"{int(value) / 1024 / 1024:g} MiB"
     return str(value)
