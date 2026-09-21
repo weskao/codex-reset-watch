@@ -1,3 +1,13 @@
+## [0.3.1] - 2026-09-21
+
+### 🐛 Bug Fixes
+
+- Align scheduler with uv bin path
+- **ui:** Enable ansi color on windows console
+
+### ⚙️ Miscellaneous Tasks
+
+- **config:** Default unchanged-scan notify to on
 ## [0.3.0] - 2026-09-21
 
 ### 🐛 Bug Fixes
@@ -6,6 +16,10 @@
 - **telegram:** [**breaking**] Config credentials outrank TG_BOT_TOKEN/TG_CHAT_ID
 - **ui:** Quit menu on ctrl-c, clear stale error
 - **cli:** Cancel gracefully on ctrl-c
+
+### 📚 Documentation
+
+- **changelog:** Release v0.3.0
 
 ### 🎨 Styling
 
