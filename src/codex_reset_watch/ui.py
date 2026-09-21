@@ -639,10 +639,12 @@ def _step_editing(state: MenuState, event: keys.KeyEvent, setting: config.Settin
         trimmed = state.edit_buffer[:-1]
         if trimmed.endswith(":"):
             trimmed = trimmed[:-1]
-        return replace(state, edit_buffer=trimmed)
+        return replace(state, edit_buffer=trimmed, error=None)
     if event.key is keys.Key.CHAR and event.char:
         candidate = _typed(setting, state.edit_buffer, event.char)
-        return state if candidate is None else replace(state, edit_buffer=candidate)
+        # A stale rejection from an earlier Enter must not sit on screen while
+        # the user is actively retyping a fix for it.
+        return state if candidate is None else replace(state, edit_buffer=candidate, error=None)
     if event.key is keys.Key.ENTER:
         if setting.kind == "secret" and not state.edit_buffer:
             # An empty commit on a secret means CANCEL: writing "" here would
@@ -855,19 +857,21 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
                 confirm_defaults=state.confirm_defaults, prompt=state.prompt,
                 prompt_buffer=state.prompt_buffer, height=height,
                 pulse_frame=pulse_frame), out, painted)
-            if not keys.key_ready(CURSOR_PULSE_INTERVAL):
-                # Idle: advance the cursor's pulse frame and redraw, without
-                # ever reaching `step()` — an animation tick must never be
-                # mistaken for a real keypress (e.g. `_step_confirm` treats
-                # any non-"y" key as "cancel").
-                pulse_frame += 1
-                continue
             try:
+                if not keys.key_ready(CURSOR_PULSE_INTERVAL):
+                    # Idle: advance the cursor's pulse frame and redraw,
+                    # without ever reaching `step()` — an animation tick must
+                    # never be mistaken for a real keypress (e.g.
+                    # `_step_confirm` treats any non-"y" key as "cancel").
+                    pulse_frame += 1
+                    continue
                 event = read()
             except (KeyboardInterrupt, StopIteration):
                 # cbreak leaves ISIG on, so a real Ctrl-C arrives as a signal
-                # rather than as a byte — same exit as pressing q. A drained
-                # fake source (tests) ends the loop the same way.
+                # rather than as a byte — same exit as pressing q. It can land
+                # while idling in key_ready()'s select() just as easily as in
+                # read(), so both must be inside this one try. A drained fake
+                # source (tests) ends the loop the same way.
                 break
             state = step(state, event)
             if state.pending_save:
