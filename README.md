@@ -2,6 +2,10 @@
 
 Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API (`src/codex_reset_watch/telegram_notify.py`, stdlib-only).
 
+Example Telegram notification (`crw --config`):
+
+![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
+
 This version is **uv-native**:
 
 - project/dependency metadata: `pyproject.toml`
@@ -565,10 +569,6 @@ Then:
 ```bash
 crw check
 ```
-
-Example Telegram notification (`crw --config`):
-
-![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
 
 ## 9. Timezone and countdown
 
