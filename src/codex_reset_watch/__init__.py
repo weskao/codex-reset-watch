@@ -678,13 +678,20 @@ def append_upcoming_links(lines: List[str], upcoming: Upcoming) -> None:
         lines.append(f"🌐 Codex Resets：{tracker}")
 
 
-def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None) -> str:
+def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> str:
+    p = paint or ui.Paint(False)
+    divider = f"{p.frame}──────────────{p.reset}"
+
+    def heading(colour: str, text: str) -> str:
+        return f"{colour}{p.bold}{text}{p.reset}"
+
     lines = ["🔎 Codex Reset 即時查詢", "━━━━━━━━━━━━━━"]
     lines.append(f"🛰️ 檢查時間：{fmt_local(snapshot.checked_at, cfg)}")
     if snapshot.latest:
         lines += [
             "",
-            "✅ 最近一次 Reset",
+            divider,
+            heading(p.ok, "✅ 最近一次 Reset"),
             f"🕒 時間：{fmt_local(snapshot.latest.timestamp, cfg)}",
             f"🏷️ 類型：{snapshot.latest.event_type or '未標示'}",
         ]
@@ -696,8 +703,8 @@ def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None) -> s
         lines += ["", "ℹ️ 最近一次 Reset：API 未提供可解析資料"]
     if snapshot.upcoming:
         u = snapshot.upcoming
-        lines += ["", "🔮 尚未發生的 Reset 訊號"]
-        lines.append(f"📌 狀態：{upcoming_status_label(u)}")
+        lines += ["", divider, heading(p.warn, "🔮 尚未發生的 Reset 訊號")]
+        lines.append(f"🚦 狀態：{upcoming_status_label(u)}")
         if u.event_type:
             lines.append(f"🏷️ 類型：{u.event_type}")
         if u.timestamp is None:
@@ -849,7 +856,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
 
         if not snapshot.status_ok:
             if mode == "manual":
-                print(format_manual(snapshot, cfg))
+                print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())))
                 return 1
             logger.event("WARNING", "scheduled_status_api_failed", mode=mode, error=snapshot.status_error)
             if mode == "daily":
@@ -864,7 +871,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
 
         if mode == "manual":
             text = format_manual(snapshot, cfg)
-            print(text)
+            print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())))
             if notify:
                 send_telegram(cfg, text, logger)
         else:

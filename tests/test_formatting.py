@@ -39,7 +39,7 @@ class FormattingTests(unittest.TestCase):
         )
         snapshot = crw.Snapshot(checked, None, upcoming, True, True)
         text = crw.format_manual(snapshot)
-        self.assertIn("📌 狀態：Banked reset scheduled", text)
+        self.assertIn("🚦 狀態：Banked reset scheduled", text)
         self.assertIn("🏷️ 類型：banked", text)
         self.assertIn("🕒 時間：尚未公布（Time to be announced）", text)
         self.assertNotIn("⏳ 距離現在：", text)
