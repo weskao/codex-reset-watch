@@ -16,10 +16,12 @@ import getpass
 import os
 import pathlib
 import platform
+import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Callable, Dict, IO
+import sysconfig
+from typing import Any, Callable, Dict, IO, List
 
 try:  # stdlib on macOS/Linux; absent on Windows, where the console
     import readline  # noqa: F401  (imported for its input() line-editing side effect)
@@ -31,6 +33,72 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from codex_reset_watch import config, paths, scheduler  # noqa: E402
 
 backend_for = scheduler.backend_for
+
+CLI_NAMES = ("crw", "codex-reset-watch")
+
+# A shell alias/function, or another file of the same name earlier on PATH, wins
+# over the entrypoints uv just wrote — so `crw` can keep resolving to a path this
+# installer never touched (classically a stale alias pointing at a hand-made
+# symlink from an older install, which then dies with "no such file or
+# directory"). Install time is the only place to catch it: once the name is
+# shadowed, `crw doctor` never reaches our code to report anything.
+_SHADOW_PATTERNS = (
+    re.compile(r"^\s*alias\s+(?:-\S+\s+)*(crw|codex-reset-watch)\s*="),      # sh/bash/zsh alias
+    re.compile(r"^\s*(?:function\s+)?(crw|codex-reset-watch)\s*\(\s*\)"),    # sh/bash/zsh function
+    re.compile(r"^\s*function\s+(crw|codex-reset-watch)\b"),                 # fish / PowerShell
+    re.compile(r"^\s*Set-Alias\s+(?:-Name\s+)?(crw|codex-reset-watch)\b", re.IGNORECASE),
+)
+
+# Read as plain files, never by sourcing a shell: keeps the check identical on
+# Windows (PowerShell profiles) and on POSIX, and runs no user code.
+_RC_FILES = (
+    ".zshrc", ".zshenv", ".zprofile", ".bashrc", ".bash_profile", ".profile",
+    ".config/fish/config.fish",
+    "Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
+    "Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
+)
+
+
+def path_shadows(bin_dir: pathlib.Path, environ: Dict[str, str] | None = None) -> List[pathlib.Path]:
+    """Same-named executables that PATH reaches before ``bin_dir``.
+
+    The venv running this installer is skipped: ``uv run`` puts its own shims on
+    PATH, and they vanish with the venv — not a shadow the user has to act on.
+    """
+    environ = os.environ if environ is None else environ
+    exts = [e for e in environ.get("PATHEXT", "").split(os.pathsep) if e] if os.name == "nt" else [""]
+    own = pathlib.Path(sysconfig.get_path("scripts"))
+    entries = [
+        d for d in (pathlib.Path(p).expanduser() for p in environ.get("PATH", "").split(os.pathsep) if p)
+        if d != own
+    ]
+    found = []
+    for name in CLI_NAMES:
+        for d in entries:
+            # is_symlink() too: a broken symlink is exactly the failure mode here.
+            hit = next((c for c in (d / (name + e) for e in exts) if c.is_file() or c.is_symlink()), None)
+            if hit is None:
+                continue
+            if d != bin_dir:
+                found.append(hit)
+            break
+    return found
+
+
+def rc_shadows(home: pathlib.Path | None = None) -> List[str]:
+    """``file:line: text`` for each shell alias/function that would hide the CLI."""
+    home = pathlib.Path.home() if home is None else home
+    hits = []
+    for rel in _RC_FILES:
+        rc = home / rel
+        try:
+            text = rc.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            if any(p.search(line) for p in _SHADOW_PATTERNS):
+                hits.append(f"{rc}:{n}: {line.strip()}")
+    return hits
 
 
 # ── first-run Telegram setup ─────────────────────────────────────────────────
@@ -192,6 +260,12 @@ def main() -> int:
         else:
             print(f"        ↳ {bin_dir} is not on PATH and `uv tool update-shell` failed;")
             print(f"          add it yourself, e.g.: export PATH=\"{bin_dir}:$PATH\"")
+    for hit in path_shadows(bin_dir):
+        print(f"        ⚠️  `{hit.name}` earlier on PATH shadows this install: {hit}")
+        print(f"          remove it, or call {bin_dir / hit.name} directly")
+    for hit in rc_shadows():
+        print(f"        ⚠️  a shell alias/function shadows the CLI — delete this line:")
+        print(f"          {hit}")
     return 0
 
 

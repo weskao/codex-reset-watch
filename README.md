@@ -120,6 +120,12 @@ alternative.
 4. puts `codex-reset-watch` and `crw` in uv's own bin directory (`~/.local/bin`, or `$UV_TOOL_BIN_DIR`/`$XDG_BIN_HOME` if you set either) and runs `uv tool update-shell` so that directory is on the `PATH` of new shells
 5. creates config/state/log directories
 6. registers the native scheduler job for the current OS (launchd / systemd --user timers / Task Scheduler)
+7. warns if anything else already answers to the name `crw` / `codex-reset-watch` — a shell
+   alias or function in your startup files (`.zshrc`, `.bashrc`, fish config, PowerShell
+   profile), or another executable earlier on `PATH`. Those win over step 4, so a leftover
+   alias from an older setup makes `crw` fail with something like
+   `zsh: no such file or directory: …/crw` even though the install succeeded. Delete the
+   line the warning points at; don't add an alias of your own — step 4 already covers it.
 
 Expected `uv tool list` entry:
 
