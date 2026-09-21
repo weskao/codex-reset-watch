@@ -249,6 +249,11 @@ terminal the list scrolls with `▴ N more` / `▾ N more` markers rather than s
 Each change saves immediately, and a schedule-relevant change re-applies the OS schedule on
 quit automatically.
 
+Colour is dropped whenever stdout isn't a real terminal or `NO_COLOR` is set. On the classic
+`cmd.exe`/conhost window it stays on: the first colour print flips that console into ANSI mode
+via `SetConsoleMode` (`ui._enable_windows_vt`), one-time and best-effort, so codes render instead
+of printing literally. Windows Terminal and PowerShell already do this on their own.
+
 ### Input is constrained at the keystroke, not just validated on save
 
 A field only accepts what it can legally hold, so an invalid value cannot be typed in the first

@@ -42,6 +42,25 @@ class PaintTests(unittest.TestCase):
     def test_colour_enabled_false_for_non_tty_stream(self):
         self.assertFalse(ui.colour_enabled(io.StringIO()))
 
+    def test_colour_enabled_arms_windows_vt_processing_on_a_real_console(self):
+        tty_stream = mock.Mock(isatty=lambda: True)
+        with mock.patch.object(ui.keys, "IS_WINDOWS", True), \
+             mock.patch.object(ui, "_enable_windows_vt") as enable:
+            self.assertTrue(ui.colour_enabled(tty_stream))
+            enable.assert_called_once()
+
+    def test_colour_enabled_skips_windows_vt_processing_elsewhere(self):
+        tty_stream = mock.Mock(isatty=lambda: True)
+        with mock.patch.object(ui.keys, "IS_WINDOWS", False), \
+             mock.patch.object(ui, "_enable_windows_vt") as enable:
+            self.assertTrue(ui.colour_enabled(tty_stream))
+            enable.assert_not_called()
+
+    def test_enable_windows_vt_processing_is_best_effort_off_windows(self):
+        # ctypes.windll does not exist here; the call must swallow that, not raise.
+        ui._enable_windows_vt.cache_clear()
+        ui._enable_windows_vt()
+
 
 class RenderSettingsTests(unittest.TestCase):
     def setUp(self):

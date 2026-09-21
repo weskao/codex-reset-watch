@@ -129,14 +129,36 @@ def package_version() -> str:
     return "dev"
 
 
+@functools.lru_cache(maxsize=1)
+def _enable_windows_vt() -> None:
+    """One-time opt-in so the classic ``cmd.exe``/conhost window renders our
+    ``\\033[...m`` codes instead of printing them literally.
+
+    Windows Terminal and modern PowerShell already interpret them without
+    this; only the legacy console host needs the SetConsoleMode nudge. Best
+    effort and cached: no console (piped output, a service) has nothing to
+    enable, and there is no reason to retry every print.
+    """
+    import ctypes
+
+    with contextlib.suppress(Exception):
+        handle = ctypes.windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            ctypes.windll.kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
+
 def colour_enabled(stream: Optional[IO[str]] = None) -> bool:
     stream = stream if stream is not None else sys.stdout
     if os.environ.get("NO_COLOR"):
         return False
     try:
-        return bool(stream.isatty())
+        enabled = bool(stream.isatty())
     except Exception:  # noqa: BLE001 - a stream with no isatty() is not a terminal
         return False
+    if enabled and keys.IS_WINDOWS:
+        _enable_windows_vt()
+    return enabled
 
 
 class Paint:
