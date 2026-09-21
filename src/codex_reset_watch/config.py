@@ -17,11 +17,11 @@ State and log directories additionally honour the ``state_dir``/``log_dir``
 settings; the environment overrides (``CRW_STATE_DIR``/``CRW_LOG_DIR``) still
 win over both so a test or a one-off run can redirect them.
 
-Telegram credentials live here too, but the environment still wins: an
-existing install that exports ``TG_BOT_TOKEN``/``TG_CHAT_ID`` keeps working
-untouched, and the config file is the fallback rather than the override (see
-:func:`telegram_credentials`). The token is a ``secret`` kind, which means it
-renders masked and is never written to an export file.
+Telegram credentials live here too, and what ``crw config`` stored wins:
+``TG_BOT_TOKEN``/``TG_CHAT_ID`` are the fallback for a machine that cannot
+store a secret at all, not an override (see :func:`telegram_credentials`).
+The token is a ``secret`` kind, which means it renders masked and is never
+written to an export file.
 """
 from __future__ import annotations
 
@@ -89,9 +89,9 @@ SETTINGS: Tuple[Setting, ...] = (
             "Push on every daily run, even when nothing changed."),
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
-            "Bot API token. Kept in the OS keychain, never in a file; TG_BOT_TOKEN wins."),
+            "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN."),
     Setting("telegram_chat_id", "text_optional", "", "telegram", "Chat ID",
-            "Telegram chat that receives the notifications; TG_CHAT_ID wins."),
+            "Telegram chat that receives the notifications; used ahead of TG_CHAT_ID."),
     # ── API ──────────────────────────────────────────────────────────────
     Setting("api_base", "text", DEFAULT_API_BASE, "api", "API base",
             "Base URL of the tracked source."),
@@ -133,7 +133,7 @@ SCHEDULE_KEYS = frozenset({
 #: not start leaking into export files just because this line was not updated.
 SECRET_KEYS = frozenset(s.key for s in SETTINGS if s.kind == "secret")
 
-#: Environment variables that outrank the stored Telegram credentials.
+#: Environment variables that stand in for unset Telegram credentials.
 TELEGRAM_ENV = {"telegram_bot_token": "TG_BOT_TOKEN", "telegram_chat_id": "TG_CHAT_ID"}
 
 
@@ -467,18 +467,19 @@ def set_value(cfg: Dict[str, Any], key: str, raw: Any) -> Any:
 # ── Telegram credentials ─────────────────────────────────────────────────────
 
 def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
-    """``(token, chat_id)``: the environment first, then the config file.
+    """``(token, chat_id)``: the config file first, then the environment.
 
-    The environment wins deliberately — an install that already exports
-    ``TG_BOT_TOKEN``/``TG_CHAT_ID`` (including one whose launchd plist or
-    systemd unit carries them) keeps behaving exactly as before, and the
-    config file is what fills the gap for everyone else. Each credential
-    falls back on its own, so a half-set environment still works. An empty
-    environment variable counts as unset rather than as an override.
+    What ``crw config`` stored wins deliberately. That is where the user sets
+    these, and a stale ``TG_BOT_TOKEN`` — left in a shell profile, or baked
+    into a launchd plist by an older install — must not keep notifying through
+    a bot they already replaced. The environment is the fallback for a machine
+    with no credential store, where the token cannot be stored at all. Each
+    credential falls back on its own, so a half-set config still works, and an
+    empty value on either side counts as unset.
     """
     cfg = cfg or {}
     return tuple(  # type: ignore[return-value]
-        os.environ.get(env, "").strip() or str(cfg.get(key, "") or "").strip()
+        str(cfg.get(key, "") or "").strip() or os.environ.get(env, "").strip()
         for key, env in TELEGRAM_ENV.items()
     )
 

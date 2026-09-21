@@ -773,7 +773,7 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
 
 
 def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
-    # Environment first, then the keychain-backed config — see
+    # The keychain-backed config first, then the environment — see
     # config.telegram_credentials. Neither value is ever logged.
     token, chat_id = cfgmod.telegram_credentials(cfg)
     if not token or not chat_id:
@@ -895,9 +895,11 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         return 0
 
 
-def _credential_source(env_var: str) -> str:
+def _credential_source(cfg: Dict[str, Any], key: str) -> str:
     """Where a credential came from, for ``doctor``. Never prints the value."""
-    return "environment" if os.environ.get(env_var, "").strip() else secrets_store.backend_label()
+    if not str(cfg.get(key, "") or "").strip():
+        return "environment"
+    return secrets_store.backend_label() if key in cfgmod.SECRET_KEYS else "config"
 
 
 def doctor() -> int:
@@ -911,10 +913,10 @@ def doctor() -> int:
     token, chat_id = cfgmod.telegram_credentials(cfg)
     checks.append(("Secret store", secrets_store.available(), secrets_store.backend_label()))
     checks.append(("Telegram bot token", bool(token),
-                   f"{cfgmod.mask_secret(token)} ({_credential_source('TG_BOT_TOKEN')})"
+                   f"{cfgmod.mask_secret(token)} ({_credential_source(cfg, 'telegram_bot_token')})"
                    if token else "unset"))
     checks.append(("Telegram chat id", bool(chat_id),
-                   f"{chat_id} ({_credential_source('TG_CHAT_ID')})" if chat_id else "unset"))
+                   f"{chat_id} ({_credential_source(cfg, 'telegram_chat_id')})" if chat_id else "unset"))
     client = APIClient(cfg, logger)
     status, err = client.get_json(str(cfg.get("status_path", "/api/v1/status")))
     checks.append(("Codex Resets status API", status is not None, "OK" if status is not None else err))

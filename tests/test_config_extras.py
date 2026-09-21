@@ -116,14 +116,18 @@ class TelegramCredentialTests(unittest.TestCase):
         with self._env():
             self.assertEqual(config.telegram_credentials(cfg), ("cfg-token", "cfg-chat"))
 
-    def test_the_environment_wins_over_the_config_file(self):
+    def test_the_config_file_wins_over_the_environment(self):
         cfg = {"telegram_bot_token": "cfg-token", "telegram_chat_id": "cfg-chat"}
         with self._env(TG_BOT_TOKEN="env-token", TG_CHAT_ID="env-chat"):
-            self.assertEqual(config.telegram_credentials(cfg), ("env-token", "env-chat"))
+            self.assertEqual(config.telegram_credentials(cfg), ("cfg-token", "cfg-chat"))
+
+    def test_the_environment_fills_an_unset_credential(self):
+        with self._env(TG_BOT_TOKEN="env-token", TG_CHAT_ID="env-chat"):
+            self.assertEqual(config.telegram_credentials({}), ("env-token", "env-chat"))
 
     def test_each_credential_falls_back_independently(self):
-        cfg = {"telegram_bot_token": "cfg-token", "telegram_chat_id": "cfg-chat"}
-        with self._env(TG_BOT_TOKEN="env-token"):
+        cfg = {"telegram_chat_id": "cfg-chat"}
+        with self._env(TG_BOT_TOKEN="env-token", TG_CHAT_ID="env-chat"):
             self.assertEqual(config.telegram_credentials(cfg), ("env-token", "cfg-chat"))
 
     def test_an_empty_environment_variable_does_not_shadow_the_config(self):

@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### 🐛 Bug Fixes
+
+- **telegram:** Use the configured credentials ahead of `TG_BOT_TOKEN`/`TG_CHAT_ID`, so a token
+  left in a shell profile or baked into an older launchd plist can no longer keep notifying
+  through a bot `crw config` already replaced
+- **scheduler:** Stop baking the token into the generated plist/unit on a machine that has a
+  credential store — the job reads it itself, so it is no longer written to a 0644 file nor
+  carried forward, stale, on every re-apply
+
 ## [0.2.0] - 2026-09-20
 
 ### 🚀 Features

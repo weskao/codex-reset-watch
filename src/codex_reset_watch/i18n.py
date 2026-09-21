@@ -137,8 +137,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "Bot API token。存放在系統金鑰圈，不會寫進任何檔案；畫面遮蔽，匯出時不帶走。",
     },
     "setting.telegram_bot_token.note": {
-        "en": "Environment TG_BOT_TOKEN wins. Store: {backend}",
-        "zh-TW": "環境變數 TG_BOT_TOKEN 優先。儲存位置：{backend}",
+        "en": "Used ahead of TG_BOT_TOKEN. Store: {backend}",
+        "zh-TW": "優先於環境變數 TG_BOT_TOKEN。儲存位置：{backend}",
     },
     # ── editor format hints (shown while a field is being typed into) ───────
     "hint.time": {
@@ -159,8 +159,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     },
     "setting.telegram_chat_id.label": {"en": "Chat ID", "zh-TW": "Chat ID"},
     "setting.telegram_chat_id.help": {
-        "en": "Telegram chat that receives the notifications. TG_CHAT_ID in the environment wins.",
-        "zh-TW": "接收通知的 Telegram 對話。環境變數 TG_CHAT_ID 優先於這個值。",
+        "en": "Telegram chat that receives the notifications. Used ahead of TG_CHAT_ID.",
+        "zh-TW": "接收通知的 Telegram 對話。優先於環境變數 TG_CHAT_ID。",
     },
 
     # ── settings: api ───────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ import re
 import subprocess
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from . import config
+from . import config, secrets_store
 
 BACKENDS = {"Darwin": "launchd", "Linux": "systemd", "Windows": "schtasks"}
 JOBS = ("daily", "monitor")
@@ -142,7 +142,7 @@ def apply_launchd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
     out_dir = launch_agents_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    env = merged_env(env, launchd_existing_env(out_dir))
+    env = job_env(env, launchd_existing_env(out_dir))
     plists = launchd_plists(program, log_dir, cfg, env)
     uid = str(os.getuid())
     for job in JOBS:  # bootout everything first: a disabled job must stop running
@@ -235,7 +235,7 @@ def apply_systemd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
     out_dir = systemd_user_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    env = merged_env(env, systemd_existing_env(out_dir))
+    env = job_env(env, systemd_existing_env(out_dir))
     units = systemd_units(program, log_dir, cfg, env)
     for job in JOBS:
         if job not in enabled_jobs(cfg):
@@ -318,6 +318,23 @@ def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) 
     return env
 
 
+def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) -> Dict[str, str]:
+    """What to bake into the generated job — nothing, when there is a keychain.
+
+    The job resolves its own credentials through :func:`config.telegram_credentials`,
+    which reads the keychain-backed config, so baking a copy into a 0644 plist
+    or unit file would only put the token on disk in plaintext *and* pin it:
+    whatever was in the installing shell's ``TG_BOT_TOKEN`` used to be carried
+    forward on every re-apply and outranked the token the user later set with
+    ``crw config``. Without a credential store the config cannot hold a token
+    at all and the environment is the only channel left, so there it is still
+    baked in — launchd and systemd jobs inherit no login shell.
+    """
+    if secrets_store.available():
+        return {}
+    return merged_env(process_env, existing)
+
+
 def program_path() -> str:
     """Absolute path of the installed CLI the scheduler should invoke.
 
@@ -388,6 +405,13 @@ def demo() -> None:
 
     assert merged_env({"TG_BOT_TOKEN": "new"}, {"TG_BOT_TOKEN": "old", "TG_CHAT_ID": "42"}) == {
         "TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"}
+
+    import unittest.mock as mock
+    with mock.patch.object(secrets_store, "available", lambda: True):
+        assert job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}) == {}   # keychain: bake nothing
+    with mock.patch.object(secrets_store, "available", lambda: False):
+        assert job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}) == {
+            "TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"}                        # no store: still baked
     print("scheduler.demo: ok")
 
 

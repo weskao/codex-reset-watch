@@ -188,12 +188,21 @@ class TelegramCredentialWiringTests(unittest.TestCase):
             self.assertTrue(crw.send_telegram(cfg, "hello", logger))
         send.assert_called_once_with("stored-token", "stored-chat", "hello")
 
-    def test_the_environment_still_wins(self):
+    def test_the_stored_credentials_outrank_a_stale_environment(self):
+        # The bug this pins: a TG_BOT_TOKEN left in a shell profile or baked into
+        # an old launchd plist kept notifying through a bot `crw config` replaced.
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
         logger = mock.Mock()
         with mock.patch.dict(os.environ, {"TG_BOT_TOKEN": "env-token", "TG_CHAT_ID": "env-chat"}), \
                 mock.patch.object(crw.telegram_notify, "send_telegram", return_value=True) as send:
             crw.send_telegram(cfg, "hello", logger)
+        send.assert_called_once_with("stored-token", "stored-chat", "hello")
+
+    def test_the_environment_is_used_when_nothing_is_stored(self):
+        logger = mock.Mock()
+        with mock.patch.dict(os.environ, {"TG_BOT_TOKEN": "env-token", "TG_CHAT_ID": "env-chat"}), \
+                mock.patch.object(crw.telegram_notify, "send_telegram", return_value=True) as send:
+            crw.send_telegram({}, "hello", logger)
         send.assert_called_once_with("env-token", "env-chat", "hello")
 
     def test_missing_credentials_are_logged_not_sent(self):

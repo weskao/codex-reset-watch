@@ -263,5 +263,22 @@ class MergedEnvTests(unittest.TestCase):
         self.assertEqual(merged, {"TG_BOT_TOKEN": "from-shell"})
 
 
+class JobEnvTests(unittest.TestCase):
+    """What actually reaches the generated plist/unit."""
+
+    def test_a_keychain_machine_bakes_nothing(self):
+        # The job reads config.telegram_credentials itself, so a copy in the
+        # 0644 plist would only pin a token `crw config` later replaced.
+        with no_ambient_telegram_env(), \
+                unittest.mock.patch.object(scheduler.secrets_store, "available", lambda: True):
+            self.assertEqual(scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}), {})
+
+    def test_without_a_credential_store_the_env_is_still_baked_in(self):
+        with no_ambient_telegram_env(), \
+                unittest.mock.patch.object(scheduler.secrets_store, "available", lambda: False):
+            self.assertEqual(scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}),
+                             {"TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"})
+
+
 if __name__ == "__main__":
     unittest.main()

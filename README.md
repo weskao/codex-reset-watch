@@ -476,7 +476,7 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 ## 8. Telegram
 
 Sends directly through the Telegram Bot API via `telegram_notify.py` — no external script
-dependency. There are two ways to supply the credentials, and the environment always wins.
+dependency. There are two ways to supply the credentials, and what `crw config` stored wins.
 The installer ([§2](#2-install-codex-reset-watch)) already walks through Option A on first
 install with the token entered echo-off; this section is for setting it up later or changing it.
 
@@ -525,10 +525,15 @@ export TG_BOT_TOKEN="..."
 export TG_CHAT_ID="..."
 ```
 
-These take precedence over the stored values, each falling back independently, so an existing
-install keeps behaving exactly as before. This is also what `scripts/install.py` bakes into the
-generated scheduler job (see [§7](#7-scheduler-jobs)) — though a token configured via Option A
-needs no such baking, because every scheduled run reads it from the credential store itself.
+These fill in whatever Option A has not stored, each falling back independently, so an install
+that only ever exported them keeps behaving exactly as before. They do **not** override a stored
+value: a `TG_BOT_TOKEN` forgotten in a shell profile must not keep notifying through a bot you
+already replaced in `crw config`.
+
+For the same reason, the credentials are baked into the generated scheduler job (see
+[§7](#7-scheduler-jobs)) **only on a machine with no credential store**. Everywhere else the
+plist/unit carries no secret at all and every scheduled run reads the token from the store
+itself — so changing it in `crw config` takes effect immediately, with no re-apply.
 
 `crw doctor` reports which store is in use and where each credential came from, showing the
 token masked:
