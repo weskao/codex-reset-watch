@@ -202,7 +202,8 @@ class SecretStorageTests(unittest.TestCase):
 
         def fake_set(key, value):
             # Mirrors the real store's contract: an empty value deletes the
-            # item rather than storing a blank one.
+            # item rather than storing a blank one. config.save_secrets must
+            # never reach that branch — see the tests below.
             if not value:
                 return fake_delete(key)
             self.vault[key] = value
@@ -238,10 +239,28 @@ class SecretStorageTests(unittest.TestCase):
             config.save(dict(config.DEFAULTS, telegram_bot_token="123456:SECRET"))
             self.assertEqual(config.load()["telegram_bot_token"], "123456:SECRET")
 
-    def test_clearing_the_token_removes_it_from_the_keychain(self):
+    def test_saving_without_the_token_leaves_the_stored_one_alone(self):
+        # The regression: every ordinary save (a menu edit, --set, an import,
+        # a reinstall) used to delete the keychain item whenever the cfg it was
+        # handed had no token in it — so the token had to be retyped.
         with isolated_config():
             config.save(dict(config.DEFAULTS, telegram_bot_token="123456:SECRET"))
             config.save(dict(config.DEFAULTS, telegram_bot_token=""))
+            config.save(dict(config.DEFAULTS))
+        self.assertEqual(self.vault["telegram_bot_token"], "123456:SECRET")
+
+    def test_restoring_defaults_keeps_the_token(self):
+        with isolated_config():
+            cfg = dict(config.DEFAULTS, telegram_bot_token="123456:SECRET", daily_time="08:00")
+            config.save(cfg)
+            config.save(config.restore_defaults(config.load()))
+        self.assertEqual(self.vault["telegram_bot_token"], "123456:SECRET")
+        self.assertEqual(config.restore_defaults(cfg)["daily_time"], config.DEFAULTS["daily_time"])
+
+    def test_clearing_the_token_is_explicit(self):
+        with isolated_config():
+            config.save(dict(config.DEFAULTS, telegram_bot_token="123456:SECRET"))
+            config.clear_secret("telegram_bot_token")
         self.assertNotIn("telegram_bot_token", self.vault)
 
     def test_a_non_secret_setting_still_round_trips_through_the_file(self):

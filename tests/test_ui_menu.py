@@ -558,11 +558,27 @@ class RenderTests(unittest.TestCase):
         self.assertFalse(any(str(pathlib.Path.home()) in line for line in lines))
 
     def test_the_token_row_names_the_store_holding_it(self):
+        import os
         index = SETTINGS.index(config.BY_KEY["telegram_bot_token"])
-        with mock.patch.object(ui.secrets_store, "available", return_value=True), \
+        cfg = dict(self.cfg, telegram_bot_token="123456:STORED")
+        with mock.patch.dict(os.environ, {}, clear=False), \
+                mock.patch.object(ui.secrets_store, "available", return_value=True), \
+                mock.patch.object(ui.secrets_store, "backend_label", return_value="macOS Keychain"):
+            os.environ.pop("TG_BOT_TOKEN", None)
+            lines = ui.render_menu(cfg, index, paint=self.plain, lang="en")
+        self.assertTrue(any("macOS Keychain" in line for line in lines))
+
+    def test_the_token_row_says_when_the_live_token_comes_from_the_environment(self):
+        # An empty row on a working setup is what made the token look lost and
+        # got it retyped after every upgrade.
+        import os
+        index = SETTINGS.index(config.BY_KEY["telegram_bot_token"])
+        with mock.patch.dict(os.environ, {"TG_BOT_TOKEN": "123456:FROM-ENV"}), \
+                mock.patch.object(ui.secrets_store, "available", return_value=True), \
                 mock.patch.object(ui.secrets_store, "backend_label", return_value="macOS Keychain"):
             lines = ui.render_menu(self.cfg, index, paint=self.plain, lang="en")
-        self.assertTrue(any("macOS Keychain" in line for line in lines))
+        self.assertTrue(any("TG_BOT_TOKEN is set in the environment" in line for line in lines))
+        self.assertFalse(any("FROM-ENV" in line for line in lines))  # never echoed
 
     def test_the_token_row_warns_when_there_is_no_store(self):
         index = SETTINGS.index(config.BY_KEY["telegram_bot_token"])

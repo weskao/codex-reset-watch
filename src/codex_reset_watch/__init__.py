@@ -1088,6 +1088,7 @@ def config_cmd(args: argparse.Namespace) -> int:
         return 0
     if args.set:
         before = dict(cfg)
+        cleared = []
         for item in args.set:
             if "=" not in item:
                 print("❌ " + i18n.t("menu.set_format", lang, item=item))
@@ -1096,6 +1097,11 @@ def config_cmd(args: argparse.Namespace) -> int:
             key = key.strip()
             try:
                 cfgmod.set_value(cfg, key, value)
+                if key in cfgmod.SECRET_KEYS and not str(cfg[key]).strip():
+                    # Naming a secret and asking for it to be empty is the one
+                    # explicit "remove this credential" gesture; an ordinary
+                    # save never deletes one (see config.save_secrets).
+                    cleared.append(key)
             except KeyError:
                 print("❌ " + i18n.t("menu.set_unknown_key", lang, key=key))
                 return 2
@@ -1104,8 +1110,12 @@ def config_cmd(args: argparse.Namespace) -> int:
                 return 2
         cfgmod.save(cfg)
         unstored = cfgmod.save_secrets(cfg)
+        for key in cleared:
+            cfgmod.clear_secret(key)
         print("✅ " + i18n.t("menu.set_done", lang, count=len(args.set),
                             path=cfgmod.config_path()))
+        for key in cleared:
+            print(f"🗑️  {key}: removed from {secrets_store.backend_label()}")
         if unstored:
             print(f"⚠️  {', '.join(unstored)}: no OS credential store on this machine — "
                   f"set TG_BOT_TOKEN in the environment instead")

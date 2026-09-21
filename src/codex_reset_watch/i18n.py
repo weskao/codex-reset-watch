@@ -153,6 +153,12 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "Whole number, {low}–{high}",
         "zh-TW": "整數，{low}–{high}",
     },
+    "menu.secret_from_env": {
+        "en": "Empty here, but TG_BOT_TOKEN is set in the environment and is being used. "
+              "Type one here to store it in the keychain instead.",
+        "zh-TW": "這裡是空的，但環境變數 TG_BOT_TOKEN 有值且正在生效。"
+                 "在這裡輸入才會改存進系統金鑰圈。",
+    },
     "menu.no_secret_store": {
         "en": "No OS credential store here — set TG_BOT_TOKEN in the environment instead",
         "zh-TW": "這台機器沒有系統金鑰圈，請改用環境變數 TG_BOT_TOKEN",

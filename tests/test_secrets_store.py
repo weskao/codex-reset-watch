@@ -16,6 +16,7 @@ import unittest
 import unittest.mock as mock
 
 from codex_reset_watch import secrets_store as store
+from tests import real_credential_store
 
 
 class Recorder:
@@ -176,13 +177,24 @@ class FailureTests(unittest.TestCase):
 
 
 class RoundTripTests(unittest.TestCase):
-    """Against the machine's real credential store — see the module docstring."""
+    """Against the machine's real credential store — see the module docstring.
+
+    The suite-wide fence in ``tests/__init__.py`` keeps every *other* module
+    away from that store; these two lift it deliberately, for their own probe
+    account, and never for the real ``telegram_bot_token`` item.
+    """
 
     PROBE_KEY = "_roundtrip_probe"
 
-    @unittest.skipUnless(store.available(), "no credential store on this machine")
-    def test_a_stored_secret_reads_back_identical(self):
+    def setUp(self):
+        fence = real_credential_store()
+        fence.__enter__()
+        self.addCleanup(fence.__exit__, None, None, None)
+        if not store.available():
+            self.skipTest("no credential store on this machine")
         self.addCleanup(store.delete, self.PROBE_KEY)
+
+    def test_a_stored_secret_reads_back_identical(self):
         secret = "sentinel:AAH-x_9/+aB=" * 2  # ':' and '/' exercise the encoding
         if not store.set(self.PROBE_KEY, secret):
             self.skipTest("credential store present but refused the write")
@@ -190,9 +202,7 @@ class RoundTripTests(unittest.TestCase):
         # is actually retrievable, not merely that the helper exited 0.
         self.assertEqual(store.get(self.PROBE_KEY), secret)
 
-    @unittest.skipUnless(store.available(), "no credential store on this machine")
     def test_deleting_leaves_nothing_behind(self):
-        self.addCleanup(store.delete, self.PROBE_KEY)
         if not store.set(self.PROBE_KEY, "to-be-removed"):
             self.skipTest("credential store present but refused the write")
         store.delete(self.PROBE_KEY)

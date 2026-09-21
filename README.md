@@ -567,6 +567,25 @@ Wherever it is displayed the token is masked (`********WXYZ`), it is never passe
 line (the credential helpers read it on **stdin**, so it cannot surface in `ps` or shell
 history), and it is never written to the event log.
 
+**Saving never deletes it.** Every other setting is persisted by rewriting the whole config, so
+a save runs constantly — on each menu edit, each `--set`, each import. A save that is handed a
+config *without* a token (a `DEFAULTS` dict, a briefly unreadable keychain, a partial config)
+leaves the stored item exactly as it is; it is not read as "remove the credential". Restoring
+defaults keeps the token for the same reason: a token has no default to restore *to*, only an
+item to destroy. Removing one is an explicit act:
+
+```bash
+crw config --set telegram_bot_token=      # names the key, asks for it to be empty
+```
+
+Until that distinction existed, `make test` was enough to wipe the stored token — the suite
+saves real configs, and a save with no token in it deleted the developer's own keychain item, so
+the token had to be retyped after every release. See [§12](#12-tests).
+
+If the token row is empty but notifications still work, `TG_BOT_TOKEN` is set in your
+environment (Option B) and is being used; the row shows only what the keychain holds, and says
+so.
+
 To inspect or remove the stored item yourself on macOS:
 
 ```bash
@@ -664,7 +683,7 @@ make test
 Windows:
 
 ```powershell
-uv run python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -t . -v
 ```
 
 Individual groups (macOS/Linux):
@@ -679,7 +698,7 @@ The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `
 Three families of side effect are mocked everywhere, for the same reason — a unit test must not touch what this machine actually has:
 
 - **The OS scheduler.** Every test that exercises `crw config` / `crw apply-schedule` mocks `scheduler.apply` (`tests/test_ui.py`, `tests/test_ui_menu.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`). The scheduler *rendering* logic itself (`tests/test_scheduler.py`, `tests/test_launchd.py`, `tests/test_systemd.py`) is exercised fully, always against a throwaway output directory.
-- **The credential store.** `tests/test_secrets_store.py` replaces the single subprocess funnel, so the macOS, Linux and Windows code paths are all covered on whatever machine runs the suite. `RoundTripTests` is the one deliberate exception: it stores and re-reads a throwaway `_roundtrip_probe` item in the machine's real credential store (deleted again in cleanup, and skipped where there is none). Mocking that funnel is precisely what once hid an inert write — `add-generic-password -w` prompts `/dev/tty` rather than reading stdin, so it stored nothing and still exited 0 while every mocked assertion passed. A contract test cannot catch a tool ignoring the contract.
+- **The credential store.** `tests/__init__.py` closes the OS boundary for the whole suite: the backend probe reports "no credential store" and `secrets_store._run` raises if anything still tries to shell out. Nothing else in the suite can reach the machine's real keychain — which it used to, every run, deleting the developer's own bot token. `tests/test_secrets_store.py` replaces the single subprocess funnel, so the macOS, Linux and Windows code paths are all covered on whatever machine runs the suite. `RoundTripTests` is the one deliberate exception: it lifts that fence (`tests.real_credential_store`) to store and re-read a throwaway `_roundtrip_probe` item in the machine's real credential store — its own account name, never the real token — deleted again in cleanup, and skipped where there is no store. Mocking that funnel is precisely what once hid an inert write — `add-generic-password -w` prompts `/dev/tty` rather than reading stdin, so it stored nothing and still exited 0 while every mocked assertion passed. A contract test cannot catch a tool ignoring the contract.
 - **The terminal.** The keyboard menu's brain (`ui.step`) is a pure function of state and keypress, so `tests/test_ui_menu.py` drives the whole interaction with synthetic `KeyEvent`s, and `tests/test_keys.py` feeds raw escape-sequence bytes through a fake byte source — no TTY, no raw mode, nothing to restore.
 
 Language-dependent assertions always pin the language explicitly (`lang="en"` / `CRW_LANG=zh-TW`), so the suite gives the same result on a machine with any locale.

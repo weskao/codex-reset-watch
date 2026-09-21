@@ -54,6 +54,31 @@ class ConfigSetTests(unittest.TestCase):
             self.assertEqual(config.load()["scan_interval_minutes"], 45)
         self.assertEqual(code, 0)
 
+    def test_setting_another_key_keeps_the_stored_token(self, mock_apply):
+        vault = {"telegram_bot_token": "123456:SECRET"}
+        with isolated_config(), mock.patch.multiple(
+                config.secrets_store,
+                available=lambda: True,
+                get=lambda key: vault.get(key, ""),
+                set=lambda key, value: vault.__setitem__(key, value) or True,
+                delete=lambda key: vault.pop(key, None) is not None):
+            args = crw.build_parser().parse_args(["config", "--set", "request_retries=5"])
+            crw.config_cmd(args)
+        self.assertEqual(vault["telegram_bot_token"], "123456:SECRET")
+
+    def test_setting_the_token_to_empty_clears_it(self, mock_apply):
+        vault = {"telegram_bot_token": "123456:SECRET"}
+        with isolated_config(), mock.patch.multiple(
+                config.secrets_store,
+                available=lambda: True,
+                get=lambda key: vault.get(key, ""),
+                set=lambda key, value: vault.__setitem__(key, value) or True,
+                delete=lambda key: vault.pop(key, None) is not None):
+            args = crw.build_parser().parse_args(["config", "--set", "telegram_bot_token="])
+            with contextlib.redirect_stdout(io.StringIO()):
+                crw.config_cmd(args)
+        self.assertNotIn("telegram_bot_token", vault)
+
     def test_schedule_relevant_set_auto_reapplies(self, mock_apply):
         with isolated_config():
             args = crw.build_parser().parse_args(["config", "--set", "daily_time=07:30"])

@@ -573,10 +573,19 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
         if setting.kind == "secret":
             # Say where the token actually lives — or that it cannot be stored
             # here at all, which is the one case the user must act on.
-            note = (i18n.t("setting.telegram_bot_token.note", lang,
-                           backend=secrets_store.backend_label())
-                    if secrets_store.available() else i18n.t("menu.no_secret_store", lang))
-            colour = paint.muted if secrets_store.available() else paint.warn
+            # A token reaching the app through TG_BOT_TOKEN never shows in
+            # this row — the row is the keychain's value — so an empty field
+            # on a working setup used to look like a token that had gone
+            # missing, and got retyped. Say where the live one comes from.
+            from_env = not cfg.get(setting.key) and os.environ.get("TG_BOT_TOKEN", "").strip()
+            if not secrets_store.available():
+                note, colour = i18n.t("menu.no_secret_store", lang), paint.warn
+            elif from_env:
+                note, colour = i18n.t("menu.secret_from_env", lang), paint.warn
+            else:
+                note = i18n.t("setting.telegram_bot_token.note", lang,
+                              backend=secrets_store.backend_label())
+                colour = paint.muted
             for line in _wrap(note, PANEL_WIDTH - 3):
                 foot.append(f"   {colour}{line}{paint.reset}")
     if error:
@@ -805,13 +814,14 @@ def _step_confirm(state: MenuState, event: keys.KeyEvent) -> MenuState:
 
     Cancel-by-default is deliberate — a restore wipes the stored chat id and
     every tuned value, so a keypress the user did not mean as yes must never be
-    read as one.
+    read as one. The bot token is the one thing it keeps: see
+    :func:`config.restore_defaults`.
     """
     if not (event.key is keys.Key.CHAR and event.char in ("y", "Y")):
         return replace(state, confirm_defaults=False, error=None)
     return replace(
         state,
-        values={**state.values, **config.DEFAULTS},
+        values=config.restore_defaults(state.values),
         confirm_defaults=False,
         pending_save=True,
         error=None,
@@ -1128,7 +1138,7 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
                 applied = dict(cfg)
             continue
         if lowered == "d":
-            cfg = dict(config.DEFAULTS)
+            cfg = config.restore_defaults(cfg)
             config.save(cfg)
             print(f" {paint.ok}✓ {i18n.t('menu.defaults_done', lang)}{paint.reset}", file=out)
             continue

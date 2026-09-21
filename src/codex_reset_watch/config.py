@@ -473,10 +473,45 @@ def save_secrets(cfg: Dict[str, Any]) -> Tuple[str, ...]:
     A non-empty result means "this machine has no credential store" (or it
     refused), and the caller should say so rather than pretending the token was
     saved — it is never silently written to the config file instead.
+
+    An *absent* or empty value is skipped, never written through as a delete.
+    Saving is how every other setting is persisted, so it runs constantly — on
+    every menu edit, every ``--set``, every import — and a ``cfg`` can be
+    missing the token for reasons that have nothing to do with wanting it gone:
+    a locked or briefly unreadable keychain at :func:`load` time, a dict built
+    from :data:`DEFAULTS`, a partial config assembled by a caller. Treating
+    that as "delete the credential" is how the stored token kept vanishing and
+    had to be retyped. Removing one is now an explicit act: :func:`clear_secret`.
     """
-    failed = [key for key in sorted(SECRET_KEYS)
-              if not secrets_store.set(key, str(cfg.get(key, "") or "")) and cfg.get(key)]
+    failed = []
+    for key in sorted(SECRET_KEYS):
+        value = str(cfg.get(key, "") or "")
+        if not value:
+            continue
+        if not secrets_store.set(key, value):
+            failed.append(key)
     return tuple(failed)
+
+
+def clear_secret(key: str) -> bool:
+    """Remove a stored secret. The only path that deletes one, by design.
+
+    Reached from ``crw config --set telegram_bot_token=`` — i.e. the user
+    naming the key and asking for it to be empty — never from an ordinary save.
+    """
+    return secrets_store.delete(key)
+
+
+def restore_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """*cfg* reset to :data:`DEFAULTS`, with any stored secret kept.
+
+    "Restore defaults" means the tuned settings, not the credentials: a bot
+    token has no default to restore *to*, only a keychain item to destroy, and
+    it cannot be recovered from anywhere once it is gone. Clearing one stays
+    the explicit act :func:`clear_secret` makes it.
+    """
+    kept = {key: cfg[key] for key in SECRET_KEYS if cfg.get(key)}
+    return {**cfg, **DEFAULTS, **kept}
 
 
 def save(cfg: Dict[str, Any], path: Optional[pathlib.Path] = None) -> pathlib.Path:

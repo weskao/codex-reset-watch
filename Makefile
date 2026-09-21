@@ -74,4 +74,4 @@ test-integration:
 		tests.test_cli_syntax tests.test_install tests.test_install_telegram -v
 
 test: lint
-	$(UV) run python -m unittest discover -s tests -v
+	$(UV) run python -m unittest discover -s tests -t . -v
