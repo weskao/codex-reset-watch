@@ -1,3 +1,8 @@
+## [0.4.1] - 2026-09-21
+
+### 🐛 Bug Fixes
+
+- **ui:** Refit cursor whenever ui_mode changes
 ## [0.4.0] - 2026-09-21
 
 ### 🚀 Features
@@ -14,6 +19,7 @@
 
 - **readme:** Add crw --config telegram notification example
 - **readme:** Move telegram example nearer the top
+- **changelog:** Release v0.4.0
 ## [0.3.1] - 2026-09-21
 
 ### 🐛 Bug Fixes
