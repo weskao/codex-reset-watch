@@ -819,23 +819,17 @@ def _step_confirm(state: MenuState, event: keys.KeyEvent) -> MenuState:
     )
 
 
-def _toggle_mode(state: MenuState, settings: Sequence[config.Setting]) -> MenuState:
-    """Flip Basic/Advanced. Keeps the same row selected if it stays visible in
-    the new mode (e.g. any Basic-tier row survives either way); otherwise
-    lands on the first row rather than leaving the cursor pointing past the
-    end of a shorter list."""
+def _toggle_mode(state: MenuState) -> MenuState:
+    """Flip Basic/Advanced. :func:`_refit_cursor` keeps the selected row
+    selected, so this only has to change the value."""
     new_mode = "advanced" if config.current_ui_mode(state.values) == "basic" else "basic"
-    selected_key = settings[state.cursor].key if settings else None
-    new_settings = config.visible_settings(new_mode)
-    new_cursor = next((i for i, s in enumerate(new_settings) if s.key == selected_key), 0)
-    return _touched(state, config.BY_KEY["ui_mode"], new_mode,
-                    cursor=new_cursor, editing=False, edit_buffer="")
+    return _touched(state, config.BY_KEY["ui_mode"], new_mode, editing=False, edit_buffer="")
 
 
 def _step_browsing(state: MenuState, event: keys.KeyEvent,
                    settings: Sequence[config.Setting]) -> MenuState:
     if event.key is keys.Key.TAB:
-        return _toggle_mode(state, settings)
+        return _toggle_mode(state)
     if event.key is keys.Key.CHAR:
         if event.char == "q":
             return replace(state, quitting=True)
@@ -865,6 +859,23 @@ def _step_browsing(state: MenuState, event: keys.KeyEvent,
     return state
 
 
+def _refit_cursor(before: MenuState, after: MenuState,
+                  settings: Sequence[config.Setting]) -> MenuState:
+    """Keep the cursor on a row that still exists once the mode changed.
+
+    Basic shows a subset of Advanced, so *any* keypress that flips ``ui_mode``
+    — Tab, ←/→/⏎ on the Mode row, or restoring defaults — can leave the cursor
+    pointing past the end of the shorter list. Re-find the selected row by key,
+    else fall back to the last row.
+    """
+    if config.current_ui_mode(before.values) == config.current_ui_mode(after.values):
+        return after
+    rows = config.visible_settings(config.current_ui_mode(after.values))
+    key = settings[before.cursor].key if before.cursor < len(settings) else None
+    return replace(after, cursor=next((i for i, s in enumerate(rows) if s.key == key),
+                                      min(after.cursor, len(rows) - 1)))
+
+
 def step(state: MenuState, event: keys.KeyEvent,
          settings: Sequence[config.Setting] = config.SETTINGS) -> MenuState:
     """*state* advanced by one keypress. Pure — the only function the tests need.
@@ -874,12 +885,14 @@ def step(state: MenuState, event: keys.KeyEvent,
     if event.key is keys.Key.CTRL_C:
         return replace(state, quitting=True, editing=False, confirm_defaults=False, prompt=None)
     if state.confirm_defaults:
-        return _step_confirm(state, event)
-    if state.prompt:
-        return _step_prompt(state, event)
-    if state.editing:
-        return _step_editing(state, event, settings[state.cursor])
-    return _step_browsing(state, event, settings)
+        after = _step_confirm(state, event)
+    elif state.prompt:
+        after = _step_prompt(state, event)
+    elif state.editing:
+        after = _step_editing(state, event, settings[state.cursor])
+    else:
+        after = _step_browsing(state, event, settings)
+    return _refit_cursor(state, after, settings)
 
 
 # ── side effects the state machine asks for ──────────────────────────────────

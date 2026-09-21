@@ -105,6 +105,28 @@ class ModeToggleStepTests(unittest.TestCase):
         basic = config.visible_settings("basic")
         self.assertLess(state.cursor, len(basic))
 
+    def test_cycling_the_mode_row_refits_the_cursor(self):
+        # ←/→/⏎ on the Mode row flips ui_mode just like Tab does; the cursor
+        # must land back on the Mode row instead of past the shorter list.
+        for key in (keys.Key.RIGHT, keys.Key.LEFT, keys.Key.ENTER):
+            with self.subTest(key=key):
+                advanced = config.visible_settings("advanced")
+                index = advanced.index(config.BY_KEY["ui_mode"])
+                state = fresh(cursor=index,
+                              values={**config.DEFAULTS, "ui_mode": "advanced"})
+                state = ui.step(state, press(key), advanced)
+                basic = config.visible_settings("basic")
+                self.assertEqual(state.values["ui_mode"], "basic")
+                self.assertEqual(basic[state.cursor].key, "ui_mode")
+
+    def test_restoring_defaults_from_advanced_refits_the_cursor(self):
+        advanced = config.visible_settings("advanced")
+        state = fresh(cursor=len(advanced) - 1,
+                      values={**config.DEFAULTS, "ui_mode": "advanced"},
+                      confirm_defaults=True)
+        state = ui.step(state, press(keys.Key.CHAR, "y"), advanced)
+        self.assertLess(state.cursor, len(config.visible_settings("basic")))
+
 
 class RenderModeTests(unittest.TestCase):
     def test_render_menu_defaults_to_the_filtered_settings_for_the_cfg_mode(self):
