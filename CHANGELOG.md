@@ -1,14 +1,15 @@
-## [Unreleased]
+## [0.3.0] - 2026-09-21
 
 ### 🐛 Bug Fixes
 
-- **telegram:** Use the configured credentials ahead of `TG_BOT_TOKEN`/`TG_CHAT_ID`, so a token
-  left in a shell profile or baked into an older launchd plist can no longer keep notifying
-  through a bot `crw config` already replaced
-- **scheduler:** Stop baking the token into the generated plist/unit on a machine that has a
-  credential store — the job reads it itself, so it is no longer written to a 0644 file nor
-  carried forward, stale, on every re-apply
+- **install:** Import readline so arrow keys work in prompts
+- **telegram:** [**breaking**] Config credentials outrank TG_BOT_TOKEN/TG_CHAT_ID
+- **ui:** Quit menu on ctrl-c, clear stale error
+- **cli:** Cancel gracefully on ctrl-c
 
+### 🎨 Styling
+
+- **cli:** Visually separate reset blocks in check output
 ## [0.2.0] - 2026-09-20
 
 ### 🚀 Features
@@ -24,6 +25,10 @@
 - Correct windows file locking
 - **ui:** Wrap long footer messages
 - **secrets:** Store the bot token via security batch mode, not -w
+
+### 📚 Documentation
+
+- **changelog:** Release v0.2.0
 
 ### 🧪 Testing
 
