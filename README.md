@@ -28,7 +28,7 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 | State | `~/Library/Application Support/codex-reset-watch/state.json` | `$XDG_STATE_HOME/codex-reset-watch/state.json` (default `~/.local/state/...`) | `%LOCALAPPDATA%\codex-reset-watch\state.json` |
 | Logs | `~/Library/Logs/codex-reset-watch/` | `$XDG_STATE_HOME/codex-reset-watch/log/` | `%LOCALAPPDATA%\codex-reset-watch\Logs\` |
 | Scheduler units | `~/Library/LaunchAgents/com.wes.codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
-| CLI | `~/scripts/codex-reset-watch` (symlinked to `/opt/homebrew/bin/codex-reset-watch`) | `~/scripts/codex-reset-watch` | `%USERPROFILE%\scripts\codex-reset-watch.exe` |
+| CLI | `~/.local/bin/{codex-reset-watch,crw}` | `~/.local/bin/{codex-reset-watch,crw}` | `%USERPROFILE%\.local\bin\{codex-reset-watch,crw}.exe` |
 
 Resolution logic lives in `src/codex_reset_watch/paths.py` (defaults) and `config.py` (overrides).
 Override any of the three with the env vars `CRW_CONFIG`, `CRW_STATE_DIR`, `CRW_LOG_DIR`, or set
@@ -67,28 +67,25 @@ uv --version
 
 ## 2. Install Codex Reset Watch
 
-One command per OS — run these in order from the extracted project folder. The installer asks
-for your Telegram bot token and chat id interactively partway through (step 3 below); nothing
-needs to be exported beforehand.
-
-**macOS / Linux:**
+One command, identical on macOS, Linux and Windows — run it from the extracted project folder.
+The installer asks for your Telegram bot token and chat id interactively partway through (see
+below); nothing needs to be exported beforehand.
 
 ```bash
-make test       # 1. run the suite before touching anything installed
-make install    # 2. install as a uv tool + register the OS scheduler
-                # 3. ↳ prompts for Telegram here — see below
-crw doctor      # 4. verify
-crw check       # 5. first real run
+uv run python scripts/install.py
 ```
 
-**Windows (PowerShell, no `make` required):**
+That single command installs the CLI, puts it on your `PATH`, stores the Telegram credentials
+and registers the OS scheduler — there is no separate step to forget. Then **open a new
+terminal** (the `PATH` entry only applies to shells started afterwards) and verify:
 
-```powershell
-uv run python -m unittest discover -s tests -v   # 1.
-uv run python scripts/install.py                 # 2. + 3. (same prompt)
-crw doctor                                        # 4.
-crw check                                         # 5.
+```bash
+crw doctor      # every line should be ✅
+crw check       # first real run
 ```
+
+`make install` / `make test` are thin wrappers over the same script, available on macOS and
+Linux if you prefer them; Windows has no `make` and does not need it.
 
 ### Step 3: the Telegram prompt
 
@@ -120,7 +117,7 @@ alternative.
 1. copies the project to `$CRW_INSTALL_DIR` (default `~/Documents/Workspace/codex-reset-watch`)
 2. runs `uv python install 3.13`
 3. installs the package as a persistent isolated uv tool
-4. puts `codex-reset-watch` and `crw` in `~/scripts` (`%USERPROFILE%\scripts` on Windows); on macOS, also symlinks both into `/opt/homebrew/bin` (already on `PATH`, no `~/.zshrc` edit needed)
+4. puts `codex-reset-watch` and `crw` in uv's own bin directory (`~/.local/bin`, or `$UV_TOOL_BIN_DIR`/`$XDG_BIN_HOME` if you set either) and runs `uv tool update-shell` so that directory is on the `PATH` of new shells
 5. creates config/state/log directories
 6. registers the native scheduler job for the current OS (launchd / systemd --user timers / Task Scheduler)
 
@@ -406,12 +403,20 @@ uv tool dir --bin
 uv python list --only-installed
 ```
 
-The installer intentionally sets `UV_TOOL_BIN_DIR=~/scripts` during tool installation so the stable paths used by launchd are:
+The installer deliberately installs into **uv's own default bin directory**, so the stable paths
+used by launchd/systemd/Task Scheduler are:
 
 ```text
-~/scripts/codex-reset-watch
-~/scripts/crw
+~/.local/bin/codex-reset-watch
+~/.local/bin/crw
 ```
+
+It used to override `UV_TOOL_BIN_DIR` to a private `~/scripts` instead, which silently broke the
+scheduler: uv records each entrypoint's absolute path in its receipt and deletes the recorded
+ones on every reinstall, so a later plain `uv tool install`/`uv tool upgrade` — run without that
+same override — moved the CLI to `~/.local/bin` and left the scheduler jobs invoking a path that
+no longer existed. Matching uv's default keeps the two in sync no matter how the tool is
+reinstalled. `crw doctor`'s **Scheduled CLI** line asserts exactly this.
 
 ## 6. Reinstall after source changes
 

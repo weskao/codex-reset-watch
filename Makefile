@@ -45,10 +45,10 @@ tool-list:
 	$(UV) tool list
 
 tool-reinstall:
-	UV_TOOL_BIN_DIR="$$HOME/scripts" $(UV) tool install --force --python $(UV_PYTHON) .
+	$(UV) tool install --force --python $(UV_PYTHON) .
 
 tool-uninstall:
-	UV_TOOL_BIN_DIR="$$HOME/scripts" $(UV) tool uninstall codex-reset-watch
+	$(UV) tool uninstall codex-reset-watch
 
 launch-status:
 	@launchctl print gui/$$(id -u)/com.wes.codex-reset-watch.daily 2>/dev/null | head -50 || true

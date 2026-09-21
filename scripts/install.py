@@ -134,7 +134,7 @@ def main() -> int:
     uv = uv_bin()
     python_version = os.environ.get("CRW_UV_PYTHON", "3.13")
     dest = pathlib.Path(os.environ.get("CRW_INSTALL_DIR", str(REPO_ROOT))).expanduser()
-    bin_dir = pathlib.Path(os.environ.get("CRW_BIN_DIR", str(pathlib.Path.home() / "scripts"))).expanduser()
+    bin_dir = scheduler.bin_dir()
     config_dir = paths.app_config_dir()
     log_dir = config.log_dir(config.load())  # config file may not exist yet: defaults apply
     for d in (dest, bin_dir, config_dir, log_dir):
@@ -153,8 +153,13 @@ def main() -> int:
         [uv, "tool", "install", "--force", "--python", python_version, str(dest)], env=env,
     )
 
-    exe_suffix = ".exe" if platform.system() == "Windows" else ""
-    program = bin_dir / f"codex-reset-watch{exe_suffix}"
+    # Put uv's bin dir on PATH for future shells, so `crw ...` works right after
+    # a first install without the user hand-editing a profile. Best effort: uv
+    # older than 0.4 has no such subcommand; failure is surfaced below instead
+    # of promising a shell restart that wouldn't actually fix anything.
+    shell_updated = subprocess.run([uv, "tool", "update-shell"], env=env, capture_output=True).returncode == 0
+
+    program = scheduler.cli_path()
     if not program.exists():
         sys.exit(f"ERROR: uv tool install completed but executable was not found at {program}")
 
@@ -174,7 +179,19 @@ def main() -> int:
     print(f"CLI:    {program}")
     print(f"Config: {config_path}")
     print(f"Logs:   {log_dir}")
-    print("Adjust timing/notifications anytime: crw config")
+    # Resolve against PATH entries, not shutil.which: under `uv run` the latter
+    # finds the project venv's own shim and would wrongly report "already set up".
+    on_path = any(
+        pathlib.Path(p).expanduser() == bin_dir
+        for p in os.environ.get("PATH", "").split(os.pathsep) if p
+    )
+    print("Next:   crw doctor  →  crw check      (settings: crw config)")
+    if not on_path:
+        if shell_updated:
+            print(f"        ↳ restart your shell first: {bin_dir} was just added to PATH")
+        else:
+            print(f"        ↳ {bin_dir} is not on PATH and `uv tool update-shell` failed;")
+            print(f"          add it yourself, e.g.: export PATH=\"{bin_dir}:$PATH\"")
     return 0
 
 

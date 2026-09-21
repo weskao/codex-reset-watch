@@ -23,7 +23,7 @@ backend_for = scheduler.backend_for
 def main() -> int:
     backend = scheduler.remove()
 
-    bin_dir = pathlib.Path(os.environ.get("CRW_BIN_DIR", str(pathlib.Path.home() / "scripts"))).expanduser()
+    bin_dir = scheduler.bin_dir()
     uv = shutil.which("uv")
     if uv:
         subprocess.run(

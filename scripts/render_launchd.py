@@ -15,7 +15,7 @@ from codex_reset_watch import config, scheduler  # noqa: E402
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--program", required=True,
-                   help="Absolute executable path installed by uv tool, e.g. ~/scripts/codex-reset-watch expanded")
+                   help="Absolute executable path installed by uv tool, e.g. ~/.local/bin/codex-reset-watch expanded")
     p.add_argument("--out-dir", required=True)
     p.add_argument("--log-dir", required=True)
     a = p.parse_args()

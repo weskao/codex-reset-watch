@@ -932,6 +932,13 @@ def doctor() -> int:
         checks.append((f"Scheduler ({backend})", True, ui.summary_line(cfg, paint=ui.Paint(False))))
     except ValueError as exc:
         checks.append(("Scheduler", False, str(exc)))
+    # The scheduler job stores an absolute path. A bare `uv tool install` rewrites
+    # uv's receipt and deletes the entrypoints it recorded, so this is the one way
+    # the jobs go silently dead — they keep "existing" while invoking nothing.
+    cli = scheduler.cli_path()
+    checks.append(("Scheduled CLI", cli.exists(),
+                   display_path(cli) if cli.exists()
+                   else f"missing: {display_path(cli)} — re-run the installer to repair"))
     print("🩺 Codex Reset Watch doctor\n")
     failed = False
     for name, ok, detail in checks:

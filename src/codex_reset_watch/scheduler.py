@@ -335,25 +335,48 @@ def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) -> 
     return merged_env(process_env, existing)
 
 
+def bin_dir() -> pathlib.Path:
+    """Directory uv puts the ``codex-reset-watch``/``crw`` entrypoints in.
+
+    Mirrors uv's own resolution order so that a plain ``uv tool install`` lands
+    in the same place install.py does. Overriding it to a private directory is
+    what broke the scheduler once: uv rewrites its receipt on every reinstall
+    and deletes the entrypoints it previously recorded, so any later bare
+    ``uv tool install``/``upgrade`` silently moved the CLI out from under the
+    launchd/systemd/schtasks job pointing at the old location.
+    """
+    configured = (
+        os.environ.get("CRW_BIN_DIR")
+        or os.environ.get("UV_TOOL_BIN_DIR")
+        or os.environ.get("XDG_BIN_HOME")
+    )
+    if configured:
+        return pathlib.Path(configured).expanduser()
+    return pathlib.Path.home() / ".local" / "bin"
+
+
+def cli_path(name: str = "codex-reset-watch") -> pathlib.Path:
+    """Where :func:`bin_dir` holds the given entrypoint on this OS."""
+    suffix = ".exe" if platform.system() == "Windows" else ""
+    return bin_dir() / f"{name}{suffix}"
+
+
 def program_path() -> str:
     """Absolute path of the installed CLI the scheduler should invoke.
 
     Prefers the stable ``uv tool install`` location install.py itself uses
-    (``$CRW_BIN_DIR`` / ``~/scripts``, matching README's "stable paths used by
-    launchd"), over both ``shutil.which`` and ``sys.argv[0]``: either of those
-    resolves to whatever "codex-reset-watch" is active in the CURRENT process
-    context, which inside ``uv run``/a project venv (e.g. a developer running
-    `crw config` from a checkout) is that ephemeral venv's shim — a scheduler
-    job pointed there stops working the moment that venv is rebuilt or removed.
+    (see :func:`bin_dir`) over both ``shutil.which`` and ``sys.argv[0]``:
+    either of those resolves to whatever "codex-reset-watch" is active in the
+    CURRENT process context, which inside ``uv run``/a project venv (e.g. a
+    developer running `crw config` from a checkout) is that ephemeral venv's
+    shim — a scheduler job pointed there stops working the moment that venv is
+    rebuilt or removed.
     """
-    import platform
     import shutil
     import sys
 
-    exe_suffix = ".exe" if platform.system() == "Windows" else ""
-    bin_dir = pathlib.Path(os.environ.get("CRW_BIN_DIR", str(pathlib.Path.home() / "scripts"))).expanduser()
     for name in ("codex-reset-watch", "crw"):
-        candidate = bin_dir / f"{name}{exe_suffix}"
+        candidate = cli_path(name)
         if candidate.exists():  # keep the symlink path itself (README's documented location)
             return str(candidate)
     found = shutil.which("codex-reset-watch") or shutil.which("crw")

@@ -188,17 +188,35 @@ class ProgramPathTests(unittest.TestCase):
     checkout) resolves to the project's OWN ephemeral .venv shim rather than
     the actually-installed CLI — pointing a real scheduler job at a path that
     stops working the moment that venv is rebuilt or removed. It must prefer
-    the stable install.py location ($CRW_BIN_DIR / ~/scripts) instead."""
+    the stable install.py location ($CRW_BIN_DIR / uv's own bin dir) instead."""
 
     def setUp(self):
-        self._old_bin_dir = os.environ.get("CRW_BIN_DIR")
+        self._old_env = {k: os.environ.get(k) for k in ("CRW_BIN_DIR", "UV_TOOL_BIN_DIR", "XDG_BIN_HOME")}
         self.addCleanup(self._restore)
 
     def _restore(self):
-        if self._old_bin_dir is None:
-            os.environ.pop("CRW_BIN_DIR", None)
-        else:
-            os.environ["CRW_BIN_DIR"] = self._old_bin_dir
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def test_bin_dir_defaults_to_uvs_own_location(self):
+        """Second half of the same incident: the default used to be a private
+        ~/scripts. uv records entrypoint paths in its receipt and deletes the
+        recorded ones on every reinstall, so a later bare `uv tool install`
+        relocated the CLI to ~/.local/bin and left the scheduler job pointing at
+        a path that no longer existed. Matching uv's default keeps them in sync."""
+        for key in self._old_env:
+            os.environ.pop(key, None)
+        self.assertEqual(scheduler.bin_dir(), pathlib.Path.home() / ".local" / "bin")
+
+    def test_bin_dir_honours_uvs_own_override(self):
+        with tempfile.TemporaryDirectory() as d:
+            for key in self._old_env:
+                os.environ.pop(key, None)
+            os.environ["UV_TOOL_BIN_DIR"] = d
+            self.assertEqual(scheduler.bin_dir(), pathlib.Path(d))
 
     def test_prefers_the_stable_bin_dir_executable_when_present(self):
         with tempfile.TemporaryDirectory() as d:
