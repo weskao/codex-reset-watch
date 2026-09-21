@@ -81,7 +81,7 @@ SETTINGS: Tuple[Setting, ...] = (
             "Notify when a newly published reset announcement is detected."),
     Setting("notify_upcoming_reset", "bool", True, "notifications", "Upcoming reset signals",
             "Notify when a not-yet-happened forecast or prediction signal is detected."),
-    Setting("monitor_notify_when_unchanged", "bool", False, "notifications",
+    Setting("monitor_notify_when_unchanged", "bool", True, "notifications",
             "Notify on unchanged scan",
             "Push on every background scan, even when nothing changed."),
     Setting("daily_notify_when_unchanged", "bool", False, "notifications",
