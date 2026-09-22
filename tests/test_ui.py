@@ -43,18 +43,27 @@ class PaintTests(unittest.TestCase):
         self.assertFalse(ui.colour_enabled(io.StringIO()))
 
     def test_colour_enabled_arms_windows_vt_processing_on_a_real_console(self):
+        import os
         tty_stream = mock.Mock(isatty=lambda: True)
-        with mock.patch.object(ui.keys, "IS_WINDOWS", True), \
-             mock.patch.object(ui, "_enable_windows_vt") as enable:
-            self.assertTrue(ui.colour_enabled(tty_stream))
-            enable.assert_called_once()
+        # Hosts that export NO_COLOR=1 (CI agents, some shells) must not
+        # bleed into the positive-path assertion — only the dedicated
+        # NO_COLOR test covers that gate.
+        with mock.patch.dict(os.environ):
+            os.environ.pop("NO_COLOR", None)
+            with mock.patch.object(ui.keys, "IS_WINDOWS", True), \
+                 mock.patch.object(ui, "_enable_windows_vt") as enable:
+                self.assertTrue(ui.colour_enabled(tty_stream))
+                enable.assert_called_once()
 
     def test_colour_enabled_skips_windows_vt_processing_elsewhere(self):
+        import os
         tty_stream = mock.Mock(isatty=lambda: True)
-        with mock.patch.object(ui.keys, "IS_WINDOWS", False), \
-             mock.patch.object(ui, "_enable_windows_vt") as enable:
-            self.assertTrue(ui.colour_enabled(tty_stream))
-            enable.assert_not_called()
+        with mock.patch.dict(os.environ):
+            os.environ.pop("NO_COLOR", None)
+            with mock.patch.object(ui.keys, "IS_WINDOWS", False), \
+                 mock.patch.object(ui, "_enable_windows_vt") as enable:
+                self.assertTrue(ui.colour_enabled(tty_stream))
+                enable.assert_not_called()
 
     def test_enable_windows_vt_processing_is_best_effort_off_windows(self):
         # ctypes.windll does not exist here; the call must swallow that, not raise.
