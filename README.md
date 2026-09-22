@@ -113,7 +113,7 @@ Linux if you prefer them; Windows has no `make` and does not need it.
 Set up Telegram notifications now?
   You'll need a bot token from @BotFather and the chat id it should message.
   Set up now? [Y/n]: y
-  Telegram chat id: -1002847193056
+  Telegram chat id: -1001234567890
   Telegram bot token (hidden):
   ✅ Saved. Bot token stored in macOS Keychain; chat id in ~/Library/Application Support/codex-reset-watch/config.json.
 ```
@@ -347,7 +347,7 @@ a keypress that cannot arrive.
 
  ▍ Telegram
    10 Bot token ··········································· (not set)
-   11 Chat ID ········································ -1002847193056
+   11 Chat ID ········································ -1001234567890
 
  ▍ API
    12 API base ····························· https://codex-resets.com
@@ -385,7 +385,7 @@ a keypress that cannot arrive.
 | `notify_new_reset_events` / `notify_upcoming_reset` | Which event types trigger a Telegram push | `on` / `off` |
 | `monitor_notify_when_unchanged` / `daily_notify_when_unchanged` | Push even when nothing changed since last check | `on` / `off` |
 | `telegram_bot_token` | Bot API token — **stored in the OS keychain, never in a file** (see [§8](#8-telegram)) | masked as `********WXYZ` |
-| `telegram_chat_id` | Chat that receives notifications | `-1002847193056` |
+| `telegram_chat_id` | Chat that receives notifications | `-1001234567890` |
 | `api_base`, `status_path`, `resets_path` | codex-resets.com endpoints | — |
 | `request_timeout_seconds`, `request_retries` | HTTP client tuning | — |
 | `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
@@ -555,7 +555,7 @@ or non-interactively:
 
 ```bash
 crw config set telegram_bot_token=123456:ABC...
-crw config set telegram_chat_id=-1002847193056
+crw config set telegram_chat_id=-1001234567890
 ```
 
 **The bot token is never written to a file.** It goes into the operating system's own credential
@@ -625,7 +625,7 @@ token masked:
 ```text
 ✅ Secret store: macOS Keychain
 ✅ Telegram bot token: ********QrSt (macOS Keychain)
-✅ Telegram chat id: -1002847193056 (environment)
+✅ Telegram chat id: -1001234567890 (environment)
 ```
 
 Then:

@@ -590,7 +590,7 @@ class RenderTests(unittest.TestCase):
         # Including the rows whose value had to be clipped: a row one cell wide
         # or narrow than its neighbours puts the value column out of alignment.
         import re
-        cfg = dict(self.cfg, timezone="Asia/Taipei", telegram_chat_id="-1002847193056")
+        cfg = dict(self.cfg, timezone="Asia/Taipei", telegram_chat_id="-1001234567890")
         for lang in ("en", "zh-TW"):
             for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=44):
                 plain = ui.strip_ansi(line)

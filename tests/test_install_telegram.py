@@ -57,16 +57,16 @@ class PromptSetupTests(unittest.TestCase):
         self.assertIn("crw config", out.getvalue())
 
     def test_accepting_stores_chat_id_and_token(self):
-        answers = iter(["y", "-1002847193056"])
+        answers = iter(["y", "-1001234567890"])
         with isolated_config():
             cfg = dict(config.DEFAULTS)
             configured = install.prompt_telegram_setup(
                 cfg, ask=lambda p: next(answers), ask_secret=lambda p: "123:ABC", out=io.StringIO())
             self.assertTrue(configured)
-            self.assertEqual(config.load()["telegram_chat_id"], "-1002847193056")
+            self.assertEqual(config.load()["telegram_chat_id"], "-1001234567890")
 
     def test_the_token_is_never_written_to_the_config_file(self):
-        answers = iter(["y", "-1002847193056"])
+        answers = iter(["y", "-1001234567890"])
         with isolated_config() as path:
             install.prompt_telegram_setup(
                 dict(config.DEFAULTS), ask=lambda p: next(answers),
@@ -75,7 +75,7 @@ class PromptSetupTests(unittest.TestCase):
         self.assertNotIn("REALTOKEN", written)
 
     def test_an_empty_token_does_not_count_as_configured(self):
-        answers = iter(["y", "-1002847193056"])
+        answers = iter(["y", "-1001234567890"])
         with isolated_config():
             configured = install.prompt_telegram_setup(
                 dict(config.DEFAULTS), ask=lambda p: next(answers),
