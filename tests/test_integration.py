@@ -1,4 +1,4 @@
-import sys, contextlib, http.server, importlib.util, json, pathlib, socketserver, tempfile, threading, unittest
+import sys, contextlib, datetime as dt, http.server, importlib.util, json, pathlib, socketserver, tempfile, threading, unittest
 import codex_reset_watch as crw
 FIX = pathlib.Path(__file__).parent / "fixtures"
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -6,7 +6,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path.startswith('/api/v1/status-tba'):
             body=(FIX/'status_scheduled_tba.json').read_bytes(); code=200
         elif self.path.startswith('/api/v1/status'):
-            body=(FIX/'status_upcoming.json').read_bytes(); code=200
+            data = json.loads((FIX/'status_upcoming.json').read_text())
+            window_end = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=9)
+            data['forecast']['window_end'] = window_end.strftime('%Y-%m-%dT%H:%M:%SZ')
+            body = json.dumps(data).encode(); code=200
         elif self.path.startswith('/api/v1/resets'):
             body=(FIX/'resets.json').read_bytes(); code=200
         else: body=b'{}'; code=404
