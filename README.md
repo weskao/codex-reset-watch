@@ -2,7 +2,16 @@
 
 Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API (`src/codex_reset_watch/telegram_notify.py`, stdlib-only).
 
-Example Telegram notification (`crw --config`):
+When a public reset signal is found, `crw check` sends its status and type, estimated reset time
+and countdown, source message and announcement link, Codex Resets link, and check time. The
+notification also makes clear that this is a third-party public forecast: an individual Codex
+quota may reset at a different time.
+
+Example reset-signal notification:
+
+![Codex Reset Watch Telegram notification showing a scheduled regular reset](docs/images/crw-reset-notification.png)
+
+Example Telegram configuration (`crw --config`):
 
 ![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
 
