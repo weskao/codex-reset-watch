@@ -1,8 +1,32 @@
+## [0.4.2] - 2026-09-22
+
+### 🐛 Bug Fixes
+
+- Preserve stored tokens during config saves
+- **tests:** Stop the integration test fixture from expiring
+- **ui:** Stop windows CI hanging in run_menu
+- **install:** Detect PATH shadows with empty PATHEXT
+
+### 📚 Documentation
+
+- Clarify reset notification docs
+
+### 🧪 Testing
+
+- **ui:** Isolate colour tests from NO_COLOR
+
+### ⚙️ Miscellaneous Tasks
+
+- Redact live telegram chat id from examples
 ## [0.4.1] - 2026-09-21
 
 ### 🐛 Bug Fixes
 
 - **ui:** Refit cursor whenever ui_mode changes
+
+### 📚 Documentation
+
+- **changelog:** Release v0.4.1
 ## [0.4.0] - 2026-09-21
 
 ### 🚀 Features
