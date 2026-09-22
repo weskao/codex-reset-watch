@@ -66,7 +66,11 @@ def path_shadows(bin_dir: pathlib.Path, environ: Dict[str, str] | None = None) -
     PATH, and they vanish with the venv — not a shadow the user has to act on.
     """
     environ = os.environ if environ is None else environ
+    # Empty PATHEXT (tests, or a stripped environment) must still look for
+    # the exact name. Filtering out blank entries otherwise yields no
+    # candidates and a Windows PATH shadow is silently missed.
     exts = [e for e in environ.get("PATHEXT", "").split(os.pathsep) if e] if os.name == "nt" else [""]
+    exts = exts or [""]
     own = pathlib.Path(sysconfig.get_path("scripts"))
     entries = [
         d for d in (pathlib.Path(p).expanduser() for p in environ.get("PATH", "").split(os.pathsep) if p)
