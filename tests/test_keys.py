@@ -108,6 +108,37 @@ class InteractivityTests(unittest.TestCase):
             self.assertFalse(keys.is_interactive_tty())
 
 
+class KeyReadyTests(unittest.TestCase):
+    """`key_ready` must not poll a real keyboard outside an interactive TTY.
+
+    Windows CI hangs in `run_menu` when this contract is broken: GitHub's
+    runner has a console, `msvcrt.kbhit()` stays false, and the pulse loop
+    never reaches the injected test reader.
+    """
+
+    def test_non_tty_stdin_is_ready_immediately(self):
+        with mock.patch("sys.stdin", io.StringIO()):
+            self.assertTrue(keys.key_ready(5.0))
+
+    def test_windows_non_tty_stdin_does_not_poll_msvcrt(self):
+        import sys
+
+        fake_msvcrt = mock.Mock()
+        fake_msvcrt.kbhit.return_value = False
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        with mock.patch.object(keys, "IS_WINDOWS", True), \
+                mock.patch.dict(sys.modules, {"msvcrt": fake_msvcrt}), \
+                mock.patch("sys.stdin", stdin):
+            self.assertTrue(keys.key_ready(5.0))
+        fake_msvcrt.kbhit.assert_not_called()
+
+    def test_a_stdin_without_isatty_is_ready_immediately(self):
+        broken = mock.Mock(spec=[])  # no isatty
+        with mock.patch("sys.stdin", broken):
+            self.assertTrue(keys.key_ready(5.0))
+
+
 class RawModeTests(unittest.TestCase):
     def test_raw_mode_is_a_noop_without_a_real_tty(self):
         with mock.patch("sys.stdin", io.StringIO()):

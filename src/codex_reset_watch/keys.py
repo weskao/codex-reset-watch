@@ -116,6 +116,12 @@ def key_ready(timeout: float) -> bool:
     tests) always reports ready immediately, so the animation branch never
     fires — and never adds latency — outside a real keyboard menu.
     """
+    try:
+        if not sys.stdin.isatty():
+            return True
+    except (OSError, ValueError, AttributeError):
+        return True
+
     if IS_WINDOWS:
         import msvcrt
 
@@ -129,8 +135,6 @@ def key_ready(timeout: float) -> bool:
 
     try:
         fd = sys.stdin.fileno()
-        if not os.isatty(fd):
-            return True
     except (OSError, ValueError):
         return True
     ready, _, _ = select.select([fd], [], [], timeout)

@@ -697,6 +697,19 @@ class RunMenuTests(unittest.TestCase):
         with mock.patch.object(ui.config, "save"), mock.patch.object(ui.scheduler, "apply"):
             self.assertEqual(ui.run_menu(cfg=dict(config.DEFAULTS), read=read, out=out, height=40), 0)
 
+    def test_an_injected_reader_does_not_wait_on_the_real_keyboard(self):
+        # Windows CI has a console, so key_ready() polling msvcrt.kbhit() never
+        # returns True. An injected reader is the whole point of run_menu's
+        # `read=` seam: the pulse loop must not consult the real keyboard.
+        def never_ready(timeout):
+            raise AssertionError(
+                "key_ready must not be consulted when read is injected")
+
+        with mock.patch.object(ui.keys, "key_ready", never_ready):
+            code, _, _, apply_mock = self._run([char("q")])
+        self.assertEqual(code, 0)
+        apply_mock.assert_not_called()
+
 
 class DispatchTests(unittest.TestCase):
     def test_a_real_tty_gets_the_keyboard_menu(self):

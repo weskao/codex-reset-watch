@@ -1008,6 +1008,10 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
     state = MenuState(values=cfg, cursor=cursor)
     painted = 0
     pulse_frame = 0
+    # Pulse animation peeks the real keyboard. An injected `read` (tests) is
+    # the whole input source: waiting on msvcrt.kbhit()/select() would ignore
+    # it and hang on a Windows console that nobody is typing into.
+    pulse = read is keys.read_key
     with keys.raw_mode():
         while True:
             lang = i18n.current_language(state.values)
@@ -1019,7 +1023,7 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
                 prompt_buffer=state.prompt_buffer, height=height,
                 pulse_frame=pulse_frame, settings=settings), out, painted)
             try:
-                if not keys.key_ready(CURSOR_PULSE_INTERVAL):
+                if pulse and not keys.key_ready(CURSOR_PULSE_INTERVAL):
                     # Idle: advance the cursor's pulse frame and redraw,
                     # without ever reaching `step()` — an animation tick must
                     # never be mistaken for a real keypress (e.g.
