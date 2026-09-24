@@ -23,7 +23,7 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import config as cfgmod
-from . import filelock, i18n, scheduler, secrets_store, telegram_notify, ui
+from . import filelock, i18n, scheduler, secrets_store, telegram_notify, ui, update_check
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
@@ -1128,6 +1128,13 @@ def config_cmd(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(_normalize_argv(raw))
+    try:
+        return _dispatch(args)
+    finally:
+        update_check.maybe_hint()
+
+
+def _dispatch(args: argparse.Namespace) -> int:
     try:
         if args.command in ("check", "update"):
             return run_check("manual", notify=not args.no_notify)

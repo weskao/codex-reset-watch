@@ -134,6 +134,9 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("ui_mode", "choice", DEFAULT_UI_MODE, "interface", "Mode",
             "Basic shows the common settings; Advanced shows everything.",
             choices=UI_MODES, tier="basic"),
+    Setting("update_check", "bool", True, "interface", "Check for updates",
+            "After a command in a terminal, say when a newer release is on GitHub (checked once a day).",
+            tier="basic"),
 )
 
 BY_KEY: Dict[str, Setting] = {s.key: s for s in SETTINGS}

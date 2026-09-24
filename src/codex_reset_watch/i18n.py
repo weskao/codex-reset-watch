@@ -253,6 +253,15 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.tab_advanced": {"en": "Advanced", "zh-TW": "進階"},
     "menu.tab_hint": {"en": "Tab to switch", "zh-TW": "按 Tab 切換"},
     "menu.switch_mode": {"en": "switch mode", "zh-TW": "切換模式"},
+    "setting.update_check.label": {"en": "Check for updates", "zh-TW": "檢查更新"},
+    "setting.update_check.help": {
+        "en": "After a command in a terminal, say when a newer release is on GitHub (checked once a day).",
+        "zh-TW": "在終端機執行指令後，若 GitHub 有更新的版本就提示（每天最多查一次）。",
+    },
+    "update.available": {
+        "en": "codex-reset-watch {latest} is available (you have {current})",
+        "zh-TW": "codex-reset-watch {latest} 已推出（目前是 {current}）",
+    },
     "cli.cancelled": {"en": "Cancelled (Ctrl-C)", "zh-TW": "已取消（Ctrl-C）"},
     "menu.cancel_hint": {"en": "Esc cancels", "zh-TW": "Esc 取消"},
     "menu.number_hint": {"en": "Type a number to edit", "zh-TW": "輸入編號修改"},

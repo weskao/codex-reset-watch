@@ -592,7 +592,7 @@ class RenderTests(unittest.TestCase):
         import re
         cfg = dict(self.cfg, timezone="Asia/Taipei", telegram_chat_id="-1001234567890")
         for lang in ("en", "zh-TW"):
-            for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=44):
+            for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=48):
                 plain = ui.strip_ansi(line)
                 if re.match(r"^ .\s*\d+ ", plain):
                     self.assertEqual(ui.width(plain), ui.PANEL_WIDTH, f"{lang}: {plain!r}")
