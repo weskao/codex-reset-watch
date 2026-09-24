@@ -1,3 +1,8 @@
+## [0.5.0] - 2026-09-24
+
+### 🚀 Features
+
+- Hint when a newer GitHub release is available
 ## [0.4.2] - 2026-09-22
 
 ### 🐛 Bug Fixes
@@ -10,6 +15,7 @@
 ### 📚 Documentation
 
 - Clarify reset notification docs
+- **changelog:** Release v0.4.2
 
 ### 🧪 Testing
 
