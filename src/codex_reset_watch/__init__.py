@@ -1128,6 +1128,7 @@ def config_cmd(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(_normalize_argv(raw))
+    update_check.start_check()
     try:
         return _dispatch(args)
     finally:

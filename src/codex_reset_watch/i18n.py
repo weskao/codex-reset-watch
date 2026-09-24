@@ -255,8 +255,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.switch_mode": {"en": "switch mode", "zh-TW": "切換模式"},
     "setting.update_check.label": {"en": "Check for updates", "zh-TW": "檢查更新"},
     "setting.update_check.help": {
-        "en": "After a command in a terminal, say when a newer release is on GitHub (checked once a day).",
-        "zh-TW": "在終端機執行指令後，若 GitHub 有更新的版本就提示（每天最多查一次）。",
+        "en": "After a command in a terminal, say when a newer release is on GitHub (checked in the background, at most every 10 minutes).",
+        "zh-TW": "在終端機執行指令後，若 GitHub 有更新的版本就提示（背景查詢，每 10 分鐘最多一次）。",
     },
     "update.available": {
         "en": "codex-reset-watch {latest} is available (you have {current})",

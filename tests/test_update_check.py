@@ -1,4 +1,4 @@
-"""GitHub update hint: version compare, daily cache, silent failure, TTY gate."""
+"""GitHub update hint: version compare, short-TTL cache, background check, TTY gate."""
 import io
 import json
 import os
@@ -38,13 +38,13 @@ class UpdateCheckTests(unittest.TestCase):
             return "v0.5.0"
 
         self.assertEqual(uc.newer_release("0.4.2", now=1000, fetch=fetch), "v0.5.0")
-        self.assertEqual(uc.newer_release("0.4.2", now=2000, fetch=fetch), "v0.5.0")
+        self.assertEqual(uc.newer_release("0.4.2", now=1000 + uc.TTL_SECONDS - 1, fetch=fetch), "v0.5.0")
         self.assertEqual(calls, [1])
 
     def test_same_release_is_no_hint(self):
         self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.4.2"))
 
-    def test_offline_is_silent_and_retried_only_after_a_day(self):
+    def test_offline_is_silent_and_retried_only_after_the_ttl(self):
         calls = []
 
         def fetch():
@@ -55,10 +55,21 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertIsNone(uc.newer_release("0.4.2", now=10, fetch=fetch))
         self.assertEqual(calls, [1])
 
+    def test_new_release_seen_within_the_hour(self):
+        # Several releases can land in one day: the next one is seen soon, not tomorrow.
+        self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.4.2"))
+        self.assertEqual(
+            uc.newer_release("0.4.2", now=uc.TTL_SECONDS, fetch=lambda: "v0.5.0"), "v0.5.0"
+        )
+        self.assertLessEqual(uc.TTL_SECONDS, 3600)
+
     def _hint(self, stream):
         self.cache.write_text(json.dumps({"checked_at": time.time(), "latest": "v9.9.0"}))
         with mock.patch.object(uc.sys, "stderr", stream), \
-                mock.patch.object(uc.ui, "package_version", return_value="0.4.2"):
+                mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
+                mock.patch.object(uc, "_check", None), \
+                mock.patch.object(uc, "_latest", []):
+            uc.start_check()
             uc.maybe_hint()
         return stream.getvalue()
 
@@ -73,6 +84,13 @@ class UpdateCheckTests(unittest.TestCase):
     def test_no_hint_when_turned_off(self):
         (self.tmp / "config.json").write_text('{"update_check": false}')
         self.assertEqual(self._hint(_Tty()), "")
+
+    def test_hint_without_start_is_silent(self):
+        self.cache.write_text(json.dumps({"checked_at": time.time(), "latest": "v9.9.0"}))
+        stream = _Tty()
+        with mock.patch.object(uc.sys, "stderr", stream), mock.patch.object(uc, "_check", None):
+            uc.maybe_hint()
+        self.assertEqual(stream.getvalue(), "")
 
 
 if __name__ == "__main__":

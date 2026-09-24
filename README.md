@@ -397,9 +397,10 @@ a keypress that cannot arrive.
 **Update check.** When a newer GitHub release exists, a command run in a terminal ends with a
 two-line hint on stderr: the new version and the exact
 `uv tool install --force --from git+…@vX.Y.Z codex-reset-watch && crw apply-schedule` line that
-installs it and re-registers the scheduler jobs. GitHub is asked at most once a day (cached as
-`update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the scheduled
-jobs stay silent, and the exit code never changes. Turn it off with
+installs it and re-registers the scheduler jobs. The GitHub request runs in the background while
+the command works, at most once every 10 minutes (cached as `update-check.json` in the state
+folder, 0.8 s timeout); offline, piped output and the scheduled jobs stay silent, and the exit
+code never changes. Turn it off with
 `crw config --set update_check=off`.
 
 ### Language
