@@ -373,6 +373,74 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "error.tz_blank": {"en": "The timezone must not be blank", "zh-TW": "時區不可留空"},
     "error.choice": {
         "en": "Must be one of: {choices}", "zh-TW": "必須是下列其中之一：{choices}"},
+
+    # ── Telegram/console notice bodies ─────────────────────────────────────
+    "notice.latest.unavailable": {
+        "en": "ℹ️ Latest reset: no parseable data from the API",
+        "zh-TW": "ℹ️ 最近一次 Reset：API 未提供可解析資料",
+    },
+    "notice.latest.heading": {"en": "✅ Latest reset", "zh-TW": "✅ 最近一次 Reset"},
+    "notice.time": {"en": "🕒 Time: {time}", "zh-TW": "🕒 時間：{time}"},
+    "notice.type": {"en": "🏷️ Type: {type}", "zh-TW": "🏷️ 類型：{type}"},
+    "notice.type_unlabeled": {"en": "unlabeled", "zh-TW": "未標示"},
+    "notice.announcement": {"en": "📝 Announcement: {text}", "zh-TW": "📝 公告：{text}"},
+    "notice.source": {"en": "🔗 Source: {url}", "zh-TW": "🔗 來源：{url}"},
+    "notice.upcoming.status": {"en": "{icon} Status: {label}", "zh-TW": "{icon} 狀態：{label}"},
+    "notice.upcoming.time_tba": {
+        "en": "🕒 Time: not yet announced ({time_text})",
+        "zh-TW": "🕒 時間：尚未公布（{time_text}）",
+    },
+    "notice.upcoming.time_announced": {
+        "en": "🕒 Announced/estimated time: {time}", "zh-TW": "🕒 預告/估計時間：{time}"},
+    "notice.upcoming.time_window_end": {
+        "en": "🕒 Forecast window closes: {time}", "zh-TW": "🕒 預測窗口截止：{time}"},
+    "notice.upcoming.remaining": {
+        "en": "⏳ Time remaining: {remaining}", "zh-TW": "⏳ 距離現在：{remaining}"},
+    "notice.upcoming.chance": {"en": "🎯 Chance: {pct}%", "zh-TW": "🎯 機率：{pct}%"},
+    "notice.upcoming.confidence": {
+        "en": "📊 Confidence: {confidence}", "zh-TW": "📊 信心：{confidence}"},
+    "notice.upcoming.window": {"en": "🪟 Window: {label}", "zh-TW": "🪟 Window：{label}"},
+    "notice.upcoming.signal": {"en": "💬 Signal: {text}", "zh-TW": "💬 訊號：{text}"},
+    "notice.upcoming.link": {"en": "🔗 Announcement: {url}", "zh-TW": "🔗 公告：{url}"},
+    "notice.checked_at": {"en": "🛰️ Checked at: {time}", "zh-TW": "🛰️ 檢查時間：{time}"},
+    "notice.manual.no_upcoming": {
+        "en": "🌙 No upcoming reset signal detected.", "zh-TW": "🌙 尚未偵測到未來 Reset 訊號。"},
+    "notice.manual.title": {"en": "🔎 Codex Reset live check", "zh-TW": "🔎 Codex Reset 即時查詢"},
+    "notice.manual.upcoming_header": {
+        "en": "🔮 Upcoming reset signal", "zh-TW": "🔮 尚未發生的 Reset 訊號"},
+    "notice.manual.disclaimer": {
+        "en": "⚠️ This is a third-party public tracking/prediction signal, not OpenAI's "
+              "guaranteed time for your account.",
+        "zh-TW": "⚠️ 此為第三方公開追蹤/預測訊號，不等同 OpenAI 對個人帳戶的保證時間。",
+    },
+    "notice.manual.status_error": {"en": "⚠️ status API: {error}", "zh-TW": "⚠️ status API：{error}"},
+    "notice.manual.resets_error": {
+        "en": "⚠️ resets API (optional): {error}", "zh-TW": "⚠️ resets API（非必要）：{error}"},
+    "notice.upcoming_notice.header": {
+        "en": "🔮 Upcoming reset signal detected", "zh-TW": "🔮 發現尚未發生的 Reset 訊號"},
+    "notice.upcoming_notice.disclaimer": {
+        "en": "⚠️ Third-party public tracking/prediction — not a guarantee your personal "
+              "Codex quota resets at this time.",
+        "zh-TW": "⚠️ 第三方公開追蹤/預測，不代表你的個人 Codex 額度一定會在該時間重置。",
+    },
+    "notice.watch.title": {"en": "🚨 Codex Reset Watch", "zh-TW": "🚨 Codex Reset Watch"},
+    "notice.no_signal.unchanged": {
+        "en": "🌙 No upcoming reset signal; nothing changed.",
+        "zh-TW": "🌙 尚未偵測到未來 Reset 訊號，內容無變化。",
+    },
+    "notice.new_event.heading": {
+        "en": "🎉 New public reset event/announcement detected",
+        "zh-TW": "🎉 偵測到新的公開 Reset 事件/公告",
+    },
+    "notice.new_event.title": {"en": "✅ Codex Reset update", "zh-TW": "✅ Codex Reset 更新"},
+
+    # ── countdown units (fmt_remaining) ─────────────────────────────────────
+    "remaining.day": {"en": "{n} Day", "zh-TW": "{n} 天"},
+    "remaining.days": {"en": "{n} Days", "zh-TW": "{n} 天"},
+    "remaining.hour": {"en": "{n} hour", "zh-TW": "{n} 小時"},
+    "remaining.hours": {"en": "{n} hours", "zh-TW": "{n} 小時"},
+    "remaining.minute": {"en": "{n} minute", "zh-TW": "{n} 分鐘"},
+    "remaining.minutes": {"en": "{n} minutes", "zh-TW": "{n} 分鐘"},
 }
 
 

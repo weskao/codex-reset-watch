@@ -38,7 +38,7 @@ class FormattingTests(unittest.TestCase):
             source_url="https://x.com/thsottiaux/status/2101352781219258527",
         )
         snapshot = crw.Snapshot(checked, None, upcoming, True, True)
-        text = crw.format_manual(snapshot)
+        text = crw.format_manual(snapshot, {"language": "zh-TW"})
         self.assertIn("🚦 狀態：Banked reset scheduled", text)
         self.assertIn("🏷️ 類型：banked", text)
         self.assertIn("🕒 時間：尚未公布（Time to be announced）", text)
@@ -58,14 +58,14 @@ class FormattingTests(unittest.TestCase):
     def test_format_manual_uses_configured_timezone(self):
         checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
         snapshot = crw.Snapshot(checked, None, None, True, True)
-        text = crw.format_manual(snapshot, {"timezone": "UTC"})
+        text = crw.format_manual(snapshot, {"timezone": "UTC", "language": "zh-TW"})
         self.assertIn("2026-09-20 00:00 UTC", text)
         self.assertNotIn("UTC+8", text)
 
     def test_format_new_event_notice_uses_configured_timezone(self):
         checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
         event = crw.Event(event_id="e1", timestamp=checked, event_type="reset")
-        text = crw.format_new_event_notice(event, checked, {"timezone": "UTC"})
+        text = crw.format_new_event_notice(event, checked, {"timezone": "UTC", "language": "zh-TW"})
         self.assertIn("2026-09-20 00:00 UTC", text)
 
     def test_tba_upcoming_notice_has_no_fake_countdown(self):
@@ -78,7 +78,7 @@ class FormattingTests(unittest.TestCase):
             time_text="Time to be announced",
             source_url="https://x.com/thsottiaux/status/2101352781219258527",
         )
-        text = crw.format_upcoming_notice(upcoming, checked)
+        text = crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"})
         self.assertIn("Banked reset scheduled", text)
         self.assertIn("Time to be announced", text)
         self.assertNotIn("距離現在", text)
@@ -91,8 +91,9 @@ class FormattingTests(unittest.TestCase):
             event_type="banked",
             message="範例：帳戶額度已重置",
         )
-        manual_text = crw.format_manual(crw.Snapshot(checked, latest, None, True, True))
-        notice_text = crw.format_no_signal_notice(checked, latest)
+        cfg = {"language": "zh-TW"}
+        manual_text = crw.format_manual(crw.Snapshot(checked, latest, None, True, True), cfg)
+        notice_text = crw.format_no_signal_notice(checked, latest, cfg)
         for expected in (
             "✅ 最近一次 Reset",
             "🕒 時間：2026-09-24 11:00 UTC+8",
@@ -106,10 +107,16 @@ class FormattingTests(unittest.TestCase):
 
     def test_no_signal_notice_without_latest_shows_fallback(self):
         checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
-        text = crw.format_no_signal_notice(checked, None)
+        text = crw.format_no_signal_notice(checked, None, {"language": "zh-TW"})
         self.assertIn("ℹ️ 最近一次 Reset：API 未提供可解析資料", text)
         self.assertIn("尚未偵測到未來 Reset 訊號，內容無變化。", text)
         self.assertIn(crw.tracker_line(), text)
+
+    def test_no_signal_notice_defaults_to_english(self):
+        checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
+        text = crw.format_no_signal_notice(checked, None)
+        self.assertIn("no parseable data from the API", text)
+        self.assertIn("No upcoming reset signal; nothing changed.", text)
 
     def test_all_notices_include_tracker_link(self):
         checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)

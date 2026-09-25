@@ -629,9 +629,11 @@ def fmt_local(value: Optional[dt.datetime], cfg: Optional[Dict[str, Any]] = None
     return local.strftime(f"%Y-%m-%d %H:%M {cfgmod.tz_label(cfg)}")
 
 
-def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = None) -> str:
+def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = None,
+                  lang: Optional[str] = None) -> str:
     if target is None:
         return "—"
+    lang = lang or i18n.FALLBACK
     now = now or now_utc()
     seconds = max(0, int((target - now).total_seconds()))
     total_minutes = seconds // 60
@@ -639,11 +641,22 @@ def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = No
     hours, minutes = divmod(rem_min, 60)
     parts: List[str] = []
     if days:
-        parts.append(f"{days} Day" + ("s" if days != 1 else ""))
+        parts.append(i18n.t("remaining.day" if days == 1 else "remaining.days", lang, n=days))
     if hours or days:
-        parts.append(f"{hours} hour" + ("s" if hours != 1 else ""))
-    parts.append(f"{minutes} minute" + ("s" if minutes != 1 else ""))
+        parts.append(i18n.t("remaining.hour" if hours == 1 else "remaining.hours", lang, n=hours))
+    parts.append(i18n.t("remaining.minute" if minutes == 1 else "remaining.minutes", lang, n=minutes))
     return " ".join(parts)
+
+
+def notice_lang(cfg: Optional[Dict[str, Any]] = None) -> str:
+    """Language for a Telegram/console notice: cfg's ``language``, falling back to
+    English when cfg carries none — same English-default policy as
+    config.render/format_interval, so a notice built with no config context
+    (or a partial test cfg) stays deterministic rather than following whatever
+    locale happens to be running the process."""
+    if cfg is None or "language" not in cfg:
+        return i18n.FALLBACK
+    return i18n.resolve_language(cfg.get("language"))
 
 
 def safe_text(s: str, max_len: int = 900) -> str:
@@ -674,9 +687,9 @@ def tracker_line() -> str:
     return f"🌐 Codex Resets：{DEFAULT_API_BASE}/"
 
 
-def append_upcoming_links(lines: List[str], upcoming: Upcoming) -> None:
+def append_upcoming_links(lines: List[str], upcoming: Upcoming, lang: str) -> None:
     if upcoming.source_url:
-        lines.append(f"🔗 公告：{upcoming.source_url}")
+        lines.append(i18n.t("notice.upcoming.link", lang, url=upcoming.source_url))
 
 
 def heading(paint: ui.Paint, colour: str, text: str) -> str:
@@ -684,22 +697,23 @@ def heading(paint: ui.Paint, colour: str, text: str) -> str:
 
 
 def latest_section(latest: Optional[Event], cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> List[str]:
-    """The '✅ 最近一次 Reset' block shared by format_manual and format_no_signal_notice."""
+    """The 'latest reset' block shared by format_manual and format_no_signal_notice."""
+    lang = notice_lang(cfg)
     if not latest:
-        return ["", "ℹ️ 最近一次 Reset：API 未提供可解析資料"]
+        return ["", i18n.t("notice.latest.unavailable", lang)]
     p = paint or ui.Paint(False)
     divider = f"{p.frame}──────────────{p.reset}"
     lines = [
         "",
         divider,
-        heading(p, p.ok, "✅ 最近一次 Reset"),
-        f"🕒 時間：{fmt_local(latest.timestamp, cfg)}",
-        f"🏷️ 類型：{latest.event_type or '未標示'}",
+        heading(p, p.ok, i18n.t("notice.latest.heading", lang)),
+        i18n.t("notice.time", lang, time=fmt_local(latest.timestamp, cfg)),
+        i18n.t("notice.type", lang, type=latest.event_type or i18n.t("notice.type_unlabeled", lang)),
     ]
     if latest.message:
-        lines.append(f"📝 公告：{safe_text(latest.message)}")
+        lines.append(i18n.t("notice.announcement", lang, text=safe_text(latest.message)))
     if latest.source_url:
-        lines.append(f"🔗 來源：{latest.source_url}")
+        lines.append(i18n.t("notice.source", lang, url=latest.source_url))
     return lines
 
 
@@ -713,34 +727,40 @@ def upcoming_section(
     status_icon: str,
     disclaimer: str,
 ) -> List[str]:
-    """The '🔮 ... Reset 訊號' body shared by format_manual and format_upcoming_notice."""
+    """The 'upcoming reset signal' body shared by format_manual and format_upcoming_notice."""
+    lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
     divider = f"{p.frame}──────────────{p.reset}"
-    lines = ["", divider, header, f"{status_icon} 狀態：{upcoming_status_label(upcoming)}"]
+    lines = ["", divider, header,
+             i18n.t("notice.upcoming.status", lang, icon=status_icon, label=upcoming_status_label(upcoming))]
     if upcoming.event_type:
-        lines.append(f"🏷️ 類型：{upcoming.event_type}")
+        lines.append(i18n.t("notice.type", lang, type=upcoming.event_type))
     if upcoming.timestamp is None:
-        lines.append(f"🕒 時間：尚未公布（{upcoming.time_text or 'Time to be announced'}）")
+        lines.append(i18n.t("notice.upcoming.time_tba", lang,
+                            time_text=upcoming.time_text or "Time to be announced"))
     else:
-        label = "預告/估計時間" if upcoming.timing_kind == "announced_or_estimated_time" else "預測窗口截止"
-        lines.append(f"🕒 {label}：{fmt_local(upcoming.timestamp, cfg)}")
-        lines.append(f"⏳ 距離現在：{fmt_remaining(upcoming.timestamp, checked_at)}")
+        key = ("notice.upcoming.time_announced" if upcoming.timing_kind == "announced_or_estimated_time"
+               else "notice.upcoming.time_window_end")
+        lines.append(i18n.t(key, lang, time=fmt_local(upcoming.timestamp, cfg)))
+        lines.append(i18n.t("notice.upcoming.remaining", lang,
+                            remaining=fmt_remaining(upcoming.timestamp, checked_at, lang)))
     if upcoming.chance_percent is not None:
-        lines.append(f"🎯 機率：{upcoming.chance_percent:g}%")
+        lines.append(i18n.t("notice.upcoming.chance", lang, pct=f"{upcoming.chance_percent:g}"))
     if upcoming.confidence:
-        lines.append(f"📊 信心：{upcoming.confidence}")
+        lines.append(i18n.t("notice.upcoming.confidence", lang, confidence=upcoming.confidence))
     if upcoming.window_label:
-        lines.append(f"🪟 Window：{upcoming.window_label}")
+        lines.append(i18n.t("notice.upcoming.window", lang, label=upcoming.window_label))
     if upcoming.message:
-        lines.append(f"💬 訊號：{safe_text(upcoming.message)}")
-    append_upcoming_links(lines, upcoming)
+        lines.append(i18n.t("notice.upcoming.signal", lang, text=safe_text(upcoming.message)))
+    append_upcoming_links(lines, upcoming, lang)
     lines.append(disclaimer)
     return lines
 
 
 def render_notice(title: str, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]], sections: List[List[str]]) -> str:
-    """Shared template: header + 🛰️ 檢查時間 + each section + tracker footer."""
-    lines = [title, "━━━━━━━━━━━━━━", f"🛰️ 檢查時間：{fmt_local(checked_at, cfg)}"]
+    """Shared template: header + checked-at line + each section + tracker footer."""
+    lang = notice_lang(cfg)
+    lines = [title, "━━━━━━━━━━━━━━", i18n.t("notice.checked_at", lang, time=fmt_local(checked_at, cfg))]
     for section in sections:
         lines += section
     lines += ["", tracker_line()]
@@ -748,6 +768,7 @@ def render_notice(title: str, checked_at: dt.datetime, cfg: Optional[Dict[str, A
 
 
 def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> str:
+    lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
     sections = [latest_section(snapshot.latest, cfg, paint=p)]
     if snapshot.upcoming:
@@ -756,55 +777,58 @@ def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, p
             snapshot.checked_at,
             cfg,
             paint=p,
-            header=heading(p, p.warn, "🔮 尚未發生的 Reset 訊號"),
+            header=heading(p, p.warn, i18n.t("notice.manual.upcoming_header", lang)),
             status_icon="🚦",
-            disclaimer="⚠️ 此為第三方公開追蹤/預測訊號，不等同 OpenAI 對個人帳戶的保證時間。",
+            disclaimer=i18n.t("notice.manual.disclaimer", lang),
         ))
     else:
-        sections.append(["", "🌙 尚未偵測到未來 Reset 訊號。"])
+        sections.append(["", i18n.t("notice.manual.no_upcoming", lang)])
     errors: List[str] = []
     if snapshot.status_error:
-        errors += ["", f"⚠️ status API：{safe_text(snapshot.status_error, 300)}"]
+        errors += ["", i18n.t("notice.manual.status_error", lang, error=safe_text(snapshot.status_error, 300))]
     if snapshot.resets_error:
-        errors.append(f"⚠️ resets API（非必要）：{safe_text(snapshot.resets_error, 300)}")
+        errors.append(i18n.t("notice.manual.resets_error", lang, error=safe_text(snapshot.resets_error, 300)))
     if errors:
         sections.append(errors)
-    return render_notice("🔎 Codex Reset 即時查詢", snapshot.checked_at, cfg, sections)
+    return render_notice(i18n.t("notice.manual.title", lang), snapshot.checked_at, cfg, sections)
 
 
 def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
+    lang = notice_lang(cfg)
     section = upcoming_section(
         upcoming,
         checked_at,
         cfg,
-        header="🔮 發現尚未發生的 Reset 訊號",
+        header=i18n.t("notice.upcoming_notice.header", lang),
         status_icon="📌",
-        disclaimer="⚠️ 第三方公開追蹤/預測，不代表你的個人 Codex 額度一定會在該時間重置。",
+        disclaimer=i18n.t("notice.upcoming_notice.disclaimer", lang),
     )
-    return render_notice("🚨 Codex Reset Watch", checked_at, cfg, [section])
+    return render_notice(i18n.t("notice.watch.title", lang), checked_at, cfg, [section])
 
 
 def format_no_signal_notice(checked_at: dt.datetime, latest: Optional[Event] = None, cfg: Optional[Dict[str, Any]] = None) -> str:
+    lang = notice_lang(cfg)
     sections = [
         latest_section(latest, cfg),
-        ["", "🌙 尚未偵測到未來 Reset 訊號，內容無變化。"],
+        ["", i18n.t("notice.no_signal.unchanged", lang)],
     ]
-    return render_notice("🚨 Codex Reset Watch", checked_at, cfg, sections)
+    return render_notice(i18n.t("notice.watch.title", lang), checked_at, cfg, sections)
 
 
 def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
+    lang = notice_lang(cfg)
     section = [
         "",
         "──────────────",
-        "🎉 偵測到新的公開 Reset 事件/公告",
-        f"🕒 時間：{fmt_local(event.timestamp, cfg)}",
-        f"🏷️ 類型：{event.event_type or '未標示'}",
+        i18n.t("notice.new_event.heading", lang),
+        i18n.t("notice.time", lang, time=fmt_local(event.timestamp, cfg)),
+        i18n.t("notice.type", lang, type=event.event_type or i18n.t("notice.type_unlabeled", lang)),
     ]
     if event.message:
-        section.append(f"📝 公告：{safe_text(event.message)}")
+        section.append(i18n.t("notice.announcement", lang, text=safe_text(event.message)))
     if event.source_url:
-        section.append(f"🔗 來源：{event.source_url}")
-    return render_notice("✅ Codex Reset 更新", checked_at, cfg, [section])
+        section.append(i18n.t("notice.source", lang, url=event.source_url))
+    return render_notice(i18n.t("notice.new_event.title", lang), checked_at, cfg, [section])
 
 
 def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
