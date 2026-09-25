@@ -1,8 +1,18 @@
+## [0.6.0] - 2026-09-25
+
+### 🚀 Features
+
+- **update-check:** Check github in background, not once a day
+- Add no-signal tracker notices
 ## [0.5.0] - 2026-09-24
 
 ### 🚀 Features
 
 - Hint when a newer GitHub release is available
+
+### 📚 Documentation
+
+- **changelog:** Release v0.5.0
 ## [0.4.2] - 2026-09-22
 
 ### 🐛 Bug Fixes
