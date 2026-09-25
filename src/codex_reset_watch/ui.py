@@ -1211,31 +1211,34 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
     version = latest.lstrip("vV")
     header = [
         f" {paint.accent}{GLYPH_MARK}{paint.reset} {paint.bold}{paint.title}"
-        f"{i18n.t('update.title', lang)}{paint.reset}",
-        f"   {paint.muted}{i18n.t('update.available', lang, latest=version, current=current)}"
-        f"{paint.reset}",
-        f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}",
+        f"{i18n.t('update.available', lang, latest=version, current=current)}{paint.reset}",
     ]
     choices = (
         ("update.now", "update.now_detail", {}),
         ("update.skip", "update.skip_detail", {}),
-        ("update.skip_version", "update.skip_version_detail", {"version": version}),
+        ("update.skip_version", "update.skip_version_detail", {}),
     )
+    labels = [i18n.t(label_id, lang) for label_id, _, _ in choices]
+    label_w = max(width(f"{i:>2} {label}") for i, label in enumerate(labels, start=1))
     body = []
     for i, (label_id, detail_id, extra) in enumerate(choices, start=1):
         label = i18n.t(label_id, lang)
         detail = i18n.t(detail_id, lang, **extra)
+        # Bare right-aligned digit, no ")" — same convention as the settings
+        # menu's own row number (see _row's ``number = f"{index:>2}"``).
+        text = f"{i:>2} {label}"
+        pad = " " * (label_w - width(text))
         if selected == i:
             row = (f" {paint.accent}{GLYPH_CURSOR}{paint.reset}{paint.sel} "
-                   f"{paint.bold}{paint.sel_text}{i}) {label}{paint.reset}{paint.sel}"
+                   f"{paint.bold}{paint.sel_text}{text}{pad}{paint.reset}{paint.sel}"
                    f"  {paint.sel_dot}{detail}{paint.reset}")
             row = f"{paint.sel}{row}{paint.reset}" if paint.sel else row
         else:
             mark = " " * width(strip_ansi(GLYPH_CURSOR))
-            row = f" {mark} {i}) {label}  {paint.muted}{detail}{paint.reset}"
+            row = f" {mark} {text}{pad}  {paint.muted}{detail}{paint.reset}"
         body.append(row)
     footer = [
-        f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}",
+        "",
         " " + f" {paint.frame}·{paint.reset} ".join([
             f"{paint.accent}↑↓{paint.reset} {paint.muted}{i18n.t('menu.move', lang)}{paint.reset}",
             f"{paint.accent}⏎{paint.reset} {paint.muted}{i18n.t('update.confirm', lang)}{paint.reset}",

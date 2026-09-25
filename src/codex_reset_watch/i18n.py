@@ -262,7 +262,6 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "codex-reset-watch {latest} is available (you have {current})",
         "zh-TW": "codex-reset-watch {latest} 已推出（目前是 {current}）",
     },
-    "update.title": {"en": "Update available", "zh-TW": "有新版本"},
     "update.now": {"en": "Update now", "zh-TW": "立即更新"},
     "update.now_detail": {
         "en": "uv tool install ... && crw apply-schedule",
@@ -272,8 +271,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "update.skip_detail": {"en": "ask again next run", "zh-TW": "下次執行再問"},
     "update.skip_version": {"en": "Skip until next version", "zh-TW": "略過到下一版"},
     "update.skip_version_detail": {
-        "en": "quiet until a release after {version}",
-        "zh-TW": "{version} 之後的新版推出前不再詢問",
+        "en": "ask again once a newer version ships",
+        "zh-TW": "有新版本推出後才會再詢問",
     },
     "update.confirm": {"en": "confirm", "zh-TW": "確認"},
     "update.skip_key": {"en": "skip", "zh-TW": "略過"},
