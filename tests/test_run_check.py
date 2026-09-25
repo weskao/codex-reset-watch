@@ -23,10 +23,13 @@ import codex_reset_watch as crw
 FIX = pathlib.Path(__file__).parent / "fixtures"
 
 
+_STATUS_FIXTURE = "status_upcoming.json"
+
+
 class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/v1/status"):
-            body, code = (FIX / "status_upcoming.json").read_bytes(), 200
+            body, code = (FIX / _STATUS_FIXTURE).read_bytes(), 200
         elif self.path.startswith("/api/v1/resets"):
             body, code = (FIX / "resets.json").read_bytes(), 200
         else:
@@ -41,7 +44,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def isolated_run(cfg_overrides=None):
+def isolated_run(cfg_overrides=None, status_fixture="status_upcoming.json"):
+    global _STATUS_FIXTURE
+    _STATUS_FIXTURE = status_fixture
     with socketserver.TCPServer(("127.0.0.1", 0), _Handler) as srv, tempfile.TemporaryDirectory() as d:
         th = threading.Thread(target=srv.serve_forever, daemon=True)
         th.start()
@@ -117,6 +122,29 @@ class DirectoryHonouredTests(unittest.TestCase):
             self.assertTrue((state_dir / "state.json").exists())
             self.assertTrue((log_dir / "events.jsonl").exists())
             self.assertTrue((log_dir / "api.jsonl").exists())
+
+
+class NotifyWhenUnchangedTests(unittest.TestCase):
+    """`daily_notify_when_unchanged`/`monitor_notify_when_unchanged` must still push
+    on a run with no upcoming signal at all — not only when an existing upcoming
+    signal is unchanged. Detected via the telegram send attempt log line, since
+    these tests run with no Telegram credentials configured."""
+
+    def _attempted_send(self, log_dir):
+        events = (log_dir / "events.jsonl").read_text(encoding="utf-8")
+        return "telegram_credentials_missing" in events
+
+    def test_no_upcoming_signal_still_pushes_when_unchanged_notify_is_on(self):
+        with isolated_run({"daily_time": "00:00", "timezone": "UTC", "daily_notify_when_unchanged": True},
+                           status_fixture="status_no_upcoming.json") as (_state_dir, log_dir):
+            crw.run_check("daily", notify=True)
+            self.assertTrue(self._attempted_send(log_dir))
+
+    def test_no_upcoming_signal_sends_nothing_when_unchanged_notify_is_off(self):
+        with isolated_run({"daily_time": "00:00", "timezone": "UTC", "daily_notify_when_unchanged": False},
+                           status_fixture="status_no_upcoming.json") as (_state_dir, log_dir):
+            crw.run_check("daily", notify=True)
+            self.assertFalse(self._attempted_send(log_dir))
 
 
 class ManualCheckTests(unittest.TestCase):

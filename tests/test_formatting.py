@@ -83,4 +83,52 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("Time to be announced", text)
         self.assertNotIn("距離現在", text)
 
+    def test_no_signal_notice_shows_latest_reset_like_manual(self):
+        checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
+        latest = crw.Event(
+            event_id="e0",
+            timestamp=checked - dt.timedelta(days=1),
+            event_type="banked",
+            message="範例：帳戶額度已重置",
+        )
+        manual_text = crw.format_manual(crw.Snapshot(checked, latest, None, True, True))
+        notice_text = crw.format_no_signal_notice(checked, latest)
+        for expected in (
+            "✅ 最近一次 Reset",
+            "🕒 時間：2026-09-24 11:00 UTC+8",
+            "🏷️ 類型：banked",
+            "📝 公告：範例：帳戶額度已重置",
+        ):
+            self.assertIn(expected, manual_text)
+            self.assertIn(expected, notice_text)
+        self.assertIn("尚未偵測到未來 Reset 訊號，內容無變化。", notice_text)
+        self.assertIn(crw.tracker_line(), notice_text)
+
+    def test_no_signal_notice_without_latest_shows_fallback(self):
+        checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
+        text = crw.format_no_signal_notice(checked, None)
+        self.assertIn("ℹ️ 最近一次 Reset：API 未提供可解析資料", text)
+        self.assertIn("尚未偵測到未來 Reset 訊號，內容無變化。", text)
+        self.assertIn(crw.tracker_line(), text)
+
+    def test_all_notices_include_tracker_link(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        event = crw.Event(event_id="e1", timestamp=checked, event_type="reset")
+        upcoming = crw.Upcoming(
+            timing_kind="scheduled_tba",
+            event_type="banked",
+            status="scheduled",
+            title="Banked reset scheduled",
+            time_text="Time to be announced",
+            source_url="https://x.com/thsottiaux/status/2101352781219258527",
+        )
+        snapshot = crw.Snapshot(checked, event, upcoming, True, True)
+        for text in (
+            crw.format_manual(snapshot),
+            crw.format_upcoming_notice(upcoming, checked),
+            crw.format_no_signal_notice(checked, event),
+            crw.format_new_event_notice(event, checked),
+        ):
+            self.assertIn(crw.tracker_line(), text)
+
 if __name__ == "__main__": unittest.main()
