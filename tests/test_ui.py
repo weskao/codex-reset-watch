@@ -2,7 +2,7 @@ import io
 import unittest
 import unittest.mock as mock
 
-from codex_reset_watch import config, ui
+from codex_reset_watch import config, keys, ui
 
 
 class WidthTests(unittest.TestCase):
@@ -240,6 +240,49 @@ class ConfigMenuTests(unittest.TestCase):
         ui.config_menu(io.StringIO("1\nd\nq\n"), out)  # toggle, then restore defaults
         saved = config.load()
         self.assertEqual(saved, config.DEFAULTS)
+
+
+class UpdatePromptTests(unittest.TestCase):
+    """The interactive update prompt — the settings menu's own cursor
+    (▸, the accent colour, the selected-row band), driven by a fake key
+    source exactly like RunMenuTests drives run_menu."""
+
+    def _pick(self, events):
+        source = iter(events)
+        out = io.StringIO()
+        answer = ui.update_prompt("0.11.0", "v0.12.0", read=lambda: next(source), out=out)
+        return answer, out.getvalue()
+
+    def test_enter_on_the_first_row_is_update_now(self):
+        answer, _ = self._pick([keys.KeyEvent(keys.Key.ENTER)])
+        self.assertEqual(answer, ui.UPDATE_NOW)
+
+    def test_down_moves_to_skip(self):
+        answer, _ = self._pick([keys.KeyEvent(keys.Key.DOWN), keys.KeyEvent(keys.Key.ENTER)])
+        self.assertEqual(answer, ui.SKIP)
+
+    def test_up_from_the_top_wraps_to_skip_version(self):
+        answer, _ = self._pick([keys.KeyEvent(keys.Key.UP), keys.KeyEvent(keys.Key.ENTER)])
+        self.assertEqual(answer, ui.SKIP_VERSION)
+
+    def test_q_backs_out_as_skip(self):
+        answer, _ = self._pick([keys.KeyEvent(keys.Key.CHAR, "q")])
+        self.assertEqual(answer, ui.SKIP)
+
+    def test_ctrl_c_backs_out_as_skip(self):
+        answer, _ = self._pick([keys.KeyEvent(keys.Key.CTRL_C)])
+        self.assertEqual(answer, ui.SKIP)
+
+    def test_an_exhausted_key_source_backs_out_as_skip(self):
+        answer, _ = self._pick([])
+        self.assertEqual(answer, ui.SKIP)
+
+    def test_shows_versions_and_the_projects_own_cursor_glyph(self):
+        _, text = self._pick([keys.KeyEvent(keys.Key.ENTER)])
+        plain = ui.strip_ansi(text)
+        self.assertIn("0.12.0", plain)
+        self.assertIn("0.11.0", plain)
+        self.assertIn(f"{ui.GLYPH_CURSOR} 1)", plain)
 
 
 if __name__ == "__main__":

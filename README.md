@@ -392,15 +392,16 @@ a keypress that cannot arrive.
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `auto`, `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
-| `update_check` | After a command run in a terminal, hint when a newer GitHub release exists (see below) | `on` / `off` |
+| `update_check` | After a command run in a terminal, ask whether to upgrade when a newer GitHub release exists (see below) | `on` / `off` |
 
-**Update check.** When a newer GitHub release exists, a command run in a terminal ends with a
-two-line hint on stderr: the new version and the exact
-`uv tool install --force --from git+…@vX.Y.Z codex-reset-watch && crw apply-schedule` line that
-installs it and re-registers the scheduler jobs. The GitHub request runs in the background while
-the command works, at most once every 10 minutes (cached as `update-check.json` in the state
-folder, 0.8 s timeout); offline, piped output and the scheduled jobs stay silent, and the exit
-code never changes. Turn it off with
+**Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
+terminal ends with a prompt — **Update now** (runs the `uv tool install --force --from
+git+…@vX.Y.Z codex-reset-watch && crw apply-schedule` steps), **Skip** (ask again next run), or
+**Skip until next version** — drawn with the same cursor and selection style as `crw config`. Off
+a keyboard terminal (piped output, CI) it stays the old two-line hint on stderr instead. The
+GitHub request runs in the background while the command works, at most once every 10 minutes
+(cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
+scheduled jobs stay silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`.
 
 ### Language

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -20,7 +21,7 @@ import urllib.request
 from typing import Callable, Optional, Tuple
 
 from . import config as cfgmod
-from . import i18n, ui
+from . import i18n, keys, ui
 
 REPO = "weskao/codex-reset-watch"
 #: Unauthenticated GitHub API allows 60 requests/hour per IP; 6/hour is polite.
@@ -84,13 +85,29 @@ def newer_release(current: str, cfg: Optional[dict] = None, *, now: Optional[flo
         except (OSError, ValueError):
             fetched = None
         latest = fetched or latest
-        with contextlib.suppress(OSError):
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps({"checked_at": stamp, "latest": latest}) + "\n", encoding="utf-8")
+        # Merge, not overwrite: a "skipped" version set by skip_version()
+        # must survive the next refetch.
+        _write_json(cache_path, {**cached, "checked_at": stamp, "latest": latest})
+    if latest is not None and latest == cached.get("skipped"):
+        return None
     latest_parts = version_tuple(latest) if latest else None
     if latest_parts is None or latest_parts <= current_parts:
         return None
     return latest
+
+
+def skip_version(tag: str, cfg: Optional[dict] = None) -> None:
+    """Stop reporting *tag*; a newer release is reported again. Never raises."""
+    cache_path = cfgmod.state_dir(cfg) / "update-check.json"
+    data = _read_json(cache_path)
+    data["skipped"] = tag
+    _write_json(cache_path, data)
+
+
+def _write_json(path, data: dict) -> None:
+    with contextlib.suppress(OSError):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data) + "\n", encoding="utf-8")
 
 
 def start_check() -> None:
@@ -117,8 +134,39 @@ def start_check() -> None:
         return
 
 
+def _upgrade_steps(latest: str) -> Tuple[Tuple[str, ...], ...]:
+    return (
+        ("uv", "tool", "install", "--force", "--from",
+         f"git+https://github.com/{REPO}.git@{latest}", "codex-reset-watch"),
+        ("crw", "apply-schedule"),
+    )
+
+
+def _run_upgrade(latest: str) -> None:
+    """Run each step in order, stopping at the first failure. Reports a
+    failed/missing step but never raises — Update Now must not crash the
+    command it runs after."""
+    lang = i18n.current_language()
+    paint = ui.Paint(ui.colour_enabled(sys.stderr))
+    for step in _upgrade_steps(latest):
+        try:
+            done = subprocess.run(list(step), check=False)
+        except OSError:
+            done = None
+        if done is None or done.returncode != 0:
+            print(f"{paint.warn}{i18n.t('update.failed', lang)}{paint.reset}", file=sys.stderr)
+            return
+
+
 def maybe_hint() -> None:
-    """Print the upgrade hint on stderr when the started check found one. Never raises."""
+    """Report the started check's result. Never raises.
+
+    On a keyboard-capable terminal (stdin AND stdout both real TTYs) this is
+    the settings menu's own interactive prompt — Update now / Skip / Skip
+    until next version. Otherwise (redirected stdin/stdout, still a TTY
+    stderr) it stays the one-shot hint: a question nobody can answer must
+    never block.
+    """
     try:
         if _check is None:
             return
@@ -128,6 +176,13 @@ def maybe_hint() -> None:
         if latest is None:
             return
         current = ui.package_version()
+        if keys.is_interactive_tty():
+            answer = ui.update_prompt(current, latest)
+            if answer == ui.SKIP_VERSION:
+                skip_version(latest)
+            elif answer == ui.UPDATE_NOW:
+                _run_upgrade(latest)
+            return
         paint = ui.Paint(ui.colour_enabled(sys.stderr))
         message = i18n.t("update.available", i18n.current_language(),
                          latest=latest.lstrip("vV"), current=current)

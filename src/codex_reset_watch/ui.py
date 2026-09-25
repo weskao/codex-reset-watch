@@ -1195,6 +1195,92 @@ def config_menu(stdin: Optional[IO[str]] = None, out: Optional[IO[str]] = None) 
     return fallback_menu(stdin or sys.stdin, out or sys.stdout)
 
 
+# ── update prompt (item selection/cursor language reused from the settings
+# menu; update_check.py is the only caller, via the answers below) ──────────
+
+#: What update_prompt() returns; update_check.py acts on the answer.
+UPDATE_NOW = "update-now"
+SKIP = "skip"
+SKIP_VERSION = "skip-version"
+
+
+def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: int) -> List[str]:
+    """Same visual language as :func:`_row`'s selected state — the accent
+    cursor glyph, the bold near-white label, the saturated row band — without
+    the dotted leader or value column a plain choice doesn't need."""
+    version = latest.lstrip("vV")
+    header = [
+        f" {paint.accent}{GLYPH_MARK}{paint.reset} {paint.bold}{paint.title}"
+        f"{i18n.t('update.title', lang)}{paint.reset}",
+        f"   {paint.muted}{i18n.t('update.available', lang, latest=version, current=current)}"
+        f"{paint.reset}",
+        f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}",
+    ]
+    choices = (
+        ("update.now", "update.now_detail", {}),
+        ("update.skip", "update.skip_detail", {}),
+        ("update.skip_version", "update.skip_version_detail", {"version": version}),
+    )
+    body = []
+    for i, (label_id, detail_id, extra) in enumerate(choices, start=1):
+        label = i18n.t(label_id, lang)
+        detail = i18n.t(detail_id, lang, **extra)
+        if selected == i:
+            row = (f" {paint.accent}{GLYPH_CURSOR}{paint.reset}{paint.sel} "
+                   f"{paint.bold}{paint.sel_text}{i}) {label}{paint.reset}{paint.sel}"
+                   f"  {paint.sel_dot}{detail}{paint.reset}")
+            row = f"{paint.sel}{row}{paint.reset}" if paint.sel else row
+        else:
+            mark = " " * width(strip_ansi(GLYPH_CURSOR))
+            row = f" {mark} {i}) {label}  {paint.muted}{detail}{paint.reset}"
+        body.append(row)
+    footer = [
+        f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}",
+        " " + f" {paint.frame}·{paint.reset} ".join([
+            f"{paint.accent}↑↓{paint.reset} {paint.muted}{i18n.t('menu.move', lang)}{paint.reset}",
+            f"{paint.accent}⏎{paint.reset} {paint.muted}{i18n.t('update.confirm', lang)}{paint.reset}",
+            f"{paint.accent}q{paint.reset} {paint.muted}{i18n.t('update.skip_key', lang)}{paint.reset}",
+        ]),
+    ]
+    return header + body + footer
+
+
+def update_prompt(current: str, latest: str, *,
+                  read: Callable[[], keys.KeyEvent] = keys.read_key,
+                  out: Optional[IO[str]] = None) -> str:
+    """Ask what to do about a newer release; returns UPDATE_NOW / SKIP /
+    SKIP_VERSION. An exhausted key source (tests), Ctrl-C, ``q`` or Esc are
+    all SKIP — backing out of a question changes nothing.
+
+    *read* is the same injection seam as :func:`run_menu`: production reads
+    the real keyboard, a test passes an iterator and never touches a
+    terminal. No idle redraw here (unlike the settings menu's breathing
+    cursor) — three choices need no animation to stay readable.
+    """
+    out = out or sys.stdout
+    paint = Paint(colour_enabled(out))
+    lang = i18n.current_language()
+    selected = 1
+    painted = 0
+    with keys.raw_mode():
+        while True:
+            painted = _draw(_update_lines(paint, lang, current, latest, selected), out, painted)
+            try:
+                event = read()
+            except (KeyboardInterrupt, StopIteration):
+                return SKIP
+            if event.key in (keys.Key.CTRL_C, keys.Key.ESCAPE):
+                return SKIP
+            if event.key == keys.Key.UP:
+                selected = selected - 1 if selected > 1 else 3
+            elif event.key == keys.Key.DOWN:
+                selected = selected + 1 if selected < 3 else 1
+            elif event.key == keys.Key.ENTER:
+                return (UPDATE_NOW, SKIP, SKIP_VERSION)[selected - 1]
+            elif event.key == keys.Key.CHAR and (event.char or "").lower() == "q":
+                return SKIP
+
+
 def demo() -> None:
     import io
 

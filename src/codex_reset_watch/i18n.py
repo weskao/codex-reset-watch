@@ -255,12 +255,31 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.switch_mode": {"en": "switch mode", "zh-TW": "切換模式"},
     "setting.update_check.label": {"en": "Check for updates", "zh-TW": "檢查更新"},
     "setting.update_check.help": {
-        "en": "After a command in a terminal, say when a newer release is on GitHub (checked in the background, at most every 10 minutes).",
-        "zh-TW": "在終端機執行指令後，若 GitHub 有更新的版本就提示（背景查詢，每 10 分鐘最多一次）。",
+        "en": "After a command in a terminal, ask whether to upgrade when a newer release is on GitHub (checked in the background, at most every 10 minutes).",
+        "zh-TW": "在終端機執行指令後，若 GitHub 有更新的版本就詢問是否更新（背景查詢，每 10 分鐘最多一次）。",
     },
     "update.available": {
         "en": "codex-reset-watch {latest} is available (you have {current})",
         "zh-TW": "codex-reset-watch {latest} 已推出（目前是 {current}）",
+    },
+    "update.title": {"en": "Update available", "zh-TW": "有新版本"},
+    "update.now": {"en": "Update now", "zh-TW": "立即更新"},
+    "update.now_detail": {
+        "en": "uv tool install ... && crw apply-schedule",
+        "zh-TW": "uv tool install ... && crw apply-schedule",
+    },
+    "update.skip": {"en": "Skip", "zh-TW": "略過"},
+    "update.skip_detail": {"en": "ask again next run", "zh-TW": "下次執行再問"},
+    "update.skip_version": {"en": "Skip until next version", "zh-TW": "略過到下一版"},
+    "update.skip_version_detail": {
+        "en": "quiet until a release after {version}",
+        "zh-TW": "{version} 之後的新版推出前不再詢問",
+    },
+    "update.confirm": {"en": "confirm", "zh-TW": "確認"},
+    "update.skip_key": {"en": "skip", "zh-TW": "略過"},
+    "update.failed": {
+        "en": "upgrade did not finish — run it yourself: uv tool install --force ... codex-reset-watch",
+        "zh-TW": "更新沒有完成 — 請自行執行：uv tool install --force ... codex-reset-watch",
     },
     "cli.cancelled": {"en": "Cancelled (Ctrl-C)", "zh-TW": "已取消（Ctrl-C）"},
     "menu.cancel_hint": {"en": "Esc cancels", "zh-TW": "Esc 取消"},
