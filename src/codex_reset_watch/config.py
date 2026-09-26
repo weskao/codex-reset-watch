@@ -95,10 +95,10 @@ SETTINGS: Tuple[Setting, ...] = (
             tier="basic"),
     Setting("monitor_notify_when_unchanged", "bool", True, "notifications",
             "Notify on unchanged scan",
-            "Push on every background scan, even when nothing changed."),
+            "Push on every background scan, even when nothing changed.", tier="basic"),
     Setting("daily_notify_when_unchanged", "bool", True, "notifications",
             "Notify on unchanged day",
-            "Push on every daily run, even when nothing changed."),
+            "Push on every daily run, even when nothing changed.", tier="basic"),
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
             "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN.",

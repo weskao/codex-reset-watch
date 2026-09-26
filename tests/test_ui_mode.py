@@ -135,6 +135,12 @@ class RenderModeTests(unittest.TestCase):
         text = "\n".join(frame)
         self.assertNotIn("API base", text)
 
+    def test_basic_menu_shows_unchanged_notification_settings(self):
+        frame = ui.render_menu(dict(config.DEFAULTS), 0, paint=ui.Paint(False), lang="en", height=200)
+        text = "\n".join(frame)
+        self.assertIn("Notify on unchanged scan", text)
+        self.assertIn("Notify on unchanged day", text)
+
     def test_the_list_view_keeps_a_badge_rather_than_a_tab_bar(self):
         # `--list` is not a keyboard surface: it states which view it printed,
         # and never offers a key that cannot be pressed there.
