@@ -241,7 +241,7 @@ interface language, and config/state/log folder locations — lives in one schem
 crw config                     # interactive menu (arrow keys)
 crw config --list              # print current settings and exit
 crw config --set scan_interval_minutes=45m --set daily_time=09:30
-crw config --export ~/crw-settings.json    # portable backup, secrets excluded
+crw config --export ~/crw-settings.json    # portable backup, local identifiers excluded
 crw config --import ~/crw-settings.json    # apply a backup, all-or-nothing
 ```
 
@@ -424,14 +424,15 @@ crw config export ~/crw-settings.json   # or `-` for stdout, to pipe it somewher
 crw config import ~/crw-settings.json
 ```
 
-An export is a portable backup: it carries every declared **non-secret** setting and is written
-`0600`. The bot token is filtered out by its schema kind, not by a hand-kept list, so a secret
-added to the schema later cannot start leaking into export files by omission.
+An export contains portable settings only. It excludes the bot token, chat ID, local paths and
+API endpoint settings. The output file is created with owner-only access; `-` writes JSON to
+stdout, where the receiving command controls access. Set local values again after import.
 
 An import is all-or-nothing and reports what it refused:
 
-- **Secrets are never imported.** An export has none, so a token in the file is either
-  hand-written or a pasted mask — writing either would destroy the real token on this machine.
+- **Local values are never imported.** This includes the token and chat ID, so importing a file
+  cannot redirect notifications or replace the local API endpoint or filesystem paths.
+- **Control characters are rejected** in setting values, including paths used by the scheduler.
 - **Unknown keys are left alone** rather than stored back as an unvalidated blob.
 - **One invalid value aborts the whole import** before the first write, so a half-applied config
   can never be the outcome.
@@ -548,7 +549,7 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 - `CodexResetWatchDaily` (`/SC DAILY /ST HH:MM`)
 - `CodexResetWatchMonitor`: `/SC HOURLY /MO <hours>` when the interval is a whole number of hours (e.g. the 2-hour default), `/SC MINUTE /MO <minutes>` otherwise, `/SC DAILY` for a full 1-day interval
-- `TG_BOT_TOKEN`/`TG_CHAT_ID` are persisted with `setx` into your user environment rather than passed as task arguments, since `schtasks /query /v` output is not a safe place for secrets
+- Task arguments and the Windows user environment registry do not receive credentials; scheduled runs read the local config and DPAPI store
 
 ## 8. Telegram
 
@@ -566,12 +567,13 @@ crw config          # rows 10 and 11, under "Telegram"
 or non-interactively:
 
 ```bash
-crw config set telegram_bot_token=123456:ABC...
+crw config --token-stdin   # reads the token from stdin without a command-line argument
 crw config set telegram_chat_id=-1001234567890
 ```
 
-**The bot token is never written to a file.** It goes into the operating system's own credential
-store, and the config file, exports, backups and screenshots never contain it:
+**The bot token is never written in plaintext by this app.** It goes into the operating system's
+credential store; on Windows the DPAPI-encrypted blob is in an owner-only file. The config file,
+exports and generated scheduler jobs never contain the token:
 
 | OS | Where the token is kept | Via |
 |---|---|---|
@@ -580,13 +582,14 @@ store, and the config file, exports, backups and screenshots never contain it:
 | Windows | DPAPI, encrypted for your user account | PowerShell |
 | none of the above | **nothing is stored** | — |
 
-That last row is deliberate. With no credential store available, `crw` refuses to persist the
-token rather than falling back to a plaintext file or to home-rolled obfuscation, and the menu
-says so on the token row. Use Option B there.
+With no credential store available, `crw` refuses to persist the token. Environment variables
+can still supply credentials to a manual run, but cannot be used for scheduled notifications;
+set up a supported credential store for scheduled runs.
 
-Wherever it is displayed the token is masked (`********WXYZ`), it is never passed on a command
-line (the credential helpers read it on **stdin**, so it cannot surface in `ps` or shell
-history), and it is never written to the event log.
+Wherever it is displayed the token is masked (`********WXYZ`). The installer and terminal menu
+hide input; `--token-stdin` supports automation. Passing a nonempty token through `--set` is
+rejected because the shell and process list can retain command-line arguments. Credential
+helpers read the value on **stdin**, and event logs do not contain it.
 
 **Saving never deletes it.** Every other setting is persisted by rewriting the whole config, so
 a save runs constantly — on each menu edit, each `--set`, each import. A save that is handed a
@@ -621,15 +624,25 @@ export TG_BOT_TOKEN="..."
 export TG_CHAT_ID="..."
 ```
 
-These fill in whatever Option A has not stored, each falling back independently, so an install
-that only ever exported them keeps behaving exactly as before. They do **not** override a stored
+These fill in whatever Option A has not stored for manual runs. They do **not** override a stored
 value: a `TG_BOT_TOKEN` forgotten in a shell profile must not keep notifying through a bot you
 already replaced in `crw config`.
 
-For the same reason, the credentials are baked into the generated scheduler job (see
-[§7](#7-scheduler-jobs)) **only on a machine with no credential store**. Everywhere else the
-plist/unit carries no secret at all and every scheduled run reads the token from the store
-itself — so changing it in `crw config` takes effect immediately, with no re-apply.
+Scheduled jobs never embed these variables in generated plist or unit files. `crw apply-schedule`
+migrates credentials found in older app-owned jobs into the local credential store and replaces
+those jobs. If the store refuses the migration, it attempts to stop the old jobs and removes the
+credentials from their files. A failed stop is reported explicitly because a running job may
+retain its old environment. Values supplied only by the current shell are not
+persisted for scheduled runs.
+
+Older Windows installs may have left `TG_BOT_TOKEN` in `HKCU\Environment`; `crw doctor` and the
+installer detect this without printing it. After confirming other applications do not use that
+variable, remove the legacy value in PowerShell:
+
+```powershell
+[Environment]::SetEnvironmentVariable('TG_BOT_TOKEN', $null, 'User')
+[Environment]::GetEnvironmentVariable('TG_BOT_TOKEN', 'User') -eq $null
+```
 
 `crw doctor` reports which store is in use and where each credential came from, showing the
 token masked:
