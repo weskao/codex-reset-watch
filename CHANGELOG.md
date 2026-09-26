@@ -1,3 +1,12 @@
+## [0.7.1] - 2026-09-26
+
+### 🐛 Bug Fixes
+
+- Pin telegram-kit and align menu rows
+
+### 💼 Other
+
+- **deps:** Use telegram-kit>=0.1.3 from PyPI
 ## [0.7.0] - 2026-09-26
 
 ### 🚀 Features
