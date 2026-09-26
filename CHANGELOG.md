@@ -1,3 +1,8 @@
+## [0.7.3] - 2026-09-26
+
+### 🐛 Bug Fixes
+
+- **ci:** Skip POSIX-only scheduler tests on Windows and check ACL via .NET
 ## [0.7.2] - 2026-09-26
 
 ### 🐛 Bug Fixes
