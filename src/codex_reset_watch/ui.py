@@ -1222,24 +1222,33 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
         ("update.skip", "update.skip_detail", {}),
         ("update.skip_version", "update.skip_version_detail", {}),
     )
-    labels = [i18n.t(label_id, lang) for label_id, _, _ in choices]
-    label_w = max(width(f"{i:>2} {label}") for i, label in enumerate(labels, start=1))
-    body = []
+    rows = []
     for i, (label_id, detail_id, extra) in enumerate(choices, start=1):
         label = i18n.t(label_id, lang)
         detail = i18n.t(detail_id, lang, **extra)
         # Bare right-aligned digit, no ")" — same convention as the settings
         # menu's own row number (see _row's ``number = f"{index:>2}"``).
-        text = f"{i:>2} {label}"
+        rows.append((f"{i:>2} {label}", detail))
+    label_w = max(width(text) for text, _ in rows)
+    cursor_width = width(strip_ansi(GLYPH_CURSOR))
+    prefix_w = 2 + cursor_width  # " " + glyph + " "
+    # Same fixed-column trick as _row's PANEL_WIDTH: pad every row out to the
+    # widest one (here the "Update now" command line) so the selected row's
+    # background band is one consistent length, not however long that row's
+    # own text happens to be.
+    row_w = max(prefix_w + label_w + 2 + width(detail) for _, detail in rows)
+    body = []
+    for i, (text, detail) in enumerate(rows, start=1):
         pad = " " * (label_w - width(text))
+        tail = " " * (row_w - (prefix_w + label_w + 2 + width(detail)))
         if selected == i:
             row = (f" {paint.accent}{GLYPH_CURSOR}{paint.reset}{paint.sel} "
                    f"{paint.bold}{paint.sel_text}{text}{pad}{paint.reset}{paint.sel}"
-                   f"  {paint.sel_dot}{detail}{paint.reset}")
+                   f"  {paint.sel_dot}{detail}{paint.reset}{paint.sel}{tail}{paint.reset}")
             row = f"{paint.sel}{row}{paint.reset}" if paint.sel else row
         else:
-            mark = " " * width(strip_ansi(GLYPH_CURSOR))
-            row = f" {mark} {text}{pad}  {paint.muted}{detail}{paint.reset}"
+            mark = " " * cursor_width
+            row = f" {mark} {text}{pad}  {paint.muted}{detail}{paint.reset}{tail}"
         body.append(row)
     footer = [
         "",
