@@ -13,9 +13,8 @@ none         **nothing is stored**
 
 That last row is the important one. With no credential store available this
 module refuses to write rather than falling back to a plaintext file or to
-home-rolled obfuscation, and the caller tells the user to use the
-``TG_BOT_TOKEN`` environment variable instead (which the launchd plist and
-systemd unit already carry). An encoding that anyone can reverse is not
+home-rolled obfuscation. Environment-only credentials work for manual runs,
+but cannot be persisted in scheduler files. An encoding that anyone can reverse is not
 storage security, it is a comforting lie, so it is not offered.
 
 The secret itself never appears in an argument vector — ``ps`` and shell
@@ -112,9 +111,23 @@ def backend_label() -> str:
     return BACKEND_LABELS.get(backend() or "", "none")
 
 
+def legacy_windows_env_token_present() -> bool:
+    """Detect a token left by older `setx` installs without reading it aloud."""
+    if not IS_WINDOWS:
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            value, _ = winreg.QueryValueEx(key, "TG_BOT_TOKEN")
+            return bool(value)
+    except OSError:
+        return False
+
+
 def _dpapi_path(key: str):
     from .paths import app_config_dir  # local: keeps this module import-light
-
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
+        raise ValueError("Invalid credential identifier")
     return app_config_dir() / f"{key}.dpapi"
 
 
@@ -141,10 +154,10 @@ def get(key: str) -> str:
                 return ""
             code, out = _run([
                 "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                f"$s = Get-Content -Raw '{path}' | ConvertTo-SecureString; "
+                "$s = [Console]::In.ReadToEnd().Trim() | ConvertTo-SecureString; "
                 "[Runtime.InteropServices.Marshal]::PtrToStringAuto("
                 "[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))",
-            ])
+            ], stdin=path.read_text(encoding="utf-8"))
         if code == 0:
             return out.strip()
     return ""
@@ -178,13 +191,15 @@ def set(key: str, value: str) -> bool:  # noqa: A001 - the store's verb, not the
                             "service", SERVICE, "account", key], stdin=value)
         else:  # dpapi
             path = _dpapi_path(key)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            code, _ = _run([
+            code, encrypted = _run([
                 "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
                 "$in = [Console]::In.ReadToEnd().Trim(); "
-                "ConvertTo-SecureString $in -AsPlainText -Force | ConvertFrom-SecureString | "
-                f"Set-Content -NoNewline '{path}'",
+                "ConvertTo-SecureString $in -AsPlainText -Force | ConvertFrom-SecureString",
             ], stdin=value)
+            if code != 0 or not encrypted.strip():
+                return False
+            from .paths import write_private
+            write_private(path, encrypted.strip())
         return code == 0
     return False
 

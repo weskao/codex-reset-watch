@@ -22,10 +22,14 @@ def main():
     log = pathlib.Path(os.path.expanduser(a.log_dir))
     log.mkdir(parents=True, exist_ok=True)
     cfg = config.load()
-    # systemd --user has no equivalent of launchd's EnvironmentVariables plist key
-    # inheriting the login env either, so TG_BOT_TOKEN/TG_CHAT_ID are baked in as
-    # Environment= lines at render time, merged with whatever a prior unit already had.
-    env = scheduler.merged_env(dict(os.environ), scheduler.systemd_existing_env(out))
+    # Scheduled jobs read local credentials; reject environment-only credentials.
+    existing = scheduler.systemd_existing_env(out)
+    try:
+        scheduler._migrate_legacy_credentials(existing, cfg)
+        env = scheduler.job_env(dict(os.environ), existing, cfg)
+    except (OSError, ValueError):
+        scheduler.write_systemd(out, scheduler.systemd_units(program, log, cfg))
+        raise
     units = scheduler.systemd_units(program, log, cfg, env)
     scheduler.write_systemd(out, units)
 

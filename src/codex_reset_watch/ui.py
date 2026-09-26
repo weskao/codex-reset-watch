@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import getpass
 import importlib.metadata
 import json
 import os
@@ -34,6 +35,7 @@ import re
 import shutil
 import sys
 import unicodedata
+import warnings
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, IO, List, Optional, Sequence, Tuple
 
@@ -931,10 +933,7 @@ def export_settings(cfg: Dict[str, Any], target: str, lang: str) -> Tuple[bool, 
     else:
         path = pathlib.Path(target).expanduser()
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-            with contextlib.suppress(OSError):
-                os.chmod(path, 0o600)
+            config.paths.write_private(path, text)
         except (OSError, ValueError) as exc:
             # ValueError, not just OSError: a null byte in the path raises it
             # from pathlib rather than from the OS.
@@ -1090,7 +1089,15 @@ def _edit(setting: config.Setting, cfg: Dict[str, Any], paint: Paint,
     print(f"   {paint.muted}{i18n.t('menu.current', lang)}{paint.reset} "
           f"{config.render(setting, before, lang)}   {paint.muted}{hint}{paint.reset}", file=out)
     print(f" {paint.accent}{GLYPH_PROMPT}{paint.reset} ", end="", file=out, flush=True)
-    raw = _read_line(stdin)
+    if setting.kind == "secret" and stdin is sys.stdin and stdin.isatty():
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                raw = getpass.getpass("Telegram bot token (hidden): ")
+        except (EOFError, OSError, getpass.GetPassWarning):
+            return False
+    else:
+        raw = _read_line(stdin)
     if raw is None or not raw.strip():
         return False
     try:
@@ -1159,7 +1166,7 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
             if ok and action == "import":
                 config.save(cfg)
             if ok and action == "export":
-                print(f" {paint.warn}⚠ {i18n.t('menu.export_secrets', lang, keys=', '.join(sorted(config.SECRET_KEYS)))}{paint.reset}", file=out)
+                print(f" {paint.warn}⚠ {i18n.t('menu.export_secrets', lang, keys=', '.join(sorted(config.LOCAL_KEYS)))}{paint.reset}", file=out)
             continue
         if not choice.isdigit() or not 1 <= int(choice) <= len(settings):
             print(f" {paint.err}✗ {i18n.t('menu.invalid_choice', lang, count=len(settings))}"

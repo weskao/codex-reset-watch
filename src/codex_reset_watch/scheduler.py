@@ -85,6 +85,8 @@ def _plist(program: str, args: List[str], label: str, stdout: str, stderr: str,
 def launchd_plists(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                    env: Optional[Dict[str, str]] = None) -> Dict[str, Dict[str, Any]]:
     """``{plist filename: plist dict}`` for the jobs enabled in ``cfg``."""
+    if env:
+        raise ValueError("Environment variables cannot be written to scheduler files")
     log = pathlib.Path(log_dir)
     hour, minute = config.daily_os_local_hm(cfg)
     built = {
@@ -121,32 +123,53 @@ def write_launchd(out_dir: pathlib.Path, plists: Dict[str, Dict[str, Any]]) -> L
 
 
 def launchd_existing_env(out_dir: pathlib.Path) -> Dict[str, str]:
+    found: Dict[str, str] = {}
     for job in JOBS:
         path = pathlib.Path(out_dir) / f"{LAUNCHD_LABELS[job]}.plist"
         with contextlib.suppress(OSError, ValueError, plistlib.InvalidFileException):
             data = plistlib.loads(path.read_bytes())
             env = data.get("EnvironmentVariables")
             if isinstance(env, dict) and env:
-                return {k: str(v) for k, v in env.items() if k in SECRET_ENV_KEYS}
-    return {}
+                for key in SECRET_ENV_KEYS:
+                    if key in env:
+                        found.setdefault(key, str(env[key]))
+    return found
 
 
 def _launchctl(*args: str, check: bool = False) -> None:
     if check:
         subprocess.check_call(["launchctl", *args])
     else:
-        subprocess.run(["launchctl", *args], capture_output=True)
+        result = subprocess.run(["launchctl", *args], capture_output=True)
+        if args[0] == "bootout" and result.returncode:
+            probe = subprocess.run(["launchctl", "print", args[1]], capture_output=True)
+            if probe.returncode == 0 or b"Could not find service" not in probe.stderr:
+                raise OSError(f"Could not stop launchd job {args[1]}; it may retain old credentials")
 
 
 def apply_launchd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
     out_dir = launch_agents_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    env = job_env(env, launchd_existing_env(out_dir))
-    plists = launchd_plists(program, log_dir, cfg, env)
+    existing = launchd_existing_env(out_dir)
     uid = str(os.getuid())
-    for job in JOBS:  # bootout everything first: a disabled job must stop running
-        _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
+    try:
+        _migrate_legacy_credentials(existing, cfg)
+        env = job_env(env, existing, cfg)
+        plists = launchd_plists(program, log_dir, cfg, env)
+        for job in JOBS:  # bootout everything first: a disabled job must stop running
+            _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
+    except (OSError, ValueError):
+        stop_error = None
+        for job in JOBS:
+            try:
+                _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
+            except OSError as exc:
+                stop_error = exc
+        write_launchd(out_dir, launchd_plists(program, log_dir, cfg))
+        if stop_error:
+            raise OSError("Legacy launchd job could not be stopped; it may retain old credentials") from stop_error
+        raise
     write_launchd(out_dir, plists)
     for job in enabled_jobs(cfg):
         _launchctl("bootstrap", f"gui/{uid}", str(out_dir / f"{LAUNCHD_LABELS[job]}.plist"), check=True)
@@ -181,6 +204,10 @@ def _timer_unit(description: str, body: Iterable[str]) -> str:
 def systemd_units(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """``{unit filename: contents}`` for the jobs enabled in ``cfg``."""
+    if env:
+        raise ValueError("Environment variables cannot be written to scheduler files")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in str(log_dir) + program):
+        raise ValueError("Control characters are not allowed in scheduler paths")
     log = pathlib.Path(log_dir)
     env = env or {}
     hour, minute = config.daily_os_local_hm(cfg)
@@ -231,16 +258,47 @@ def systemd_existing_env(out_dir: pathlib.Path) -> Dict[str, str]:
     return found
 
 
+def _stop_systemd_timer(job: str) -> None:
+    failed = []
+    for unit, action in ((f"{SYSTEMD_UNITS[job]}.timer", ("disable", "--now")),
+                         (f"{SYSTEMD_UNITS[job]}.service", ("stop",))):
+        try:
+            result = subprocess.run(["systemctl", "--user", *action, unit], capture_output=True)
+            if result is not None and result.returncode:
+                state = subprocess.run(["systemctl", "--user", "is-active", unit],
+                                       capture_output=True, text=True)
+                if state.stdout.strip() not in ("inactive", "failed", "unknown"):
+                    failed.append(unit)
+        except OSError:
+            failed.append(unit)
+    if failed:
+        raise OSError(f"Could not stop systemd unit(s) {', '.join(failed)}; they may retain old credentials")
+
+
 def apply_systemd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
     out_dir = systemd_user_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    env = job_env(env, systemd_existing_env(out_dir))
-    units = systemd_units(program, log_dir, cfg, env)
-    for job in JOBS:
-        if job not in enabled_jobs(cfg):
-            subprocess.run(["systemctl", "--user", "disable", "--now", f"{SYSTEMD_UNITS[job]}.timer"],
-                           capture_output=True)
+    existing = systemd_existing_env(out_dir)
+    try:
+        _migrate_legacy_credentials(existing, cfg)
+        env = job_env(env, existing, cfg)
+        units = systemd_units(program, log_dir, cfg, env)
+        for job in JOBS:
+            if existing or job not in enabled_jobs(cfg):
+                _stop_systemd_timer(job)
+    except (OSError, ValueError):
+        stop_error = None
+        for job in JOBS:
+            try:
+                _stop_systemd_timer(job)
+            except OSError as exc:
+                stop_error = exc
+        write_systemd(out_dir, systemd_units(program, log_dir, cfg))
+        subprocess.check_call(["systemctl", "--user", "daemon-reload"])
+        if stop_error:
+            raise OSError("Legacy systemd timer could not be stopped; it may retain old credentials") from stop_error
+        raise
     write_systemd(out_dir, units)
     subprocess.check_call(["systemctl", "--user", "daemon-reload"])
     for job in enabled_jobs(cfg):
@@ -259,8 +317,8 @@ def remove_systemd() -> None:
 
 
 # ── Windows Task Scheduler ───────────────────────────────────────────────────
-# Secrets are never task arguments: `schtasks /query /v` prints those. install.py
-# persists TG_BOT_TOKEN/TG_CHAT_ID with `setx` into the user environment instead.
+# Task Scheduler reads local credentials at runtime; secrets never enter task
+# arguments or the Windows user environment registry.
 
 def daily_task_command(program: str, cfg: Optional[Dict[str, Any]] = None,
                        task_name: str = DAILY_TASK_NAME) -> List[str]:
@@ -304,12 +362,7 @@ def remove_schtasks() -> None:
 # ── entry points ─────────────────────────────────────────────────────────────
 
 def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) -> Dict[str, str]:
-    """Credentials for the generated job.
-
-    A re-apply triggered from ``crw config`` usually runs in a shell with no
-    TG_* exported; without this merge, re-rendering would silently strip the
-    credentials the installer baked in and the job would go quiet.
-    """
+    """Find environment-only credentials, including those in older job files."""
     env = dict(existing)
     for key in SECRET_ENV_KEYS:
         value = (process_env or {}).get(key) or os.environ.get(key)
@@ -318,21 +371,30 @@ def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) 
     return env
 
 
-def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) -> Dict[str, str]:
-    """What to bake into the generated job — nothing, when there is a keychain.
+def _migrate_legacy_credentials(existing: Dict[str, str], cfg: Dict[str, Any]) -> None:
+    """Rescue credentials from older app-owned jobs before stripping their env."""
+    if not existing or not secrets_store.available():
+        return
+    updates = {}
+    for env_key, cfg_key in (("TG_BOT_TOKEN", "telegram_bot_token"),
+                             ("TG_CHAT_ID", "telegram_chat_id")):
+        if existing.get(env_key) and not cfg.get(cfg_key):
+            updates[cfg_key] = config.coerce(config.BY_KEY[cfg_key], existing[env_key])
+    if updates:
+        config.save({**cfg, **updates})
+        cfg.update(updates)
 
-    The job resolves its own credentials through :func:`config.telegram_credentials`,
-    which reads the keychain-backed config, so baking a copy into a 0644 plist
-    or unit file would only put the token on disk in plaintext *and* pin it:
-    whatever was in the installing shell's ``TG_BOT_TOKEN`` used to be carried
-    forward on every re-apply and outranked the token the user later set with
-    ``crw config``. Without a credential store the config cannot hold a token
-    at all and the environment is the only channel left, so there it is still
-    baked in — launchd and systemd jobs inherit no login shell.
-    """
-    if secrets_store.available():
-        return {}
-    return merged_env(process_env, existing)
+
+def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str],
+            cfg: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """Scheduled jobs resolve local credentials; never persist their environment."""
+    cfg = cfg if cfg is not None else config.load()
+    env = merged_env(process_env, existing)
+    for env_key, cfg_key in (("TG_BOT_TOKEN", "telegram_bot_token"),
+                             ("TG_CHAT_ID", "telegram_chat_id")):
+        if env.get(env_key) and not cfg.get(cfg_key):
+            raise ValueError(f"{env_key} only works for manual runs; set {cfg_key} in crw config for scheduled runs")
+    return {}
 
 
 def bin_dir() -> pathlib.Path:
@@ -398,6 +460,7 @@ def apply(*, program: Optional[str] = None, cfg: Optional[Dict[str, Any]] = None
         return backend, apply_launchd(program, log_dir, cfg, env)
     if backend == "systemd":
         return backend, apply_systemd(program, log_dir, cfg, env)
+    job_env(env, {}, cfg)
     return backend, apply_schtasks(program, cfg)
 
 
@@ -430,11 +493,15 @@ def demo() -> None:
         "TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"}
 
     import unittest.mock as mock
-    with mock.patch.object(secrets_store, "available", lambda: True):
-        assert job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}) == {}   # keychain: bake nothing
+    assert job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"},
+                   {"telegram_bot_token": "stored", "telegram_chat_id": "42"}) == {}
     with mock.patch.object(secrets_store, "available", lambda: False):
-        assert job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}) == {
-            "TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"}                        # no store: still baked
+        try:
+            job_env({"TG_BOT_TOKEN": "new"}, {}, {})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("environment-only scheduled token was accepted")
     print("scheduler.demo: ok")
 
 

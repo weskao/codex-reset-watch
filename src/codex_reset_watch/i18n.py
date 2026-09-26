@@ -160,8 +160,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
                  "在這裡輸入才會改存進系統金鑰圈。",
     },
     "menu.no_secret_store": {
-        "en": "No OS credential store here — set TG_BOT_TOKEN in the environment instead",
-        "zh-TW": "這台機器沒有系統金鑰圈，請改用環境變數 TG_BOT_TOKEN",
+        "en": "No OS credential store — TG_BOT_TOKEN works for manual runs only",
+        "zh-TW": "沒有系統金鑰圈；TG_BOT_TOKEN 僅能用於手動執行",
     },
     "setting.telegram_chat_id.label": {"en": "Chat ID", "zh-TW": "Chat ID"},
     "setting.telegram_chat_id.help": {
@@ -324,8 +324,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "已匯出 {count} 項設定到 {target}",
     },
     "menu.export_secrets": {
-        "en": "Secrets are never exported — set these again on the other machine: {keys}",
-        "zh-TW": "機密不會被匯出，請在另一台機器重新設定：{keys}",
+        "en": "Local settings are not exported — set these on the other machine: {keys}",
+        "zh-TW": "本機設定不會匯出，請在另一台機器重新設定：{keys}",
     },
     "menu.export_stdout": {"en": "standard output", "zh-TW": "標準輸出"},
     "menu.import_done": {
@@ -333,8 +333,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "已從 {path} 匯入 {count} 項設定",
     },
     "menu.import_skipped": {
-        "en": "Skipped (secrets are never imported, unknown keys are left alone): {keys}",
-        "zh-TW": "已略過（機密不會匯入，未知的鍵保持原樣）：{keys}",
+        "en": "Skipped (local settings and unknown keys are left alone): {keys}",
+        "zh-TW": "已略過（本機設定及未知的鍵保持原樣）：{keys}",
     },
     "menu.import_not_object": {
         "en": "{path} is not a JSON object of settings",

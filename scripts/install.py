@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import warnings
 from typing import Any, Callable, Dict, IO, List
 
 try:  # stdlib on macOS/Linux; absent on Windows, where the console
@@ -138,14 +139,25 @@ def prompt_telegram_setup(cfg: Dict[str, Any], *, ask: Callable[[str], str] = in
         return False
 
     chat_id = ask("  Telegram chat id: ").strip()
-    token = ask_secret("  Telegram bot token (hidden): ").strip()
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            token = ask_secret("  Telegram bot token (hidden): ").strip()
+    except (EOFError, OSError, getpass.GetPassWarning):
+        print("  ❌ Could not hide token input; configure it later in a terminal.", file=out)
+        return False
     if not chat_id or not token:
         print("  Skipped — configure later with `crw config`.", file=out)
         return False
 
     config.set_value(cfg, "telegram_chat_id", chat_id)
     config.set_value(cfg, "telegram_bot_token", token)
-    config.save(cfg)
+    try:
+        config.save(cfg)
+    except OSError as exc:
+        cfg["telegram_bot_token"] = ""
+        print(f"  ❌ Telegram settings were not saved: {exc}", file=out)
+        return False
     print(f"  ✅ Saved. Bot token stored in {config.secrets_store.backend_label()}; "
           f"chat id in {config.config_path()}.", file=out)
     return True
@@ -192,13 +204,7 @@ def trim_launchd_logs(log_dir: pathlib.Path, max_bytes: int = 512 * 1024, keep_b
 
 
 def install_schtasks(program: pathlib.Path, cfg) -> None:
-    # Task Scheduler has no per-task env-var slot; persist into the user's
-    # environment instead of the task args, or the tokens would leak into
-    # `schtasks /query /v` output.
-    for key in scheduler.SECRET_ENV_KEYS:
-        value = os.environ.get(key)
-        if value:
-            subprocess.run(["setx", key, value], capture_output=True)
+    scheduler.job_env(dict(os.environ), {}, cfg)
     scheduler.apply_schtasks(str(program), cfg)
 
 
@@ -251,6 +257,9 @@ def main() -> int:
     print(f"CLI:    {program}")
     print(f"Config: {config_path}")
     print(f"Logs:   {log_dir}")
+    if backend == "schtasks" and config.secrets_store.legacy_windows_env_token_present():
+        print("⚠️  An older install left TG_BOT_TOKEN in HKCU Environment. "
+              "Check other apps before removing that legacy value.")
     # Resolve against PATH entries, not shutil.which: under `uv run` the latter
     # finds the project venv's own shim and would wrongly report "already set up".
     on_path = any(

@@ -181,6 +181,10 @@ def schedule_changed(before: Mapping[str, Any], after: Mapping[str, Any]) -> boo
 #: Read off the kind, never hand-listed: a secret added to :data:`SETTINGS` must
 #: not start leaking into export files just because this line was not updated.
 SECRET_KEYS = frozenset(s.key for s in SETTINGS if s.kind == "secret")
+LOCAL_KEYS = SECRET_KEYS | frozenset({
+    "telegram_chat_id", "state_dir", "log_dir", "api_base", "status_path",
+    "resets_path", "user_agent",
+})
 
 #: Environment variables that stand in for unset Telegram credentials.
 TELEGRAM_ENV = {"telegram_bot_token": "TG_BOT_TOKEN", "telegram_chat_id": "TG_CHAT_ID"}
@@ -328,6 +332,8 @@ def mask_secret(secret: str) -> str:
 
 def coerce(setting: Setting, raw: Any) -> Any:
     """Turn user/file input into the stored type. Raises ValueError with a message."""
+    if isinstance(raw, str) and any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
+        raise ValueError("Control characters are not allowed")
     if setting.kind == "bool":
         if isinstance(raw, bool):
             return raw
@@ -465,10 +471,9 @@ def _rescue_plaintext_secrets(cfg: Dict[str, Any], raw: Dict[str, Any],
     rewritten without the secret, which is the point.
     """
     for key in SECRET_KEYS:
-        if raw.get(key):
-            secrets_store.set(key, str(raw[key]))
-    with contextlib.suppress(OSError):
-        save(cfg, path)
+        if raw.get(key) and not secrets_store.set(key, str(raw[key])):
+            raise OSError(f"Credential store refused {key}; original config was preserved")
+    save(cfg, path)
 
 
 def save_secrets(cfg: Dict[str, Any]) -> Tuple[str, ...]:
@@ -530,12 +535,10 @@ def save(cfg: Dict[str, Any], path: Optional[pathlib.Path] = None) -> pathlib.Pa
     payload = {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.kind != "secret"}
     payload.update({k: v for k, v in cfg.items()
                     if k not in BY_KEY and k not in SECRET_KEYS})
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    with contextlib.suppress(OSError):
-        os.chmod(tmp, 0o600)
-    tmp.replace(path)
-    save_secrets(cfg)
+    failed = save_secrets(cfg)
+    if failed:
+        raise OSError(f"Credential store refused {', '.join(failed)}; config was not saved")
+    paths.write_private(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     i18n.forget_stored_language()  # the file this cache mirrors just changed
     return path
 
@@ -580,7 +583,7 @@ def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
     secret added to :data:`SETTINGS` cannot start leaking into export files
     because this function was not updated.
     """
-    return {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.kind != "secret"}
+    return {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.key not in LOCAL_KEYS}
 
 
 def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]]:
@@ -601,7 +604,7 @@ def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]
     skipped: List[str] = []
     for key, value in raw.items():
         setting = BY_KEY.get(key)
-        if setting is None or key in SECRET_KEYS:
+        if setting is None or key in LOCAL_KEYS:
             skipped.append(key)
             continue
         updates[key] = coerce(setting, value)  # raises ValueError → caller aborts

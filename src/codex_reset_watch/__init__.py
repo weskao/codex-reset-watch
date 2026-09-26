@@ -981,6 +981,10 @@ def doctor() -> int:
                    if token else "unset"))
     checks.append(("Telegram chat id", bool(chat_id),
                    f"{chat_id} ({_credential_source(cfg, 'telegram_chat_id')})" if chat_id else "unset"))
+    if secrets_store.IS_WINDOWS:
+        legacy = secrets_store.legacy_windows_env_token_present()
+        checks.append(("Legacy Windows environment token", not legacy,
+                       "Remove HKCU Environment TG_BOT_TOKEN after checking other apps" if legacy else "absent"))
     client = APIClient(cfg, logger)
     status, err = client.get_json(str(cfg.get("status_path", "/api/v1/status")))
     checks.append(("Codex Resets status API", status is not None, "OK" if status is not None else err))
@@ -1049,6 +1053,7 @@ def build_parser() -> argparse.ArgumentParser:
     cfgp.add_argument("--list", action="store_true", help="列出目前設定後結束，不進入選單")
     cfgp.add_argument("--set", action="append", metavar="KEY=VALUE",
                       help="非互動式修改一項設定，可重複；影響排程的鍵會自動重新套用")
+    cfgp.add_argument("--token-stdin", action="store_true", help="從標準輸入安全設定 Telegram Bot Token")
     cfgp.add_argument("--apply-schedule", action="store_true", help="搭配 --set 時，強制重新套用 OS 排程")
     cfgp.add_argument("--export", metavar="FILE", help="把可攜設定寫成 JSON（`-` 代表標準輸出）；機密不會匯出")
     cfgp.add_argument("--import", dest="import_file", metavar="FILE", help="從 JSON 匯入設定（全有全無）")
@@ -1128,17 +1133,42 @@ def config_cmd(args: argparse.Namespace) -> int:
     lang = i18n.current_language(cfg)
     if args.export:
         ok, message = ui.export_settings(cfg, args.export, lang)
-        print(f"{'✅' if ok else '❌'} {message}")
+        print(f"{'✅' if ok else '❌'} {message}", file=sys.stderr if args.export == "-" else sys.stdout)
         if ok:
             print("⚠️  " + i18n.t("menu.export_secrets", lang,
-                                  keys=", ".join(sorted(cfgmod.SECRET_KEYS))))
+                                  keys=", ".join(sorted(cfgmod.LOCAL_KEYS))),
+                  file=sys.stderr if args.export == "-" else sys.stdout)
         return 0 if ok else 1
+    if args.token_stdin:
+        if args.set or args.import_file:
+            print("❌ --token-stdin must be used alone")
+            return 2
+        token = sys.stdin.readline(513).strip()
+        if not token or len(token) > 512:
+            print("❌ Invalid token input")
+            return 2
+        try:
+            cfgmod.set_value(cfg, "telegram_bot_token", token)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            return 2
+        try:
+            cfgmod.save(cfg)
+        except OSError as exc:
+            print(f"❌ {exc}")
+            return 1
+        print("✅ Telegram token stored in the OS credential store")
+        return 0
     if args.import_file:
         ok, message = ui.import_settings(cfg, args.import_file, lang)
         print(f"{'✅' if ok else '❌'} {message}")
         if not ok:
             return 1
-        cfgmod.save(cfg)
+        try:
+            cfgmod.save(cfg)
+        except OSError as exc:
+            print(f"❌ {exc}")
+            return 1
         return apply_schedule_cmd()
     if args.list:
         print(ui.render_settings(cfg))
@@ -1152,6 +1182,9 @@ def config_cmd(args: argparse.Namespace) -> int:
                 return 2
             key, _, value = item.partition("=")
             key = key.strip()
+            if key in cfgmod.SECRET_KEYS and value.strip():
+                print("❌ Enter bot tokens in the interactive menu or use --token-stdin")
+                return 2
             try:
                 cfgmod.set_value(cfg, key, value)
                 if key in cfgmod.SECRET_KEYS and not str(cfg[key]).strip():
@@ -1165,17 +1198,19 @@ def config_cmd(args: argparse.Namespace) -> int:
             except ValueError as exc:
                 print(f"❌ {key}：{exc}")
                 return 2
-        cfgmod.save(cfg)
-        unstored = cfgmod.save_secrets(cfg)
+        try:
+            cfgmod.save(cfg)
+        except OSError as exc:
+            print(f"❌ {exc}")
+            return 1
         for key in cleared:
-            cfgmod.clear_secret(key)
+            if not cfgmod.clear_secret(key):
+                print(f"❌ Could not remove {key} from the credential store")
+                return 1
         print("✅ " + i18n.t("menu.set_done", lang, count=len(args.set),
                             path=cfgmod.config_path()))
         for key in cleared:
             print(f"🗑️  {key}: removed from {secrets_store.backend_label()}")
-        if unstored:
-            print(f"⚠️  {', '.join(unstored)}: no OS credential store on this machine — "
-                  f"set TG_BOT_TOKEN in the environment instead")
         if args.apply_schedule or cfgmod.schedule_changed(before, cfg):
             return apply_schedule_cmd()
         return 0
@@ -1217,6 +1252,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(f"\n{paint.warn}{i18n.t('cli.cancelled', i18n.current_language())}{paint.reset}",
               file=sys.stderr)
         return 130
+    except OSError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

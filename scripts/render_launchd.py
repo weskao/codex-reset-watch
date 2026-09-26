@@ -24,10 +24,14 @@ def main():
     log = pathlib.Path(os.path.expanduser(a.log_dir))
     log.mkdir(parents=True, exist_ok=True)
     cfg = config.load()
-    # launchd jobs don't inherit the login shell env, so TG_BOT_TOKEN/TG_CHAT_ID must be
-    # baked into the plist at render time (from whatever env this was run with, merged
-    # with whatever an existing plist already carries).
-    env = scheduler.merged_env(dict(os.environ), scheduler.launchd_existing_env(out))
+    # Scheduled jobs read local credentials; reject environment-only credentials.
+    existing = scheduler.launchd_existing_env(out)
+    try:
+        scheduler._migrate_legacy_credentials(existing, cfg)
+        env = scheduler.job_env(dict(os.environ), existing, cfg)
+    except (OSError, ValueError):
+        scheduler.write_launchd(out, scheduler.launchd_plists(program, log, cfg))
+        raise
     plists = scheduler.launchd_plists(program, log, cfg, env)
     scheduler.write_launchd(out, plists)
 
