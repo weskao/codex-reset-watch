@@ -1,6 +1,6 @@
 # Codex Reset Watch
 
-Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API. The Telegram layer is a separate stdlib-only package, `telegram_kit`, that other projects can import ([§8](#using-telegram_kit-from-other-projects)).
+Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too ([§8](#using-telegram_kit-from-other-projects)).
 
 When a public reset signal is found, `crw check` sends its status and type, estimated reset time
 and countdown, source message and announcement link, Codex Resets link, and check time. The
@@ -553,7 +553,7 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 ## 8. Telegram
 
-Sends directly through the Telegram Bot API via the bundled `telegram_kit` package — no external
+Sends directly through the Telegram Bot API via the `telegram_kit` package — no external
 script dependency. There are two ways to supply the credentials, and what `crw config` stored wins.
 The installer ([§2](#2-install-codex-reset-watch)) already walks through Option A on first
 install with the token entered echo-off; this section is for setting it up later or changing it.
@@ -672,13 +672,13 @@ crw check
 
 ### Using `telegram_kit` from other projects
 
-`telegram_kit` ships in the same wheel but does not import the CLI. Another Python project can
-depend on this repository and get the same storage and sending guarantees:
+`telegram_kit` lives in its own repository, [weskao/telegram-kit](https://github.com/weskao/telegram-kit),
+and does not import this CLI. Any Python project can depend on it directly and get the same
+storage and sending guarantees — pin the dependency to a tag, and a fix ships to every project
+that uses it by bumping that tag and re-running `uv lock --upgrade-package telegram-kit`:
 
 ```bash
-uv add "codex-reset-watch @ git+https://github.com/weskao/codex-reset-watch"
-# or, from a local checkout
-uv add --editable ../codex-reset-watch
+uv add "telegram-kit @ git+https://github.com/weskao/telegram-kit@v0.1.0"
 ```
 
 ```python

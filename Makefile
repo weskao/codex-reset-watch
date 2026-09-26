@@ -61,7 +61,7 @@ lint:
 	$(UV) run python -m py_compile src/codex_reset_watch/__init__.py src/codex_reset_watch/paths.py \
 		src/codex_reset_watch/filelock.py src/codex_reset_watch/config.py src/codex_reset_watch/scheduler.py \
 		src/codex_reset_watch/ui.py src/codex_reset_watch/i18n.py src/codex_reset_watch/keys.py \
-		src/codex_reset_watch/secrets_store.py src/telegram_kit/__init__.py scripts/render_launchd.py scripts/render_systemd.py \
+		src/codex_reset_watch/secrets_store.py scripts/render_launchd.py scripts/render_systemd.py \
 		scripts/schtasks.py scripts/install.py scripts/uninstall.py
 
 test-unit:
