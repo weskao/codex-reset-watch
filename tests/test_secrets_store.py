@@ -14,6 +14,9 @@ followed by a real read can.
 """
 import unittest
 import unittest.mock as mock
+import pathlib
+import tempfile
+import sys
 
 from codex_reset_watch import secrets_store as store
 from tests import real_credential_store
@@ -140,6 +143,39 @@ class LibsecretTests(unittest.TestCase):
         self.assertEqual(argv[:2], ["secret-tool", "store"])
         self.assertNotIn("linux-secret", " ".join(argv))
         self.assertEqual(stdin, "linux-secret")
+
+
+class DpapiTests(unittest.TestCase):
+    def test_legacy_windows_registry_token_is_detected_without_printing_it(self):
+        registry = mock.MagicMock(HKEY_CURRENT_USER=object())
+        registry.OpenKey.return_value.__enter__.return_value = object()
+        registry.QueryValueEx.return_value = ("fake-token", 1)
+        with mock.patch.object(store, "IS_WINDOWS", True), mock.patch.dict(sys.modules, {"winreg": registry}):
+            self.assertTrue(store.legacy_windows_env_token_present())
+
+    def test_encrypted_file_is_written_privately_without_path_in_command(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "token.dpapi"
+            run = Recorder((0, "synthetic-ciphertext\n"))
+            with backend("dpapi", run), mock.patch.object(store, "_dpapi_path", return_value=path):
+                self.assertTrue(store.set("telegram_bot_token", "fake-token"))
+            self.assertEqual(path.read_text(), "synthetic-ciphertext")
+            self.assertNotIn("fake-token", " ".join(run.calls[0][0]))
+            self.assertNotIn(str(path), " ".join(run.calls[0][0]))
+
+    def test_decrypt_reads_ciphertext_from_stdin_without_path_in_command(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "token.dpapi"
+            path.write_text("synthetic-ciphertext")
+            run = Recorder((0, "fake-token\n"))
+            with backend("dpapi", run), mock.patch.object(store, "_dpapi_path", return_value=path):
+                self.assertEqual(store.get("telegram_bot_token"), "fake-token")
+            self.assertEqual(run.calls[0][1], "synthetic-ciphertext")
+            self.assertNotIn(str(path), " ".join(run.calls[0][0]))
+
+    def test_account_cannot_escape_dpapi_directory(self):
+        with self.assertRaises(ValueError):
+            store._dpapi_path("../elsewhere")
 
 
 class NoBackendTests(unittest.TestCase):

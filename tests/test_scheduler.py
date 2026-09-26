@@ -85,11 +85,10 @@ class LaunchdRenderTests(unittest.TestCase):
         self.assertNotIn("com.wes.codex-reset-watch.daily.plist", plists)
         self.assertIn("com.wes.codex-reset-watch.monitor.plist", plists)
 
-    def test_env_is_baked_into_every_job(self):
-        plists = scheduler.launchd_plists(
-            "/bin/crw", pathlib.Path("/tmp"), cfg(), env={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
-        for plist in plists.values():
-            self.assertEqual(plist["EnvironmentVariables"], {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
+    def test_env_cannot_be_baked_into_any_job(self):
+        with self.assertRaises(ValueError):
+            scheduler.launchd_plists(
+                "/bin/crw", pathlib.Path("/tmp"), cfg(), env={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
 
     def test_write_launchd_removes_stale_disabled_plist(self):
         with tempfile.TemporaryDirectory() as d:
@@ -100,11 +99,12 @@ class LaunchdRenderTests(unittest.TestCase):
             self.assertFalse((out / "com.wes.codex-reset-watch.daily.plist").exists())
             self.assertTrue((out / "com.wes.codex-reset-watch.monitor.plist").exists())
 
-    def test_existing_env_is_recovered_from_a_written_plist(self):
+    def test_existing_env_is_recovered_from_a_legacy_plist(self):
         with tempfile.TemporaryDirectory() as d:
             out = pathlib.Path(d)
-            scheduler.write_launchd(out, scheduler.launchd_plists(
-                "/bin/crw", pathlib.Path("/tmp"), cfg(), env={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"}))
+            out.mkdir(exist_ok=True)
+            (out / "com.wes.codex-reset-watch.daily.plist").write_bytes(
+                plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"}}))
             recovered = scheduler.launchd_existing_env(out)
         self.assertEqual(recovered, {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
 
@@ -141,11 +141,11 @@ class SystemdRenderTests(unittest.TestCase):
             self.assertFalse((out / "codex-reset-watch-monitor.timer").exists())
             self.assertTrue((out / "codex-reset-watch-daily.timer").exists())
 
-    def test_existing_env_recovered_from_written_service_file(self):
+    def test_existing_env_recovered_from_legacy_service_file(self):
         with tempfile.TemporaryDirectory() as d:
             out = pathlib.Path(d)
-            scheduler.write_systemd(out, scheduler.systemd_units(
-                "/bin/crw", pathlib.Path("/tmp"), cfg(), env={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"}))
+            (out / "codex-reset-watch-daily.service").write_text(
+                "[Service]\nEnvironment=TG_BOT_TOKEN=tok\nEnvironment=TG_CHAT_ID=42\n")
             recovered = scheduler.systemd_existing_env(out)
         self.assertEqual(recovered, {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
 
@@ -289,13 +289,14 @@ class JobEnvTests(unittest.TestCase):
         # 0644 plist would only pin a token `crw config` later replaced.
         with no_ambient_telegram_env(), \
                 unittest.mock.patch.object(scheduler.secrets_store, "available", lambda: True):
-            self.assertEqual(scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}), {})
+            self.assertEqual(scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"},
+                                               {"telegram_bot_token": "stored", "telegram_chat_id": "42"}), {})
 
-    def test_without_a_credential_store_the_env_is_still_baked_in(self):
+    def test_without_a_credential_store_the_env_is_rejected(self):
         with no_ambient_telegram_env(), \
                 unittest.mock.patch.object(scheduler.secrets_store, "available", lambda: False):
-            self.assertEqual(scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}),
-                             {"TG_BOT_TOKEN": "new", "TG_CHAT_ID": "42"})
+            with self.assertRaises(ValueError):
+                scheduler.job_env({"TG_BOT_TOKEN": "new"}, {"TG_CHAT_ID": "42"}, {})
 
 
 if __name__ == "__main__":

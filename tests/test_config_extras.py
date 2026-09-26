@@ -141,9 +141,9 @@ class TelegramCredentialTests(unittest.TestCase):
 
 
 class ExportTests(unittest.TestCase):
-    def test_every_non_secret_setting_is_exported(self):
+    def test_every_portable_setting_is_exported(self):
         payload = config.export_payload(dict(config.DEFAULTS))
-        expected = {s.key for s in config.SETTINGS if s.kind != "secret"}
+        expected = {s.key for s in config.SETTINGS if s.key not in config.LOCAL_KEYS}
         self.assertEqual(set(payload), expected)
 
     def test_the_bot_token_is_never_exported(self):
@@ -152,9 +152,9 @@ class ExportTests(unittest.TestCase):
         self.assertNotIn("telegram_bot_token", payload)
         self.assertNotIn("super-secret", json.dumps(payload))
 
-    def test_the_chat_id_is_exported_because_it_is_not_a_secret(self):
+    def test_the_chat_id_is_not_exported(self):
         cfg = dict(config.DEFAULTS, telegram_chat_id="12345")
-        self.assertEqual(config.export_payload(cfg)["telegram_chat_id"], "12345")
+        self.assertNotIn("telegram_chat_id", config.export_payload(cfg))
 
     def test_current_values_are_exported_not_defaults(self):
         cfg = dict(config.DEFAULTS, scan_interval_minutes=45)
@@ -298,9 +298,9 @@ class NoKeychainTests(unittest.TestCase):
 
     def test_saving_does_not_fall_back_to_the_config_file(self):
         with isolated_config() as path:
-            config.save(dict(config.DEFAULTS, telegram_bot_token="123456:SECRET"))
-            written = path.read_text(encoding="utf-8")
-        self.assertNotIn("SECRET", written)
+            with self.assertRaises(OSError):
+                config.save(dict(config.DEFAULTS, telegram_bot_token="123456:SECRET"))
+            self.assertFalse(path.exists())
 
     def test_saving_reports_that_the_secret_was_not_stored(self):
         with isolated_config():

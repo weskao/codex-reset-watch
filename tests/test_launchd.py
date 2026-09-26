@@ -62,21 +62,18 @@ class LaunchdTests(unittest.TestCase):
             self.assertFalse((out / "com.wes.codex-reset-watch.daily.plist").exists())
             self.assertTrue((out / "com.wes.codex-reset-watch.monitor.plist").exists())
 
-    def test_credentials_are_baked_in_from_the_environment(self):
+    def test_environment_only_credentials_cannot_be_scheduled(self):
         with tempfile.TemporaryDirectory() as d:
-            out, _ = self.render(pathlib.Path(d), env_extra={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
-            daily = plistlib.loads((out / "com.wes.codex-reset-watch.daily.plist").read_bytes())
-            self.assertEqual(daily["EnvironmentVariables"], {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.render(pathlib.Path(d), env_extra={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
 
-    def test_rerender_without_env_keeps_previously_baked_credentials(self):
+    def test_rerender_without_env_keeps_schedule_settings(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            out, _ = self.render(root, env_extra={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
-            # Re-render (e.g. after `crw config` changed a timing setting) from a
-            # shell with no TG_* exported: the baked-in credentials must survive.
+            out, _ = self.render(root)
             out, _ = self.render(root, config_raw={"daily_time": "11:00"})
             daily = plistlib.loads((out / "com.wes.codex-reset-watch.daily.plist").read_bytes())
-            self.assertEqual(daily["EnvironmentVariables"], {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
+            self.assertNotIn("EnvironmentVariables", daily)
             self.assertEqual(daily["StartCalendarInterval"], {"Hour": 11, "Minute": 0})
 
 

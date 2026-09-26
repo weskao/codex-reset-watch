@@ -77,12 +77,10 @@ class SystemdTests(unittest.TestCase):
             self.assertFalse((out / "codex-reset-watch-monitor.timer").exists())
             self.assertTrue((out / "codex-reset-watch-daily.timer").exists())
 
-    def test_credentials_are_baked_in_as_environment_lines(self):
+    def test_environment_only_credentials_cannot_be_scheduled(self):
         with tempfile.TemporaryDirectory() as d:
-            out, _, _ = self.render(pathlib.Path(d), env_extra={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
-            text = (out / "codex-reset-watch-daily.service").read_text(encoding="utf-8")
-            self.assertIn("Environment=TG_BOT_TOKEN=tok", text)
-            self.assertIn("Environment=TG_CHAT_ID=42", text)
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.render(pathlib.Path(d), env_extra={"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})
 
 
 if __name__ == "__main__":
