@@ -203,9 +203,26 @@ def trim_launchd_logs(log_dir: pathlib.Path, max_bytes: int = 512 * 1024, keep_b
             f.write_bytes(tail)
 
 
-def install_schtasks(program: pathlib.Path, cfg) -> None:
-    scheduler.job_env(dict(os.environ), {}, cfg)
-    scheduler.apply_schtasks(str(program), cfg)
+def apply_schedule(backend: str, program: pathlib.Path, log_dir: pathlib.Path, cfg,
+                   *, out: IO[str] = sys.stdout) -> bool:
+    """Register the OS jobs; report a credential problem instead of a traceback."""
+    if backend == "schtasks" and config.secrets_store.legacy_windows_env_token_present():
+        print("⚠️  An older install left TG_BOT_TOKEN in HKCU Environment. "
+              "Check other apps before removing that legacy value.", file=out)
+    try:
+        if backend == "launchd":
+            scheduler.apply_launchd(str(program), log_dir, cfg)
+            trim_launchd_logs(log_dir)
+        elif backend == "systemd":
+            scheduler.apply_systemd(str(program), log_dir, cfg)
+        else:
+            scheduler.job_env(dict(os.environ), {}, cfg)
+            scheduler.apply_schtasks(str(program), cfg)
+    except (OSError, ValueError) as exc:
+        print(f"❌ Scheduling was not applied: {exc}", file=out)
+        print("   Fix it, then run: crw apply-schedule", file=out)
+        return False
+    return True
 
 
 def main() -> int:
@@ -244,22 +261,13 @@ def main() -> int:
     cfg = config.load()  # re-read: config_path may have just been created above
     maybe_setup_telegram(cfg)
     backend = backend_for(platform.system())
-    if backend == "launchd":
-        scheduler.apply_launchd(str(program), log_dir, cfg)
-        trim_launchd_logs(log_dir)
-    elif backend == "systemd":
-        scheduler.apply_systemd(str(program), log_dir, cfg)
-    else:
-        install_schtasks(program, cfg)
+    scheduled = apply_schedule(backend, program, log_dir, cfg)
 
-    jobs = scheduler.enabled_jobs(cfg) or ("none",)
+    jobs = (scheduler.enabled_jobs(cfg) if scheduled else ()) or ("none",)
     print(f"✅ Codex Reset Watch installed with uv tool ({backend} scheduling: {', '.join(jobs)}).")
     print(f"CLI:    {program}")
     print(f"Config: {config_path}")
     print(f"Logs:   {log_dir}")
-    if backend == "schtasks" and config.secrets_store.legacy_windows_env_token_present():
-        print("⚠️  An older install left TG_BOT_TOKEN in HKCU Environment. "
-              "Check other apps before removing that legacy value.")
     # Resolve against PATH entries, not shutil.which: under `uv run` the latter
     # finds the project venv's own shim and would wrongly report "already set up".
     on_path = any(

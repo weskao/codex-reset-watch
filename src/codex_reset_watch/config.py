@@ -66,6 +66,9 @@ class Setting:
     #: mode. A row added to SETTINGS with no explicit tier is advanced-only,
     #: so it never appears in Basic mode by accident.
     tier: str = "advanced"
+    #: ``False`` for machine-local identity (credentials, endpoints, paths):
+    #: never exported, never accepted from an import file.
+    portable: bool = True
 
 
 #: The two menu modes. Basic is the default: the curated subset most people
@@ -102,27 +105,30 @@ SETTINGS: Tuple[Setting, ...] = (
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
             "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN.",
-            tier="basic"),
+            tier="basic", portable=False),
     Setting("telegram_chat_id", "text_optional", "", "telegram", "Chat ID",
             "Telegram chat that receives the notifications; used ahead of TG_CHAT_ID.",
-            tier="basic"),
+            tier="basic", portable=False),
     # ── API ──────────────────────────────────────────────────────────────
     Setting("api_base", "text", DEFAULT_API_BASE, "api", "API base",
-            "Base URL of the tracked source."),
+            "Base URL of the tracked source.", portable=False),
     Setting("status_path", "text", "/api/v1/status", "api", "status path",
-            "Status endpoint (required)."),
+            "Status endpoint (required).", portable=False),
     Setting("resets_path", "text", "/api/v1/resets?limit=20&order=desc", "api", "resets path",
-            "History endpoint (optional; a failure here does not stop the main flow)."),
+            "History endpoint (optional; a failure here does not stop the main flow).",
+            portable=False),
     Setting("request_timeout_seconds", "int", 15, "api", "Timeout (seconds)",
             "Per-request HTTP timeout.", 1, 300),
     Setting("request_retries", "int", 3, "api", "Retries",
             "Attempt limit for retryable errors (429/5xx/connection).", 1, 10),
     Setting("user_agent", "text", "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)",
-            "api", "User-Agent", "User-Agent header sent with each request."),
+            "api", "User-Agent", "User-Agent header sent with each request.", portable=False),
     # ── storage ──────────────────────────────────────────────────────────
-    Setting("state_dir", "path", "", "storage", "State folder", "Blank = platform default."),
+    Setting("state_dir", "path", "", "storage", "State folder", "Blank = platform default.",
+            portable=False),
     Setting("log_dir", "path", "", "storage", "Log folder",
-            "Blank = platform default. Changing it needs the schedule re-applied."),
+            "Blank = platform default. Changing it needs the schedule re-applied.",
+            portable=False),
     Setting("max_log_bytes", "int", 2 * 1024 * 1024, "storage", "Log size cap",
             "Rotate once a log passes this size (bytes).", 64 * 1024, 512 * 1024 * 1024),
     Setting("log_backups", "int", 3, "storage", "Log backups",
@@ -181,10 +187,7 @@ def schedule_changed(before: Mapping[str, Any], after: Mapping[str, Any]) -> boo
 #: Read off the kind, never hand-listed: a secret added to :data:`SETTINGS` must
 #: not start leaking into export files just because this line was not updated.
 SECRET_KEYS = frozenset(s.key for s in SETTINGS if s.kind == "secret")
-LOCAL_KEYS = SECRET_KEYS | frozenset({
-    "telegram_chat_id", "state_dir", "log_dir", "api_base", "status_path",
-    "resets_path", "user_agent",
-})
+LOCAL_KEYS = SECRET_KEYS | frozenset(s.key for s in SETTINGS if not s.portable)
 
 #: Environment variables that stand in for unset Telegram credentials.
 TELEGRAM_ENV = {"telegram_bot_token": "TG_BOT_TOKEN", "telegram_chat_id": "TG_CHAT_ID"}
@@ -472,7 +475,7 @@ def _rescue_plaintext_secrets(cfg: Dict[str, Any], raw: Dict[str, Any],
     """
     for key in SECRET_KEYS:
         if raw.get(key) and not secrets_store.set(key, str(raw[key])):
-            raise OSError(f"Credential store refused {key}; original config was preserved")
+            return  # keep the only copy on disk; `crw doctor` reports the source
     save(cfg, path)
 
 
@@ -495,7 +498,7 @@ def save_secrets(cfg: Dict[str, Any]) -> Tuple[str, ...]:
     failed = []
     for key in sorted(SECRET_KEYS):
         value = str(cfg.get(key, "") or "")
-        if not value:
+        if not value or value == secrets_store.get(key):
             continue
         if not secrets_store.set(key, value):
             failed.append(key)
@@ -508,7 +511,7 @@ def clear_secret(key: str) -> bool:
     Reached from ``crw config --set telegram_bot_token=`` — i.e. the user
     naming the key and asking for it to be empty — never from an ordinary save.
     """
-    return secrets_store.delete(key)
+    return secrets_store.delete(key) or not secrets_store.get(key)
 
 
 def restore_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -583,7 +586,8 @@ def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
     secret added to :data:`SETTINGS` cannot start leaking into export files
     because this function was not updated.
     """
-    return {s.key: cfg.get(s.key, s.default) for s in SETTINGS if s.key not in LOCAL_KEYS}
+    return {s.key: cfg.get(s.key, s.default) for s in SETTINGS
+            if s.portable and s.kind != "secret"}
 
 
 def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]]:
@@ -604,7 +608,7 @@ def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]
     skipped: List[str] = []
     for key, value in raw.items():
         setting = BY_KEY.get(key)
-        if setting is None or key in LOCAL_KEYS:
+        if setting is None or not setting.portable or setting.kind == "secret":
             skipped.append(key)
             continue
         updates[key] = coerce(setting, value)  # raises ValueError → caller aborts

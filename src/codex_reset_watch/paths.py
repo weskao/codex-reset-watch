@@ -44,12 +44,15 @@ def write_private(target: pathlib.Path, content: str) -> None:
                 "$writer=[IO.StreamWriter]::new($file,[Text.UTF8Encoding]::new($false)); "
                 "try { $writer.Write($data.content) } finally { $writer.Dispose() }"
             )
-            result = subprocess.run(
-                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-                input=json.dumps({"path": str(temporary), "content": content}, ensure_ascii=True),
-                capture_output=True, text=True, timeout=15, check=False,
-            )
-            created = temporary.exists()
+            created = True  # PowerShell may create it before failing or timing out
+            try:
+                result = subprocess.run(
+                    ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                    input=json.dumps({"path": str(temporary), "content": content}, ensure_ascii=True),
+                    capture_output=True, text=True, timeout=15, check=False,
+                )
+            except subprocess.SubprocessError as exc:
+                raise OSError("Unable to create an owner-only file") from exc
             if result.returncode:
                 raise OSError("Unable to create an owner-only file")
         else:

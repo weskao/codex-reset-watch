@@ -25,15 +25,10 @@ def main():
     log.mkdir(parents=True, exist_ok=True)
     cfg = config.load()
     # Scheduled jobs read local credentials; reject environment-only credentials.
-    existing = scheduler.launchd_existing_env(out)
-    try:
-        scheduler._migrate_legacy_credentials(existing, cfg)
-        env = scheduler.job_env(dict(os.environ), existing, cfg)
-    except (OSError, ValueError):
-        scheduler.write_launchd(out, scheduler.launchd_plists(program, log, cfg))
-        raise
-    plists = scheduler.launchd_plists(program, log, cfg, env)
-    scheduler.write_launchd(out, plists)
+    scheduler.apply_jobs(
+        scheduler.launchd_existing_env(out), cfg, dict(os.environ),
+        write=lambda: scheduler.write_launchd(out, scheduler.launchd_plists(program, log, cfg)),
+    )
 
 
 if __name__ == "__main__":

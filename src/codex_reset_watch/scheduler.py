@@ -21,7 +21,7 @@ import platform
 import plistlib
 import re
 import subprocess
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from . import config, secrets_store
 
@@ -63,7 +63,7 @@ def systemd_user_dir() -> pathlib.Path:
 
 def _plist(program: str, args: List[str], label: str, stdout: str, stderr: str,
            *, calendar: Any = None, interval: Optional[int] = None,
-           run_at_load: bool = True, env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+           run_at_load: bool = True) -> Dict[str, Any]:
     d: Dict[str, Any] = {
         "Label": label,
         "ProgramArguments": [program] + args,
@@ -77,8 +77,6 @@ def _plist(program: str, args: List[str], label: str, stdout: str, stderr: str,
         d["StartCalendarInterval"] = calendar
     if interval is not None:
         d["StartInterval"] = int(interval)
-    if env:
-        d["EnvironmentVariables"] = env
     return d
 
 
@@ -93,12 +91,12 @@ def launchd_plists(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
         "daily": _plist(
             program, ["daily"], LAUNCHD_LABELS["daily"],
             str(log / "launchd-daily.out.log"), str(log / "launchd-daily.err.log"),
-            calendar={"Hour": hour, "Minute": minute}, env=env,
+            calendar={"Hour": hour, "Minute": minute},
         ),
         "monitor": _plist(
             program, ["monitor"], LAUNCHD_LABELS["monitor"],
             str(log / "launchd-monitor.out.log"), str(log / "launchd-monitor.err.log"),
-            interval=int(cfg.get("scan_interval_minutes", 120)) * 60, env=env,
+            interval=int(cfg.get("scan_interval_minutes", 120)) * 60,
         ),
     }
     return {f"{LAUNCHD_LABELS[job]}.plist": built[job] for job in enabled_jobs(cfg)}
@@ -147,33 +145,22 @@ def _launchctl(*args: str, check: bool = False) -> None:
                 raise OSError(f"Could not stop launchd job {args[1]}; it may retain old credentials")
 
 
+def _bootout(job: str) -> None:
+    _launchctl("bootout", f"gui/{os.getuid()}/{LAUNCHD_LABELS[job]}")
+
+
 def apply_launchd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
                   env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
     out_dir = launch_agents_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    existing = launchd_existing_env(out_dir)
-    uid = str(os.getuid())
-    try:
-        _migrate_legacy_credentials(existing, cfg)
-        env = job_env(env, existing, cfg)
-        plists = launchd_plists(program, log_dir, cfg, env)
-        for job in JOBS:  # bootout everything first: a disabled job must stop running
-            _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
-    except (OSError, ValueError):
-        stop_error = None
-        for job in JOBS:
-            try:
-                _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
-            except OSError as exc:
-                stop_error = exc
-        write_launchd(out_dir, launchd_plists(program, log_dir, cfg))
-        if stop_error:
-            raise OSError("Legacy launchd job could not be stopped; it may retain old credentials") from stop_error
-        raise
-    write_launchd(out_dir, plists)
+    apply_jobs(
+        launchd_existing_env(out_dir), cfg, env,
+        write=lambda: write_launchd(out_dir, launchd_plists(program, log_dir, cfg)),
+        stop=lambda: _each(JOBS, _bootout),  # a disabled job must stop running too
+    )
     for job in enabled_jobs(cfg):
-        _launchctl("bootstrap", f"gui/{uid}", str(out_dir / f"{LAUNCHD_LABELS[job]}.plist"), check=True)
-        _launchctl("enable", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
+        _launchctl("bootstrap", f"gui/{os.getuid()}",
+                   str(out_dir / f"{LAUNCHD_LABELS[job]}.plist"), check=True)
     return enabled_jobs(cfg)
 
 
@@ -181,17 +168,16 @@ def remove_launchd() -> None:
     uid = str(os.getuid())
     out_dir = launch_agents_dir()
     for job in JOBS:
-        _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
+        with contextlib.suppress(OSError):  # uninstall is best-effort; strictness is for apply
+            _launchctl("bootout", f"gui/{uid}/{LAUNCHD_LABELS[job]}")
         (out_dir / f"{LAUNCHD_LABELS[job]}.plist").unlink(missing_ok=True)
 
 
 # ── systemd --user ───────────────────────────────────────────────────────────
 
-def _service_unit(description: str, exec_start: str, stdout: Any, stderr: Any,
-                  env: Dict[str, str]) -> str:
+def _service_unit(description: str, exec_start: str, stdout: Any, stderr: Any) -> str:
     lines = ["[Unit]", f"Description={description}", "", "[Service]", "Type=oneshot",
              f"ExecStart={exec_start}"]
-    lines += [f"Environment={k}={v}" for k, v in env.items()]
     lines += [f"StandardOutput=append:{stdout}", f"StandardError=append:{stderr}", ""]
     return "\n".join(lines)
 
@@ -209,21 +195,20 @@ def systemd_units(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in str(log_dir) + program):
         raise ValueError("Control characters are not allowed in scheduler paths")
     log = pathlib.Path(log_dir)
-    env = env or {}
     hour, minute = config.daily_os_local_hm(cfg)
     minutes = int(cfg.get("scan_interval_minutes", 120))
     units: Dict[str, str] = {}
     if "daily" in enabled_jobs(cfg):
         units[f"{SYSTEMD_UNITS['daily']}.service"] = _service_unit(
             "Codex Reset Watch (daily)", f"{program} daily",
-            log / "systemd-daily.out.log", log / "systemd-daily.err.log", env)
+            log / "systemd-daily.out.log", log / "systemd-daily.err.log")
         units[f"{SYSTEMD_UNITS['daily']}.timer"] = _timer_unit(
             "Codex Reset Watch (daily) timer",
             [f"OnCalendar=*-*-* {hour:02d}:{minute:02d}:00", "Persistent=true"])
     if "monitor" in enabled_jobs(cfg):
         units[f"{SYSTEMD_UNITS['monitor']}.service"] = _service_unit(
             "Codex Reset Watch (monitor)", f"{program} monitor",
-            log / "systemd-monitor.out.log", log / "systemd-monitor.err.log", env)
+            log / "systemd-monitor.out.log", log / "systemd-monitor.err.log")
         units[f"{SYSTEMD_UNITS['monitor']}.timer"] = _timer_unit(
             "Codex Reset Watch (monitor) timer",
             [f"OnBootSec={minutes}min", f"OnUnitActiveSec={minutes}min"])
@@ -280,27 +265,19 @@ def apply_systemd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
     out_dir = systemd_user_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     existing = systemd_existing_env(out_dir)
-    try:
-        _migrate_legacy_credentials(existing, cfg)
-        env = job_env(env, existing, cfg)
-        units = systemd_units(program, log_dir, cfg, env)
-        for job in JOBS:
-            if existing or job not in enabled_jobs(cfg):
-                _stop_systemd_timer(job)
-    except (OSError, ValueError):
-        stop_error = None
-        for job in JOBS:
-            try:
-                _stop_systemd_timer(job)
-            except OSError as exc:
-                stop_error = exc
+
+    def write() -> None:
         write_systemd(out_dir, systemd_units(program, log_dir, cfg))
         subprocess.check_call(["systemctl", "--user", "daemon-reload"])
-        if stop_error:
-            raise OSError("Legacy systemd timer could not be stopped; it may retain old credentials") from stop_error
-        raise
-    write_systemd(out_dir, units)
-    subprocess.check_call(["systemctl", "--user", "daemon-reload"])
+
+    # A running service keeps the environment it started with, so legacy
+    # credentials restart every job; otherwise only disabled ones stop.
+    apply_jobs(
+        existing, cfg, env, write=write,
+        stop=lambda: _each([j for j in JOBS if existing or j not in enabled_jobs(cfg)],
+                           _stop_systemd_timer),
+        stop_all=lambda: _each(JOBS, _stop_systemd_timer),
+    )
     for job in enabled_jobs(cfg):
         subprocess.check_call(["systemctl", "--user", "enable", "--now", f"{SYSTEMD_UNITS[job]}.timer"])
     return enabled_jobs(cfg)
@@ -372,14 +349,20 @@ def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) 
 
 
 def _migrate_legacy_credentials(existing: Dict[str, str], cfg: Dict[str, Any]) -> None:
-    """Rescue credentials from older app-owned jobs before stripping their env."""
-    if not existing or not secrets_store.available():
-        return
+    """Rescue credentials from older app-owned jobs before stripping their env.
+
+    The chat id is plain config and always migrates; the token only when a
+    credential store can take it (see :mod:`secrets_store` for why).
+    """
     updates = {}
     for env_key, cfg_key in (("TG_BOT_TOKEN", "telegram_bot_token"),
                              ("TG_CHAT_ID", "telegram_chat_id")):
-        if existing.get(env_key) and not cfg.get(cfg_key):
-            updates[cfg_key] = config.coerce(config.BY_KEY[cfg_key], existing[env_key])
+        value = existing.get(env_key, "").strip()
+        if not value or cfg.get(cfg_key):
+            continue
+        if cfg_key in config.SECRET_KEYS and not secrets_store.available():
+            continue
+        updates[cfg_key] = config.coerce(config.BY_KEY[cfg_key], value)
     if updates:
         config.save({**cfg, **updates})
         cfg.update(updates)
@@ -395,6 +378,49 @@ def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str],
         if env.get(env_key) and not cfg.get(cfg_key):
             raise ValueError(f"{env_key} only works for manual runs; set {cfg_key} in crw config for scheduled runs")
     return {}
+
+
+def _each(jobs: Iterable[str], action: Callable[[str], None]) -> None:
+    """Run *action* for every job, then re-raise the last OSError, if any."""
+    error: Optional[OSError] = None
+    for job in jobs:
+        try:
+            action(job)
+        except OSError as exc:
+            error = exc
+    if error:
+        raise error
+
+
+def apply_jobs(existing: Dict[str, str], cfg: Dict[str, Any], env: Optional[Dict[str, str]], *,
+               write: Callable[[], Any], stop: Callable[[], Any] = lambda: None,
+               stop_all: Optional[Callable[[], Any]] = None) -> None:
+    """Validate credentials, then stop jobs and write env-free job files.
+
+    *existing* is what older job files still carry. A credential problem with
+    nothing on disk is reported before any running job is touched. With legacy
+    credentials on disk the jobs are stopped and the files scrubbed anyway,
+    because leaving a 0644 plaintext token in place is the worse outcome.
+    """
+    try:
+        _migrate_legacy_credentials(existing, cfg)
+        job_env(env, existing, cfg)
+    except (OSError, ValueError):
+        if not existing:
+            raise
+        try:
+            (stop_all or stop)()
+        except OSError as exc:
+            write()
+            raise OSError("Legacy job could not be stopped; it may retain old credentials") from exc
+        write()
+        raise
+    try:
+        stop()
+    except OSError:
+        write()  # the files on disk still lose any legacy credentials
+        raise
+    write()
 
 
 def bin_dir() -> pathlib.Path:
