@@ -673,12 +673,12 @@ crw check
 ### Using `telegram_kit` from other projects
 
 `telegram_kit` lives in its own repository, [weskao/telegram-kit](https://github.com/weskao/telegram-kit),
-and does not import this CLI. Any Python project can depend on it directly and get the same
-storage and sending guarantees — pin the dependency to a tag, and a fix ships to every project
-that uses it by bumping that tag and re-running `uv lock --upgrade-package telegram-kit`:
+is published to [PyPI](https://pypi.org/project/telegram-kit/), and does not import this CLI. Any
+Python project can depend on it directly and get the same storage and sending guarantees; a fix
+ships to every project that uses it with `uv lock --upgrade-package telegram-kit`:
 
 ```bash
-uv add "telegram-kit @ git+https://github.com/weskao/telegram-kit@v0.1.0"
+uv add "telegram-kit>=0.1.3,<0.2"
 ```
 
 ```python
