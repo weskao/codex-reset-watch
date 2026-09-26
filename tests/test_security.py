@@ -19,6 +19,9 @@ from codex_reset_watch import config, paths, scheduler, secrets_store, ui
 from scripts import install, render_launchd, render_systemd
 
 
+POSIX_BACKEND = unittest.skipIf(os.name == "nt", "launchd/systemd backends never run on Windows")
+
+
 class SecurityTests(unittest.TestCase):
     def test_portable_settings_cannot_disclose_or_replace_local_identity(self):
         local = dict(telegram_bot_token="fake-token", telegram_chat_id="111",
@@ -56,6 +59,7 @@ class SecurityTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 scheduler.job_env({"TG_BOT_TOKEN": "fake-token"}, {})
 
+    @POSIX_BACKEND
     def test_failed_launchd_migration_stops_job_and_scrubs_legacy_plist(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -80,6 +84,7 @@ class SecurityTests(unittest.TestCase):
             self.assertNotIn("fake-token", old.read_text())
             self.assertTrue(any("disable" in call for call in calls))
 
+    @POSIX_BACKEND
     def test_launchd_migrates_legacy_token_to_store_before_rewriting(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -93,6 +98,7 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "config.json").read_text())["telegram_chat_id"], "111")
             self.assertNotIn("fake-token", old.read_text())
 
+    @POSIX_BACKEND
     def test_launchd_migrates_credentials_split_between_plists(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -107,6 +113,7 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(vault["telegram_bot_token"], "fake-token")
             self.assertEqual(json.loads((root / "config.json").read_text())["telegram_chat_id"], "111")
 
+    @POSIX_BACKEND
     def test_launchd_failed_stop_is_reported_after_disk_scrub(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -172,6 +179,7 @@ class SecurityTests(unittest.TestCase):
         self.assertTrue(any("stop" in call and "codex-reset-watch-daily.service" in call
                             for call in calls))
 
+    @POSIX_BACKEND
     def test_systemd_migrates_legacy_token_to_store_before_rewriting(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -185,6 +193,7 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "config.json").read_text())["telegram_chat_id"], "111")
             self.assertNotIn("fake-token", old.read_text())
 
+    @POSIX_BACKEND
     def test_systemd_successful_migration_stops_legacy_running_service(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -340,10 +349,11 @@ class SecurityTests(unittest.TestCase):
             target = pathlib.Path(d) / "config.json"
             paths.write_private(target, "private")
             check = (
-                "$a=Get-Acl -LiteralPath ([Console]::In.ReadToEnd()); "
+                # .NET only: Get-Acl breaks when a pwsh 7 parent leaks its PSModulePath into powershell.exe
+                "$a=[IO.FileInfo]::new([Console]::In.ReadToEnd()).GetAccessControl(); "
+                "$r=$a.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]); "
                 "$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value; "
-                "if (!$a.AreAccessRulesProtected -or $a.Access.Count -ne 1 -or "
-                "$a.Access[0].IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -ne $sid) { exit 1 }"
+                "if (!$a.AreAccessRulesProtected -or $r.Count -ne 1 -or $r[0].IdentityReference.Value -ne $sid) { exit 1 }"
             )
             result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", check],
                                     input=str(target), text=True, capture_output=True, check=False)
@@ -419,6 +429,7 @@ class ReviewRegressionTests(unittest.TestCase):
                     code = crw.config_cmd(crw.build_parser().parse_args(["config", "--set", "telegram_bot_token="]))
             self.assertEqual(code, 0)
 
+    @POSIX_BACKEND
     def test_uninstall_removes_plists_when_bootout_fails(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -429,6 +440,7 @@ class ReviewRegressionTests(unittest.TestCase):
                 scheduler.remove_launchd()
             self.assertFalse(plist.exists())
 
+    @POSIX_BACKEND
     def test_legacy_chat_id_migrates_without_credential_store(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
@@ -441,6 +453,7 @@ class ReviewRegressionTests(unittest.TestCase):
                 scheduler.apply_systemd("/bin/crw", root / "logs", dict(config.DEFAULTS))
             self.assertEqual(json.loads((root / "config.json").read_text())["telegram_chat_id"], "111")
 
+    @POSIX_BACKEND
     def test_legacy_token_with_trailing_newline_migrates(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
