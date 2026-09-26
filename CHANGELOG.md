@@ -1,3 +1,30 @@
+## [0.7.0] - 2026-09-26
+
+### 🚀 Features
+
+- **i18n:** [**breaking**] Translate telegram notices via config language
+- Interactive update prompts
+- **security:** [**breaking**] Harden telegram secret storage and export
+- **telegram:** [**breaking**] Extract reusable telegram_kit package
+
+### 🐛 Bug Fixes
+
+- **ui:** Align update prompt layout
+- Include unchanged notification settings in basic mode
+- **security:** Keep cli and schedules alive on store failure
+
+### 🚜 Refactor
+
+- **telegram:** [**breaking**] Depend on telegram_kit instead of vendoring it
+
+### 📚 Documentation
+
+- Describe telegram credential store and export changes
+- Document telegram_kit and credential fallbacks
+
+### 🧪 Testing
+
+- **security:** Cover credential store and export hardening
 ## [0.6.0] - 2026-09-25
 
 ### 🚀 Features
