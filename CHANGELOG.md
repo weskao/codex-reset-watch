@@ -1,3 +1,8 @@
+## [0.7.2] - 2026-09-26
+
+### 🐛 Bug Fixes
+
+- **ci:** Drop --no-index from wheel install check
 ## [0.7.1] - 2026-09-26
 
 ### 🐛 Bug Fixes
