@@ -7,64 +7,12 @@ from __future__ import annotations
 
 import os
 import pathlib
-import json
-import subprocess
 import sys
-import uuid
 from typing import Any, Dict, Optional, Type
 
+from telegram_kit import write_private  # noqa: F401 - re-exported
+
 APP_DIR_NAME = "codex-reset-watch"
-
-
-def write_private(target: pathlib.Path, content: str) -> None:
-    """Atomically write owner-only text; fail before writing if protection fails."""
-    target = pathlib.Path(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.is_symlink():
-        raise OSError("Refusing to overwrite a symlink")
-    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
-    created = False
-    try:
-        if os.name == "nt":
-            # The ACL is attached at creation, before content is written.
-            # The path and content travel on stdin, never the command line.
-            script = (
-                "$ErrorActionPreference='Stop'; "
-                "$data=[Console]::In.ReadToEnd() | ConvertFrom-Json; "
-                "$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User; "
-                "$acl=[Security.AccessControl.FileSecurity]::new(); "
-                "$acl.SetAccessRuleProtection($true,$false); $acl.SetOwner($sid); "
-                "$rule=[Security.AccessControl.FileSystemAccessRule]::new($sid,"
-                "[Security.AccessControl.FileSystemRights]::FullControl,"
-                "[Security.AccessControl.AccessControlType]::Allow); "
-                "$acl.AddAccessRule($rule); "
-                "$file=[IO.FileStream]::new($data.path,[IO.FileMode]::CreateNew,"
-                "[Security.AccessControl.FileSystemRights]::FullControl,[IO.FileShare]::None,4096,"
-                "[IO.FileOptions]::None,$acl); "
-                "$writer=[IO.StreamWriter]::new($file,[Text.UTF8Encoding]::new($false)); "
-                "try { $writer.Write($data.content) } finally { $writer.Dispose() }"
-            )
-            created = True  # PowerShell may create it before failing or timing out
-            try:
-                result = subprocess.run(
-                    ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-                    input=json.dumps({"path": str(temporary), "content": content}, ensure_ascii=True),
-                    capture_output=True, text=True, timeout=15, check=False,
-                )
-            except subprocess.SubprocessError as exc:
-                raise OSError("Unable to create an owner-only file") from exc
-            if result.returncode:
-                raise OSError("Unable to create an owner-only file")
-        else:
-            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            created = True
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                stream.write(content)
-        os.replace(temporary, target)
-        created = False
-    finally:
-        if created:
-            temporary.unlink(missing_ok=True)
 
 
 def _path_cls(platform: str) -> Type[pathlib.PurePath]:

@@ -1,7 +1,7 @@
 """The OS-keychain secret store.
 
 Almost no test touches a real keychain: nearly every one replaces the single
-subprocess funnel (``secrets_store._run``) and the platform probe, so the
+subprocess funnel (``telegram_kit._run``) and the platform probe, so the
 macOS, Linux and Windows paths are all exercised on whatever machine runs the
 suite.
 
@@ -18,6 +18,7 @@ import pathlib
 import tempfile
 import sys
 
+import telegram_kit
 from codex_reset_watch import secrets_store as store
 from tests import real_credential_store
 
@@ -41,39 +42,39 @@ def backend(name, run):
     memoized in production (it probes the filesystem once), so patching the
     probe alone would leak the first test's answer into every later one.
     """
-    return mock.patch.multiple(store, backend=lambda: name, _run=run)
+    return mock.patch.multiple(telegram_kit, backend=lambda: name, _run=run)
 
 
 class BackendDetectionTests(unittest.TestCase):
     def test_macos_uses_the_security_tool_when_present(self):
-        with mock.patch.object(store, "IS_MACOS", True), \
-                mock.patch.object(store, "IS_WINDOWS", False), \
+        with mock.patch.object(telegram_kit, "IS_MACOS", True), \
+                mock.patch.object(telegram_kit, "IS_WINDOWS", False), \
                 mock.patch("shutil.which", return_value="/usr/bin/security"):
-            self.assertEqual(store._detect_backend(), "keychain")
+            self.assertEqual(telegram_kit._detect_backend(), "keychain")
 
     def test_linux_uses_secret_tool_when_present(self):
-        with mock.patch.object(store, "IS_MACOS", False), \
-                mock.patch.object(store, "IS_WINDOWS", False), \
+        with mock.patch.object(telegram_kit, "IS_MACOS", False), \
+                mock.patch.object(telegram_kit, "IS_WINDOWS", False), \
                 mock.patch("shutil.which", side_effect=lambda n: "/usr/bin/secret-tool"
                            if n == "secret-tool" else None):
-            self.assertEqual(store._detect_backend(), "libsecret")
+            self.assertEqual(telegram_kit._detect_backend(), "libsecret")
 
     def test_windows_uses_dpapi(self):
-        with mock.patch.object(store, "IS_MACOS", False), \
-                mock.patch.object(store, "IS_WINDOWS", True), \
+        with mock.patch.object(telegram_kit, "IS_MACOS", False), \
+                mock.patch.object(telegram_kit, "IS_WINDOWS", True), \
                 mock.patch("shutil.which", return_value="powershell.exe"):
-            self.assertEqual(store._detect_backend(), "dpapi")
+            self.assertEqual(telegram_kit._detect_backend(), "dpapi")
 
     def test_no_tool_means_no_backend(self):
-        with mock.patch.object(store, "IS_MACOS", False), \
-                mock.patch.object(store, "IS_WINDOWS", False), \
+        with mock.patch.object(telegram_kit, "IS_MACOS", False), \
+                mock.patch.object(telegram_kit, "IS_WINDOWS", False), \
                 mock.patch("shutil.which", return_value=None):
-            self.assertIsNone(store._detect_backend())
+            self.assertIsNone(telegram_kit._detect_backend())
 
     def test_available_reflects_the_backend(self):
-        with mock.patch.object(store, "backend", return_value=None):
+        with mock.patch.object(telegram_kit, "backend", return_value=None):
             self.assertFalse(store.available())
-        with mock.patch.object(store, "backend", return_value="keychain"):
+        with mock.patch.object(telegram_kit, "backend", return_value="keychain"):
             self.assertTrue(store.available())
 
 
@@ -113,7 +114,7 @@ class KeychainTests(unittest.TestCase):
     def test_a_newline_in_an_identifier_is_refused_not_injected(self):
         with backend("keychain", Recorder((0, ""))):
             with self.assertRaises(ValueError):
-                store._batch_quote("svc\nadd-generic-password -s evil")
+                telegram_kit._batch_quote("svc\nadd-generic-password -s evil")
 
     def test_delete_removes_the_item(self):
         run = Recorder((0, ""))
@@ -150,14 +151,14 @@ class DpapiTests(unittest.TestCase):
         registry = mock.MagicMock(HKEY_CURRENT_USER=object())
         registry.OpenKey.return_value.__enter__.return_value = object()
         registry.QueryValueEx.return_value = ("fake-token", 1)
-        with mock.patch.object(store, "IS_WINDOWS", True), mock.patch.dict(sys.modules, {"winreg": registry}):
+        with mock.patch.object(telegram_kit, "IS_WINDOWS", True), mock.patch.dict(sys.modules, {"winreg": registry}):
             self.assertTrue(store.legacy_windows_env_token_present())
 
     def test_encrypted_file_is_written_privately_without_path_in_command(self):
         with tempfile.TemporaryDirectory() as d:
             path = pathlib.Path(d) / "token.dpapi"
             run = Recorder((0, "synthetic-ciphertext\n"))
-            with backend("dpapi", run), mock.patch.object(store, "_dpapi_path", return_value=path):
+            with backend("dpapi", run), mock.patch.object(store._store, "_dpapi_path", return_value=path):
                 self.assertTrue(store.set("telegram_bot_token", "fake-token"))
             self.assertEqual(path.read_text(), "synthetic-ciphertext")
             self.assertNotIn("fake-token", " ".join(run.calls[0][0]))
@@ -168,14 +169,14 @@ class DpapiTests(unittest.TestCase):
             path = pathlib.Path(d) / "token.dpapi"
             path.write_text("synthetic-ciphertext")
             run = Recorder((0, "fake-token\n"))
-            with backend("dpapi", run), mock.patch.object(store, "_dpapi_path", return_value=path):
+            with backend("dpapi", run), mock.patch.object(store._store, "_dpapi_path", return_value=path):
                 self.assertEqual(store.get("telegram_bot_token"), "fake-token")
             self.assertEqual(run.calls[0][1], "synthetic-ciphertext")
             self.assertNotIn(str(path), " ".join(run.calls[0][0]))
 
     def test_account_cannot_escape_dpapi_directory(self):
         with self.assertRaises(ValueError):
-            store._dpapi_path("../elsewhere")
+            store._store._dpapi_path("../elsewhere")
 
 
 class NoBackendTests(unittest.TestCase):

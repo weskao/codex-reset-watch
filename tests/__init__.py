@@ -10,7 +10,7 @@ having destroyed it (``load() == DEFAULTS`` only holds when the store is
 empty).
 
 So the OS boundary is closed once, here, for every test module: the backend
-probe reports "no credential store", and :func:`secrets_store._run` — the one
+probe reports "no credential store", and :func:`telegram_kit._run` — the one
 subprocess funnel — raises if anything still tries to shell out to
 ``security``/``secret-tool``/PowerShell. Tests that need a working store mock
 ``get``/``set``/``delete`` themselves (see ``test_config_extras``), and
@@ -20,7 +20,7 @@ inside its own context.
 import contextlib
 import unittest.mock as mock
 
-from codex_reset_watch import secrets_store
+import telegram_kit
 
 
 def _no_credential_helpers(argv, stdin=None):  # pragma: no cover - a tripwire
@@ -31,9 +31,9 @@ def _no_credential_helpers(argv, stdin=None):  # pragma: no cover - a tripwire
 
 # ``backend``, not ``_detect_backend``: the probe itself is what
 # test_secrets_store.BackendDetectionTests exercises, and it must stay real.
-_REAL_BACKEND, _REAL_RUN = secrets_store.backend, secrets_store._run
-secrets_store.backend = lambda: None
-secrets_store._run = _no_credential_helpers
+_REAL_BACKEND, _REAL_RUN = telegram_kit.backend, telegram_kit._run
+telegram_kit.backend = lambda: None
+telegram_kit._run = _no_credential_helpers
 
 
 @contextlib.contextmanager
@@ -46,5 +46,5 @@ def real_credential_store():
     ``/dev/tty`` instead of reading stdin: nothing stored, exit 0, every mocked
     assertion green). It touches its own account name, never the real token.
     """
-    with mock.patch.multiple(secrets_store, backend=_REAL_BACKEND, _run=_REAL_RUN):
+    with mock.patch.multiple(telegram_kit, backend=_REAL_BACKEND, _run=_REAL_RUN):
         yield

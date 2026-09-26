@@ -21,7 +21,6 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-import warnings
 from typing import Any, Callable, Dict, IO, List
 
 try:  # stdlib on macOS/Linux; absent on Windows, where the console
@@ -31,6 +30,7 @@ except ImportError:
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+import telegram_kit  # noqa: E402
 from codex_reset_watch import config, paths, scheduler  # noqa: E402
 
 backend_for = scheduler.backend_for
@@ -139,11 +139,8 @@ def prompt_telegram_setup(cfg: Dict[str, Any], *, ask: Callable[[str], str] = in
         return False
 
     chat_id = ask("  Telegram chat id: ").strip()
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", getpass.GetPassWarning)
-            token = ask_secret("  Telegram bot token (hidden): ").strip()
-    except (EOFError, OSError, getpass.GetPassWarning):
+    token = telegram_kit.read_hidden("  Telegram bot token (hidden): ", ask=ask_secret)
+    if token is None:
         print("  ❌ Could not hide token input; configure it later in a terminal.", file=out)
         return False
     if not chat_id or not token:

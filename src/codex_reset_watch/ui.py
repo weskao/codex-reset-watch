@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import contextlib
 import functools
-import getpass
 import importlib.metadata
 import json
 import os
@@ -35,9 +34,10 @@ import re
 import shutil
 import sys
 import unicodedata
-import warnings
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, IO, List, Optional, Sequence, Tuple
+
+import telegram_kit
 
 from . import config, i18n, keys, scheduler, secrets_store
 
@@ -1090,11 +1090,8 @@ def _edit(setting: config.Setting, cfg: Dict[str, Any], paint: Paint,
           f"{config.render(setting, before, lang)}   {paint.muted}{hint}{paint.reset}", file=out)
     print(f" {paint.accent}{GLYPH_PROMPT}{paint.reset} ", end="", file=out, flush=True)
     if setting.kind == "secret" and stdin is sys.stdin and stdin.isatty():
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("error", getpass.GetPassWarning)
-                raw = getpass.getpass("Telegram bot token (hidden): ")
-        except (EOFError, OSError, getpass.GetPassWarning):
+        raw = telegram_kit.read_hidden("Telegram bot token (hidden): ")
+        if raw is None:
             return False
     else:
         raw = _read_line(stdin)

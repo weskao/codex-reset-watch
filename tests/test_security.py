@@ -14,6 +14,7 @@ import getpass
 from unittest import mock
 
 import codex_reset_watch as crw
+import telegram_kit
 from codex_reset_watch import config, paths, scheduler, secrets_store, ui
 from scripts import install, render_launchd, render_systemd
 
@@ -461,12 +462,12 @@ class ReviewRegressionTests(unittest.TestCase):
             raise subprocess.TimeoutExpired(argv, 15)
         with tempfile.TemporaryDirectory() as d:
             target = pathlib.Path(d) / "config.json"
-            class WindowsOs:  # only paths sees "nt"; pathlib keeps the host flavour
+            class WindowsOs:  # only the kit sees "nt"; pathlib keeps the host flavour
                 name = "nt"
                 def __getattr__(self, attr):
                     return getattr(os, attr)
-            with mock.patch.object(paths, "os", WindowsOs()), \
-                    mock.patch.object(paths.subprocess, "run", side_effect=slow_powershell):
+            with mock.patch.object(telegram_kit, "os", WindowsOs()), \
+                    mock.patch.object(telegram_kit.subprocess, "run", side_effect=slow_powershell):
                 with self.assertRaises(OSError):
                     paths.write_private(target, "private")
             self.assertEqual(list(pathlib.Path(d).iterdir()), [])

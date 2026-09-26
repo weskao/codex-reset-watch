@@ -23,7 +23,9 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import config as cfgmod
-from . import filelock, i18n, scheduler, secrets_store, telegram_notify, ui, update_check
+import telegram_kit
+
+from . import filelock, i18n, scheduler, secrets_store, ui, update_check
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
@@ -838,7 +840,7 @@ def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
     if not token or not chat_id:
         logger.event("ERROR", "telegram_credentials_missing")
         return False
-    ok = telegram_notify.send_telegram(token, chat_id, message)
+    ok = telegram_kit.send_message(token, chat_id, message)
     logger.event("INFO" if ok else "ERROR", "telegram_send", ok=ok)
     return ok
 

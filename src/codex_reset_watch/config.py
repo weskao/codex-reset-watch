@@ -34,6 +34,9 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+import telegram_kit
+from telegram_kit import mask_secret  # noqa: F401 - re-exported
+
 from . import i18n, paths, secrets_store
 
 DEFAULT_API_BASE = "https://codex-resets.com"
@@ -189,8 +192,6 @@ def schedule_changed(before: Mapping[str, Any], after: Mapping[str, Any]) -> boo
 SECRET_KEYS = frozenset(s.key for s in SETTINGS if s.kind == "secret")
 LOCAL_KEYS = SECRET_KEYS | frozenset(s.key for s in SETTINGS if not s.portable)
 
-#: Environment variables that stand in for unset Telegram credentials.
-TELEGRAM_ENV = {"telegram_bot_token": "TG_BOT_TOKEN", "telegram_chat_id": "TG_CHAT_ID"}
 
 
 # ── translated text ──────────────────────────────────────────────────────────
@@ -324,13 +325,6 @@ def daily_os_local_hm(cfg: Dict[str, Any], *, now: Optional[dt.datetime] = None)
 
 _TRUE = {"1", "true", "yes", "y", "on", "開", "是"}
 _FALSE = {"0", "false", "no", "n", "off", "關", "否"}
-
-
-def mask_secret(secret: str) -> str:
-    """Stars, plus at most the last 4 characters — never enough to reuse."""
-    if not secret:
-        return ""
-    return "*" * 8 + secret[-4:] if len(secret) > 12 else "*" * 8
 
 
 def coerce(setting: Setting, raw: Any) -> Any:
@@ -571,10 +565,8 @@ def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str
     empty value on either side counts as unset.
     """
     cfg = cfg or {}
-    return tuple(  # type: ignore[return-value]
-        str(cfg.get(key, "") or "").strip() or os.environ.get(env, "").strip()
-        for key, env in TELEGRAM_ENV.items()
-    )
+    return telegram_kit.resolve_credentials(cfg.get("telegram_bot_token", ""),
+                                            cfg.get("telegram_chat_id", ""))
 
 
 # ── export / import ──────────────────────────────────────────────────────────

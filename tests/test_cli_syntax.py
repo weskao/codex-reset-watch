@@ -183,7 +183,7 @@ class TelegramCredentialWiringTests(unittest.TestCase):
     def test_send_telegram_uses_the_stored_credentials(self):
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
         logger = mock.Mock()
-        with self._no_env(), mock.patch.object(crw.telegram_notify, "send_telegram",
+        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_message",
                                                return_value=True) as send:
             self.assertTrue(crw.send_telegram(cfg, "hello", logger))
         send.assert_called_once_with("stored-token", "stored-chat", "hello")
@@ -194,20 +194,20 @@ class TelegramCredentialWiringTests(unittest.TestCase):
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
         logger = mock.Mock()
         with mock.patch.dict(os.environ, {"TG_BOT_TOKEN": "env-token", "TG_CHAT_ID": "env-chat"}), \
-                mock.patch.object(crw.telegram_notify, "send_telegram", return_value=True) as send:
+                mock.patch.object(crw.telegram_kit, "send_message", return_value=True) as send:
             crw.send_telegram(cfg, "hello", logger)
         send.assert_called_once_with("stored-token", "stored-chat", "hello")
 
     def test_the_environment_is_used_when_nothing_is_stored(self):
         logger = mock.Mock()
         with mock.patch.dict(os.environ, {"TG_BOT_TOKEN": "env-token", "TG_CHAT_ID": "env-chat"}), \
-                mock.patch.object(crw.telegram_notify, "send_telegram", return_value=True) as send:
+                mock.patch.object(crw.telegram_kit, "send_message", return_value=True) as send:
             crw.send_telegram({}, "hello", logger)
         send.assert_called_once_with("env-token", "env-chat", "hello")
 
     def test_missing_credentials_are_logged_not_sent(self):
         logger = mock.Mock()
-        with self._no_env(), mock.patch.object(crw.telegram_notify, "send_telegram") as send:
+        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_message") as send:
             self.assertFalse(crw.send_telegram({}, "hello", logger))
         send.assert_not_called()
         logger.event.assert_called_once()
@@ -215,7 +215,7 @@ class TelegramCredentialWiringTests(unittest.TestCase):
     def test_the_token_is_never_written_to_the_log(self):
         cfg = {"telegram_bot_token": "123456:SUPERSECRET", "telegram_chat_id": "42"}
         logger = mock.Mock()
-        with self._no_env(), mock.patch.object(crw.telegram_notify, "send_telegram",
+        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_message",
                                                return_value=True):
             crw.send_telegram(cfg, "hello", logger)
         logged = json.dumps([[str(a) for a in call.args] + [str(call.kwargs)]
