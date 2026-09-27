@@ -1,24 +1,57 @@
+## [0.10.0] - 2026-09-27
+
+### 🚀 Features
+
+- **check:** Read active_watch and avg reset interval
+- **check:** Show how long ago the latest reset was
+- **telegram:** Send photo notifications with reset notices
+
+### 🐛 Bug Fixes
+
+- **cli:** Offer the update prompt on every exit path
+- Keep scheduled reset announcements until executed
+- **telegram:** Upload notice images
+
+### ⚙️ Miscellaneous Tasks
+
+- Add "upcoming" images
 ## [0.9.0] - 2026-09-27
 
 ### 🚀 Features
 
 - **config:** [**breaking**] Drop auto language, resolve once at first use
 - **cli:** Translate --help text via i18n catalogue
+
+### 📚 Documentation
+
+- **changelog:** Release v0.9.0
 ## [0.8.0] - 2026-09-27
 
 ### 🚀 Features
 
 - **update:** Link release notes in the update prompt
+
+### 📚 Documentation
+
+- **changelog:** Release v0.8.0
 ## [0.7.3] - 2026-09-26
 
 ### 🐛 Bug Fixes
 
 - **ci:** Skip POSIX-only scheduler tests on Windows and check ACL via .NET
+
+### 📚 Documentation
+
+- **changelog:** Release v0.7.3
 ## [0.7.2] - 2026-09-26
 
 ### 🐛 Bug Fixes
 
 - **ci:** Drop --no-index from wheel install check
+
+### 📚 Documentation
+
+- **changelog:** Release v0.7.2
 ## [0.7.1] - 2026-09-26
 
 ### 🐛 Bug Fixes
@@ -28,6 +61,10 @@
 ### 💼 Other
 
 - **deps:** Use telegram-kit>=0.1.3 from PyPI
+
+### 📚 Documentation
+
+- **changelog:** Release v0.7.1
 ## [0.7.0] - 2026-09-26
 
 ### 🚀 Features
@@ -51,6 +88,7 @@
 
 - Describe telegram credential store and export changes
 - Document telegram_kit and credential fallbacks
+- **changelog:** Release v0.7.0
 
 ### 🧪 Testing
 
@@ -61,6 +99,10 @@
 
 - **update-check:** Check github in background, not once a day
 - Add no-signal tracker notices
+
+### 📚 Documentation
+
+- **changelog:** Release v0.6.0
 ## [0.5.0] - 2026-09-24
 
 ### 🚀 Features
