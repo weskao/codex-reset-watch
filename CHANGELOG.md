@@ -1,3 +1,8 @@
+## [0.8.0] - 2026-09-27
+
+### 🚀 Features
+
+- **update:** Link release notes in the update prompt
 ## [0.7.3] - 2026-09-26
 
 ### 🐛 Bug Fixes
