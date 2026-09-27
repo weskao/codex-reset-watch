@@ -10,6 +10,7 @@ silently check a path that no longer exists (an `exists()` check would then
 pass "vacuously" whether or not the code under test ever created the file)."""
 import contextlib
 import http.server
+import io
 import json
 import os
 import pathlib
@@ -17,6 +18,7 @@ import socketserver
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 import codex_reset_watch as crw
 
@@ -145,6 +147,38 @@ class NotifyWhenUnchangedTests(unittest.TestCase):
                            status_fixture="status_no_upcoming.json") as (_state_dir, log_dir):
             crw.run_check("daily", notify=True)
             self.assertFalse(self._attempted_send(log_dir))
+
+
+class NoticeImageTests(unittest.TestCase):
+    """A new reset carries a random reset image, an upcoming signal the upcoming
+    image, and every other notice goes out as plain text."""
+
+    def _sent(self, cfg, state=None, status_fixture="status_upcoming.json"):
+        with isolated_run(cfg, status_fixture=status_fixture) as (state_dir, _log_dir):
+            if state:
+                state_dir.mkdir(parents=True, exist_ok=True)
+                (state_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
+            with mock.patch.object(crw, "send_telegram", return_value=True) as send:
+                crw.run_check("monitor", notify=True)
+        return [(c.args[1], c.kwargs.get("image")) for c in send.call_args_list]
+
+    def test_new_reset_and_upcoming_each_carry_their_own_image(self):
+        sent = self._sent({"timezone": "UTC"}, {"initialized_at": "2026-01-01T00:00:00Z", "latest_event_key": "old"},
+                          status_fixture="status_scheduled_tba.json")
+        self.assertEqual([image.parent.name for _text, image in sent], ["reset", "upcoming"])
+
+    def test_the_no_signal_notice_stays_text_only(self):
+        sent = self._sent({"timezone": "UTC", "monitor_notify_when_unchanged": True},
+                          status_fixture="status_no_upcoming.json")
+        self.assertTrue(sent)
+        self.assertEqual([image for _text, image in sent], [None])
+
+    def test_manual_notify_stays_text_only(self):
+        with isolated_run({"timezone": "UTC"}), mock.patch.object(crw, "send_telegram") as send, \
+                contextlib.redirect_stdout(io.StringIO()):
+            crw.run_check("manual", notify=True)
+        send.assert_called_once()
+        self.assertNotIn("image", send.call_args.kwargs)
 
 
 class ManualCheckTests(unittest.TestCase):

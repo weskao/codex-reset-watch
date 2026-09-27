@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import pathlib
+import random
 import re
 import shutil
 import sys
@@ -899,14 +900,26 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
     return render_notice(i18n.t("notice.new_event.title", lang), checked_at, cfg, [section])
 
 
-def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger) -> bool:
+ASSETS_DIR = pathlib.Path(__file__).parent / "assets"
+
+
+def notice_image(kind: str) -> Optional[pathlib.Path]:
+    """A random image from ``assets/<kind>/`` to send with that notice; None if there is none."""
+    images = [p for p in (ASSETS_DIR / kind).glob("*") if p.suffix.lower() in (".jpeg", ".jpg", ".png")]
+    return random.choice(images) if images else None
+
+
+def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger,
+                  image: Optional[pathlib.Path] = None) -> bool:
     # The keychain-backed config first, then the environment — see
     # config.telegram_credentials. Neither value is ever logged.
     token, chat_id = cfgmod.telegram_credentials(cfg)
     if not token or not chat_id:
         logger.event("ERROR", "telegram_credentials_missing")
         return False
-    ok = telegram_kit.send_message(token, chat_id, message)
+    # A rejected photo must not cost the notice itself: fall back to the text alone.
+    ok = bool(image) and telegram_kit.send_photo(token, chat_id, image, message)
+    ok = ok or telegram_kit.send_message(token, chat_id, message)
     logger.event("INFO" if ok else "ERROR", "telegram_send", ok=ok)
     return ok
 
@@ -987,7 +1000,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         prev_latest = state.get("latest_event_key", "")
         prev_upcoming = state.get("upcoming_key", "")
         is_first = not state.get("initialized_at")
-        messages: List[str] = []
+        messages: List[Tuple[str, Optional[pathlib.Path]]] = []
 
         if mode == "manual":
             text = format_manual(snapshot, cfg)
@@ -999,20 +1012,22 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                 changed = snapshot.latest.key != prev_latest
                 # First run establishes a baseline; only notify an already-existing event if very recent.
                 if changed and (not is_first or is_recent_event(snapshot.latest, snapshot.checked_at)):
-                    messages.append(format_new_event_notice(snapshot.latest, snapshot.checked_at, cfg))
+                    messages.append((format_new_event_notice(snapshot.latest, snapshot.checked_at, cfg),
+                                     notice_image("reset")))
             if bool(cfg.get("notify_upcoming_reset", True)):
                 notify_unchanged = bool(cfg.get("monitor_notify_when_unchanged" if mode == "monitor" else "daily_notify_when_unchanged", False))
                 if snapshot.upcoming:
                     changed = snapshot.upcoming.key != prev_upcoming
                     if changed or notify_unchanged:
-                        messages.append(format_upcoming_notice(snapshot.upcoming, snapshot.checked_at, cfg))
+                        messages.append((format_upcoming_notice(snapshot.upcoming, snapshot.checked_at, cfg),
+                                         notice_image("upcoming")))
                 elif notify_unchanged:
                     # No upcoming signal at all is itself "unchanged" — without this branch
                     # notify_when_unchanged never fires on days with nothing to report.
-                    messages.append(format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg))
+                    messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if notify:
-                for message in messages:
-                    send_telegram(cfg, message, logger)
+                for message, image in messages:
+                    send_telegram(cfg, message, logger, image=image)
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
         state["last_check_at"] = iso_utc(snapshot.checked_at)

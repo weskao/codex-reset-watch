@@ -7,6 +7,10 @@ and countdown, source message and announcement link, Codex Resets link, and chec
 notification also makes clear that this is a third-party public forecast: an individual Codex
 quota may reset at a different time.
 
+New-reset and upcoming-reset notices arrive as one photo message: the text is the caption of an
+image picked at random from `src/codex_reset_watch/assets/reset/` or `assets/upcoming/`. To add
+more images, drop `.jpeg`/`.jpg`/`.png` files into those folders. Other notices stay text-only.
+
 Example reset-signal notification:
 
 ![Codex Reset Watch Telegram notification showing a scheduled regular reset](docs/images/crw-reset-notification.png)

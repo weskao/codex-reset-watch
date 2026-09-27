@@ -205,6 +205,29 @@ class TelegramCredentialWiringTests(unittest.TestCase):
             crw.send_telegram({}, "hello", logger)
         send.assert_called_once_with("env-token", "env-chat", "hello")
 
+    def test_an_image_goes_out_with_the_text_in_one_photo_message(self):
+        cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
+        image = crw.notice_image("reset")
+        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_photo", return_value=True) as photo, \
+                mock.patch.object(crw.telegram_kit, "send_message") as send:
+            self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=image))
+        photo.assert_called_once_with("stored-token", "stored-chat", image, "hello")
+        send.assert_not_called()
+
+    def test_a_failed_photo_still_delivers_the_text(self):
+        cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
+        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_photo", return_value=False), \
+                mock.patch.object(crw.telegram_kit, "send_message", return_value=True) as send:
+            self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=crw.notice_image("upcoming")))
+        send.assert_called_once_with("stored-token", "stored-chat", "hello")
+
+    def test_notice_image_picks_from_the_bundled_folder_of_that_kind(self):
+        reset = {crw.notice_image("reset") for _ in range(200)}
+        self.assertEqual({p.name for p in reset}, {f"reset_{i}.jpeg" for i in range(1, 6)})
+        self.assertTrue(all(p.is_file() for p in reset))
+        self.assertEqual(crw.notice_image("upcoming").name, "upcoming_1.jpeg")
+        self.assertIsNone(crw.notice_image("no-such-kind"))
+
     def test_missing_credentials_are_logged_not_sent(self):
         logger = mock.Mock()
         with self._no_env(), mock.patch.object(crw.telegram_kit, "send_message") as send:
