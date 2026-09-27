@@ -735,6 +735,10 @@ Example:
   embedded X/Twitter Snowflake post ID, which encodes its own creation time. This keeps
   historical reset times available even if the upstream schema changes or omits its timestamp
   field. API-provided timestamps always take priority over this fallback.
+- Upcoming signals come from any known container (`scheduled_reset`, `upcoming_reset`,
+  `forecast`, …) including the tracker's `active_watch`, whose `expires_at` is shown as the
+  forecast window close and drops the signal once passed. `crw check` also prints
+  `stats.avg_interval_days` as "Avg. reset interval" when the API provides it.
 
 ## 11. Logs and disk usage
 

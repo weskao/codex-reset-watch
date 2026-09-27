@@ -99,4 +99,23 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(u.time_text, "Time to be announced")
         self.assertEqual(crw.upcoming_status_label(u), "Banked reset")
 
+    def test_active_watch_is_an_upcoming_signal(self):
+        # Live payload shape: scheduled_reset is null, the tracker's watch carries the signal.
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        u = crw.upcoming_from_status(self.fixture("status_active_watch.json"), now=now)
+        self.assertIsNotNone(u)
+        self.assertEqual(crw.iso_utc(u.timestamp), "2026-09-30T06:59:59.999000Z")
+        self.assertEqual(u.confidence, "strong")
+        self.assertEqual(u.window_label, "around OpenAI DevDay 2026 on September 29 (Pacific Time)")
+        self.assertTrue(u.message.startswith("OpenAI DevDay 2026 is on September 29"))
+        self.assertEqual(u.event_type, "")  # source.type "observed" is not a reset type
+
+    def test_expired_active_watch_is_ignored(self):
+        now = dt.datetime(2026, 9, 30, 7, 0, tzinfo=dt.timezone.utc)
+        self.assertIsNone(crw.upcoming_from_status(self.fixture("status_active_watch.json"), now=now))
+
+    def test_avg_interval_days_from_stats(self):
+        self.assertEqual(crw.avg_interval_days(self.fixture("status_active_watch.json")), 6.9)
+        self.assertIsNone(crw.avg_interval_days(self.fixture("status_scheduled_tba.json")))
+
 if __name__ == "__main__": unittest.main()

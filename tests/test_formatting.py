@@ -46,6 +46,15 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("🔗 公告：https://x.com/thsottiaux/status/2101352781219258527", text)
         self.assertIn("🌐 Codex Resets：https://codex-resets.com/", text)
 
+    def test_manual_output_shows_avg_reset_interval(self):
+        checked = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        latest = crw.Event(event_id="1", timestamp=checked, event_type="regular")
+        snapshot = crw.Snapshot(checked, latest, None, True, True, avg_interval_days=6.9)
+        self.assertIn("📈 Avg. reset interval: 6.9 days", crw.format_manual(snapshot, {"language": "en"}))
+        self.assertIn("📈 平均 Reset 間隔：6.9 天", crw.format_manual(snapshot, {"language": "zh-TW"}))
+        snapshot.avg_interval_days = None
+        self.assertNotIn("📈", crw.format_manual(snapshot, {"language": "en"}))
+
     def test_fmt_local_honours_configured_timezone(self):
         t = dt.datetime(2026, 9, 19, 13, 0, tzinfo=dt.timezone.utc)
         self.assertEqual(crw.fmt_local(t, {"timezone": "UTC"}), "2026-09-19 13:00 UTC")

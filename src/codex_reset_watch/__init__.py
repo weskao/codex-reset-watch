@@ -121,6 +121,7 @@ class Snapshot:
     resets_ok: bool
     status_error: str = ""
     resets_error: str = ""
+    avg_interval_days: Optional[float] = None
 
 
 def now_utc() -> dt.datetime:
@@ -333,13 +334,15 @@ UPCOMING_CONTAINER_KEYS = (
     "forecast", "prediction", "upcoming", "upcoming_reset", "next_reset", "next",
     "outlook", "reset_forecast", "next_reset_forecast", "forecast_window",
     "scheduled_reset", "reset_schedule", "next_reset_schedule", "banked_reset",
+    "active_watch",
 )
 EXACT_TIME_KEYS = (
     "next_reset_at", "scheduled_reset_at", "target_at", "estimated_at", "eta",
     "eta_at", "reset_at", "scheduled_at", "expected_at", "scheduled_for",
 )
 WINDOW_TIME_KEYS = (
-    "window_end_at", "window_end", "until", "by", "end_at", "forecast_until", "deadline"
+    "window_end_at", "window_end", "until", "by", "end_at", "forecast_until", "deadline",
+    "expires_at",
 )
 UPCOMING_TYPE_KEYS = ("type", "reset_type", "event_type", "kind", "category", "mode")
 UPCOMING_STATUS_KEYS = ("status", "state", "schedule_status", "reset_status")
@@ -394,9 +397,16 @@ def looks_like_future_signal(*values: Any) -> bool:
     phrases = (
         "scheduled", "upcoming", "pending", "time to be announced", "to be announced",
         "tba", "coming", "next reset", "will reset", "will give", "will credit",
-        "will do", "lands", "landing", "scheduled reset",
+        "will do", "lands", "landing", "scheduled reset", "active_watch",
     )
     return any(p in text for p in phrases)
+
+
+def avg_interval_days(status: Any) -> Optional[float]:
+    if not isinstance(status, dict):
+        return None
+    val, _ = deep_first(status, ["avg_interval_days"])
+    return numeric(val)
 
 
 def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> Optional[Upcoming]:
@@ -421,17 +431,19 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
         if ts is not None and ts <= now:
             continue
 
-        event_type_raw, _ = deep_first(d, UPCOMING_TYPE_KEYS)
+        # source.type ("x_post", "observed") describes the post, not the reset.
+        event_type_raw, _ = deep_first({k: v for k, v in d.items() if normalize_key(k) != "source"},
+                                       UPCOMING_TYPE_KEYS)
         status_raw, _ = deep_first(d, UPCOMING_STATUS_KEYS)
         title_raw, _ = deep_first(d, UPCOMING_TITLE_KEYS)
         time_text_raw, _ = deep_first(d, UPCOMING_TIME_TEXT_KEYS)
         flag_raw, _ = deep_first(d, UPCOMING_FLAG_KEYS)
-        chance_raw, _ = deep_first(d, ["chance_percent", "probability_percent", "chance", "probability", "percent", "likelihood_percent"])
+        chance_raw, _ = deep_first(d, ["chance_percent", "reset_chance_percent", "probability_percent", "chance", "probability", "percent", "likelihood_percent"])
         chance = numeric(chance_raw)
         if chance is not None and 0 <= chance <= 1:
             chance *= 100
         confidence_raw, _ = deep_first(d, ["confidence", "confidence_label", "level", "signal"])
-        window_raw, _ = deep_first(d, ["window_label", "window", "horizon", "within", "time_window"])
+        window_raw, _ = deep_first(d, ["window_label", "forecast_window", "window", "horizon", "within", "time_window"])
         message_raw, _ = deep_first(d, ["message", "text", "reason", "summary", "hint", "source_text", "description", "announcement"])
         source_url = nested_source_url(d)
 
@@ -618,6 +630,7 @@ class APIClient:
             resets_ok=resets is not None,
             status_error=status_error,
             resets_error=resets_error,
+            avg_interval_days=avg_interval_days(status),
         )
 
 
@@ -774,6 +787,8 @@ def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, p
     lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
     sections = [latest_section(snapshot.latest, cfg, paint=p)]
+    if snapshot.avg_interval_days is not None:
+        sections[0].append(i18n.t("notice.avg_interval", lang, days=f"{snapshot.avg_interval_days:g}"))
     if snapshot.upcoming:
         sections.append(upcoming_section(
             snapshot.upcoming,

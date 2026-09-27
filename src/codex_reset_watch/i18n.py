@@ -401,6 +401,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.type_unlabeled": {"en": "unlabeled", "zh-TW": "未標示"},
     "notice.announcement": {"en": "📝 Announcement: {text}", "zh-TW": "📝 公告：{text}"},
     "notice.source": {"en": "🔗 Source: {url}", "zh-TW": "🔗 來源：{url}"},
+    "notice.avg_interval": {"en": "📈 Avg. reset interval: {days} days", "zh-TW": "📈 平均 Reset 間隔：{days} 天"},
     "notice.upcoming.status": {"en": "{icon} Status: {label}", "zh-TW": "{icon} 狀態：{label}"},
     "notice.upcoming.time_tba": {
         "en": "🕒 Time: not yet announced ({time_text})",
