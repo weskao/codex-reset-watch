@@ -1,3 +1,9 @@
+## [0.9.0] - 2026-09-27
+
+### 🚀 Features
+
+- **config:** [**breaking**] Drop auto language, resolve once at first use
+- **cli:** Translate --help text via i18n catalogue
 ## [0.8.0] - 2026-09-27
 
 ### 🚀 Features
