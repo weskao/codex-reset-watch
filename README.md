@@ -364,7 +364,7 @@ a keypress that cannot arrive.
    21 Log backups ················································· 3
 
  ▍ Interface
-   22 Language ······································· auto (English)
+   22 Language ············································· English
    23 Mode ···················································· Basic
 
  Times shown in Asia/Taipei; the OS fires each job in its own local time.
@@ -390,7 +390,7 @@ a keypress that cannot arrive.
 | `request_timeout_seconds`, `request_retries` | HTTP client tuning | — |
 | `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
-| `language` | Menu, `doctor`, and Telegram notification language | `auto`, `en`, `zh-TW` |
+| `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
 | `update_check` | After a command run in a terminal, ask whether to upgrade when a newer GitHub release exists (see below) | `on` / `off` |
 
@@ -408,9 +408,10 @@ scheduled jobs stay silent, and the exit code never changes. Turn it off with
 ### Language
 
 The menu, help text, validation errors, the `doctor` summary, and Telegram/console notification
-bodies are all available in English and Traditional Chinese. `auto` (the default) follows the
-system locale — `zh_TW`, `zh_HK`, `zh_Hant` and `zh_MO` resolve to 繁體中文, everything else to
-English. Pin it explicitly with:
+bodies are all available in English and Traditional Chinese — no third "auto" setting. The
+default, until you pick one, follows the system locale at first use — `zh_TW`, `zh_HK`,
+`zh_Hant` and `zh_MO` resolve to 繁體中文, everything else (including no match at all) to
+English. Change it explicitly with:
 
 ```bash
 crw config set language=zh-TW

@@ -27,8 +27,8 @@ class SchemaShapeTests(unittest.TestCase):
     def test_language_is_a_choice_setting(self):
         setting = config.BY_KEY["language"]
         self.assertEqual(setting.kind, "choice")
-        self.assertEqual(setting.choices, ("auto", "en", "zh-TW"))
-        self.assertEqual(setting.default, "auto")
+        self.assertEqual(setting.choices, ("en", "zh-TW"))
+        self.assertEqual(setting.default, config.i18n.system_language())
 
     def test_telegram_settings_exist_in_their_own_group(self):
         self.assertEqual(config.BY_KEY["telegram_bot_token"].group, "telegram")
@@ -323,7 +323,7 @@ class LanguagePersistenceTests(unittest.TestCase):
         with isolated_config() as path:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({"language": "klingon"}), encoding="utf-8")
-            self.assertEqual(config.load()["language"], "auto")
+            self.assertEqual(config.load()["language"], config.DEFAULTS["language"])
 
 
 if __name__ == "__main__":

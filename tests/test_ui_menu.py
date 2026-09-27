@@ -72,12 +72,12 @@ class ToggleTests(unittest.TestCase):
 
     def test_a_choice_row_cycles_through_its_choices(self):
         index = SETTINGS.index(config.BY_KEY["language"])
-        state = ui.step(fresh(cursor=index), press(keys.Key.RIGHT), SETTINGS)
-        self.assertEqual(state.values["language"], "en")
-        state = ui.step(state, press(keys.Key.RIGHT), SETTINGS)
+        values = dict(config.DEFAULTS, language="en")  # pin the start; the
+        # real default is machine-dependent (the system's own language)
+        state = ui.step(fresh(cursor=index, values=values), press(keys.Key.RIGHT), SETTINGS)
         self.assertEqual(state.values["language"], "zh-TW")
         state = ui.step(state, press(keys.Key.RIGHT), SETTINGS)
-        self.assertEqual(state.values["language"], "auto")  # wraps
+        self.assertEqual(state.values["language"], "en")  # wraps
 
     def test_toggling_a_schedule_key_marks_the_schedule_dirty(self):
         state = ui.step(fresh(), press(keys.Key.RIGHT), SETTINGS)  # daily_enabled

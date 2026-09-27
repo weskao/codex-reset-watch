@@ -658,7 +658,8 @@ def notice_lang(cfg: Optional[Dict[str, Any]] = None) -> str:
     locale happens to be running the process."""
     if cfg is None or "language" not in cfg:
         return i18n.FALLBACK
-    return i18n.resolve_language(cfg.get("language"))
+    value = cfg.get("language")
+    return value if value in i18n.LANGUAGE_CODES else i18n.FALLBACK
 
 
 def safe_text(s: str, max_len: int = 900) -> str:

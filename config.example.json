@@ -19,6 +19,5 @@
   "log_dir": "",
   "max_log_bytes": 2097152,
   "log_backups": 3,
-  "language": "auto",
   "ui_mode": "basic"
 }

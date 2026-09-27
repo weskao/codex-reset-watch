@@ -34,9 +34,6 @@ from typing import Any, Dict, Optional, Tuple
 
 FALLBACK = "en"
 
-#: The config value meaning "ask the OS" — resolved by :func:`system_language`.
-AUTO = "auto"
-
 #: Environment override, for a one-off run in another language.
 ENV_VAR = "CRW_LANG"
 
@@ -212,8 +209,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     # ── settings: interface ─────────────────────────────────────────────────
     "setting.language.label": {"en": "Language", "zh-TW": "語言"},
     "setting.language.help": {
-        "en": "Language for the menu and messages. auto follows the system locale.",
-        "zh-TW": "選單與訊息的語言。auto 會跟隨系統語系。",
+        "en": "Language for the menu and messages.",
+        "zh-TW": "選單與訊息的語言。",
     },
     "setting.ui_mode.label": {"en": "Mode", "zh-TW": "模式"},
     "setting.ui_mode.help": {
@@ -502,20 +499,10 @@ def system_language() -> str:
     return FALLBACK
 
 
-def resolve_language(configured: Any) -> str:
-    """The language *configured* selects — ``auto``/junk/``None`` means the OS's.
-
-    Never raises: an unknown code from a hand-edited config resolves to the
-    system language, so a typo degrades to a sane default instead of an error
-    inside a notification path.
-    """
-    code = str(configured or AUTO).strip()
-    return code if code in LANGUAGE_CODES else system_language()
-
-
 @lru_cache(maxsize=1)
-def _stored_language() -> str:
-    """The raw ``language`` value in the config file, read without ``config.load``.
+def _stored_language() -> Optional[str]:
+    """The raw ``language`` value in the config file, or ``None`` when absent
+    or unreadable — read without ``config.load``.
 
     A direct file read on purpose — see the module docstring: ``config.load()``
     coerces values, and a coercion error asks this module for its message, so
@@ -525,9 +512,9 @@ def _stored_language() -> str:
         from .config import config_path
 
         parsed = json.loads(config_path().read_text(encoding="utf-8"))
-        if isinstance(parsed, dict):
-            return str(parsed.get("language") or AUTO)
-    return AUTO
+        if isinstance(parsed, dict) and parsed.get("language"):
+            return str(parsed["language"])
+    return None
 
 
 def forget_stored_language() -> None:
@@ -536,18 +523,17 @@ def forget_stored_language() -> None:
 
 
 def current_language(cfg: Optional[Dict[str, Any]] = None) -> str:
-    """The language to render in: ``$CRW_LANG``, else *cfg*, else the config file.
+    """The language to render in: ``$CRW_LANG``, else *cfg*, else the config
+    file, else the system's own language (first use — nothing chosen yet).
 
-    A junk ``$CRW_LANG`` is ignored rather than fatal, so an exported shell
-    variable can never break a scheduled run.
+    A junk value anywhere in that chain is ignored rather than fatal, so a
+    typo or a stray environment variable can never break a scheduled run.
     """
     override = os.environ.get(ENV_VAR, "").strip()
     if override in LANGUAGE_CODES:
         return override
-    if override == AUTO:
-        return system_language()
     configured = cfg.get("language") if cfg is not None else _stored_language()
-    return resolve_language(configured)
+    return configured if configured in LANGUAGE_CODES else system_language()
 
 
 def language_labels() -> Dict[str, str]:
@@ -555,11 +541,8 @@ def language_labels() -> Dict[str, str]:
 
     Every language names itself in its own script (``English``, ``繁體中文``),
     which is what language pickers do and means these names need no translating.
-    ``auto`` renders as whichever language it currently resolves to.
     """
-    names = {lang.code: lang.label for lang in LANGUAGES}
-    resolved = names.get(system_language(), system_language())
-    return {AUTO: f"auto ({resolved})", **names}
+    return {lang.code: lang.label for lang in LANGUAGES}
 
 
 def t(msg_id: str, lang: Optional[str] = None, default: Optional[str] = None, **kwargs: Any) -> str:
@@ -588,7 +571,7 @@ def demo() -> None:
     assert t("menu.quit", lang="zh-TW") == "離開"
     assert t("no.such.id", lang="en", default="fb") == "fb"
     assert t("error.min", lang="en", minimum=3) == "Must not be less than 3"
-    assert resolve_language("zh-TW") == "zh-TW"
+    assert current_language({"language": "zh-TW"}) == "zh-TW"
     assert language_labels()["zh-TW"] == "繁體中文"
     missing = [f"{k}:{c}" for k, v in MESSAGES.items() for c in LANGUAGE_CODES if c not in v]
     assert not missing, missing

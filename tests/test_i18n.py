@@ -44,22 +44,23 @@ class SystemLanguageTests(unittest.TestCase):
             self.assertEqual(i18n.system_language(), i18n.FALLBACK)
 
 
-class ResolveLanguageTests(unittest.TestCase):
+class CurrentLanguageTests(unittest.TestCase):
     def test_explicit_code_is_kept(self):
-        self.assertEqual(i18n.resolve_language("zh-TW"), "zh-TW")
-        self.assertEqual(i18n.resolve_language("en"), "en")
+        self.assertEqual(i18n.current_language({"language": "zh-TW"}), "zh-TW")
+        self.assertEqual(i18n.current_language({"language": "en"}), "en")
 
-    def test_auto_resolves_to_system_language(self):
+    def test_unknown_code_falls_back_to_the_system_language(self):
         with mock.patch.object(i18n, "system_language", return_value="zh-TW"):
-            self.assertEqual(i18n.resolve_language("auto"), "zh-TW")
+            self.assertEqual(i18n.current_language({"language": "klingon"}), "zh-TW")
 
-    def test_unknown_code_resolves_to_system_language(self):
+    def test_no_language_key_falls_back_to_the_system_language(self):
         with mock.patch.object(i18n, "system_language", return_value="en"):
-            self.assertEqual(i18n.resolve_language("klingon"), "en")
+            self.assertEqual(i18n.current_language({}), "en")
 
-    def test_none_resolves_to_system_language(self):
-        with mock.patch.object(i18n, "system_language", return_value="en"):
-            self.assertEqual(i18n.resolve_language(None), "en")
+    def test_no_cfg_and_no_stored_file_falls_back_to_the_system_language(self):
+        with mock.patch.object(i18n, "_stored_language", return_value=None), \
+                mock.patch.object(i18n, "system_language", return_value="en"):
+            self.assertEqual(i18n.current_language(), "en")
 
 
 class EnvOverrideTests(unittest.TestCase):
@@ -114,8 +115,8 @@ class CatalogueCompletenessTests(unittest.TestCase):
     def test_language_codes_match_the_language_table(self):
         self.assertEqual(i18n.LANGUAGE_CODES, tuple(l.code for l in i18n.LANGUAGES))
 
-    def test_auto_is_not_a_selectable_language_code(self):
-        self.assertNotIn(i18n.AUTO, i18n.LANGUAGE_CODES)
+    def test_only_english_and_traditional_chinese_are_selectable(self):
+        self.assertEqual(i18n.LANGUAGE_CODES, ("en", "zh-TW"))
 
     def test_every_language_names_itself_in_its_own_script(self):
         labels = i18n.language_labels()

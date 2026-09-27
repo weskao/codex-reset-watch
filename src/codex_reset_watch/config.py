@@ -137,9 +137,12 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("log_backups", "int", 3, "storage", "Log backups",
             "How many rotated files to keep.", 0, 20),
     # ── interface ────────────────────────────────────────────────────────
-    Setting("language", "choice", "auto", "interface", "Language",
-            "Language for the menu and messages. auto follows the system locale.",
-            choices=(i18n.AUTO,) + i18n.LANGUAGE_CODES, tier="basic"),
+    # Default is the system's language at first use (empty/no-match config
+    # falls back to English inside system_language() itself) — resolved once,
+    # here, at import; not re-derived on every read like the old "auto" value.
+    Setting("language", "choice", i18n.system_language(), "interface", "Language",
+            "Language for the menu and messages.",
+            choices=i18n.LANGUAGE_CODES, tier="basic"),
     Setting("ui_mode", "choice", DEFAULT_UI_MODE, "interface", "Mode",
             "Basic shows the common settings; Advanced shows everything.",
             choices=UI_MODES, tier="basic"),
@@ -160,7 +163,7 @@ def current_ui_mode(cfg: Optional[Dict[str, Any]] = None) -> str:
     """The active menu mode: whatever ``cfg`` has, defaulting to Basic.
 
     A junk value (hand-edited config, an older/newer build) falls back to
-    Basic rather than raising — same policy as :func:`i18n.resolve_language`.
+    Basic rather than raising — same policy as :func:`i18n.current_language`.
     """
     value = str((cfg or {}).get("ui_mode", DEFAULT_UI_MODE))
     return value if value in UI_MODES else DEFAULT_UI_MODE
