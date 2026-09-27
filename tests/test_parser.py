@@ -118,4 +118,16 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(crw.avg_interval_days(self.fixture("status_active_watch.json")), 6.9)
         self.assertIsNone(crw.avg_interval_days(self.fixture("status_scheduled_tba.json")))
 
+    def test_event_time_unit_follows_api_precision(self):
+        cases = {
+            "2026-09-27": "day",
+            "2026-09-27T02+00:00": "hour",
+            "2026-09-27T02:17Z": "minute",
+            "2026-09-26T18:17:54.000Z": "minute",  # finer than minutes is capped
+            1789824000000: "minute",
+        }
+        for raw, unit in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(crw.event_from_dict({"id": "x", "announced_at": raw}).time_unit, unit)
+
 if __name__ == "__main__": unittest.main()

@@ -66,6 +66,7 @@ class Event:
     event_type: str = ""
     message: str = ""
     source_url: str = ""
+    time_unit: str = "minute"  # finest unit the API's time carries: day / hour / minute
 
     @property
     def key(self) -> str:
@@ -251,6 +252,16 @@ SOURCE_URL_KEYS = (
 )
 
 
+def time_unit_of(value: Any) -> str:
+    """Finest unit a raw API time carries, capped at minutes (seconds, ms, epochs → minute)."""
+    s = value.strip() if isinstance(value, str) else ""
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return "day"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}[T ]\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)?", s):
+        return "hour"
+    return "minute"
+
+
 def x_snowflake_time(value: Any) -> Optional[dt.datetime]:
     """Decode an X/Twitter snowflake ID into its UTC creation timestamp.
 
@@ -304,6 +315,7 @@ def event_from_dict(d: Dict[str, Any]) -> Event:
         event_type=first_str(d, ["type", "event_type", "eventType", "reset_type", "resetType", "kind", "category", "status"]),
         message=first_str(d, ["message", "text", "content", "body", "announcement", "description", "summary"]),
         source_url=source_url,
+        time_unit=time_unit_of(ts_value) if ts is not None else "minute",
     )
 
 
@@ -663,6 +675,36 @@ def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = No
     return " ".join(parts)
 
 
+AGO_UNIT_MINUTES = {"day": 1440, "hour": 60, "minute": 1}
+
+
+def fmt_ago(ts: dt.datetime, now: Optional[dt.datetime] = None, lang: Optional[str] = None,
+            unit: str = "minute") -> str:
+    """Elapsed time since ``ts``: largest unit Day, smallest ``unit`` (the API's precision)."""
+    lang = lang or i18n.FALLBACK
+    step = AGO_UNIT_MINUTES.get(unit, 1)
+    minutes = max(0, int(((now or now_utc()) - ts).total_seconds())) // 60 // step * step
+    if not minutes:
+        return "< " + i18n.t(f"remaining.{unit if unit in AGO_UNIT_MINUTES else 'minute'}", lang, n=1)
+    days, rem = divmod(minutes, 1440)
+    hours, mins = divmod(rem, 60)
+    parts: List[str] = []
+    if days:
+        parts.append(i18n.t("remaining.day" if days == 1 else "remaining.days", lang, n=days))
+    if hours:
+        parts.append(i18n.t("remaining.hour" if hours == 1 else "remaining.hours", lang, n=hours))
+    if mins:
+        parts.append(i18n.t("remaining.minute" if mins == 1 else "remaining.minutes", lang, n=mins))
+    return " ".join(parts)
+
+
+def event_time_line(event: Event, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]], lang: str) -> str:
+    if event.timestamp is None:
+        return i18n.t("notice.time", lang, time=fmt_local(None, cfg))
+    return i18n.t("notice.time_ago", lang, time=fmt_local(event.timestamp, cfg),
+                  ago=fmt_ago(event.timestamp, checked_at, lang, event.time_unit))
+
+
 def notice_lang(cfg: Optional[Dict[str, Any]] = None) -> str:
     """Language for a Telegram/console notice: cfg's ``language``, falling back to
     English when cfg carries none — same English-default policy as
@@ -712,7 +754,8 @@ def heading(paint: ui.Paint, colour: str, text: str) -> str:
     return f"{colour}{paint.bold}{text}{paint.reset}"
 
 
-def latest_section(latest: Optional[Event], cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> List[str]:
+def latest_section(latest: Optional[Event], checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None, *,
+                   paint: Optional[ui.Paint] = None) -> List[str]:
     """The 'latest reset' block shared by format_manual and format_no_signal_notice."""
     lang = notice_lang(cfg)
     if not latest:
@@ -723,7 +766,7 @@ def latest_section(latest: Optional[Event], cfg: Optional[Dict[str, Any]] = None
         "",
         divider,
         heading(p, p.ok, i18n.t("notice.latest.heading", lang)),
-        i18n.t("notice.time", lang, time=fmt_local(latest.timestamp, cfg)),
+        event_time_line(latest, checked_at, cfg, lang),
         i18n.t("notice.type", lang, type=latest.event_type or i18n.t("notice.type_unlabeled", lang)),
     ]
     if latest.message:
@@ -786,7 +829,7 @@ def render_notice(title: str, checked_at: dt.datetime, cfg: Optional[Dict[str, A
 def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> str:
     lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
-    sections = [latest_section(snapshot.latest, cfg, paint=p)]
+    sections = [latest_section(snapshot.latest, snapshot.checked_at, cfg, paint=p)]
     if snapshot.avg_interval_days is not None:
         sections[0].append(i18n.t("notice.avg_interval", lang, days=f"{snapshot.avg_interval_days:g}"))
     if snapshot.upcoming:
@@ -827,7 +870,7 @@ def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: Opt
 def format_no_signal_notice(checked_at: dt.datetime, latest: Optional[Event] = None, cfg: Optional[Dict[str, Any]] = None) -> str:
     lang = notice_lang(cfg)
     sections = [
-        latest_section(latest, cfg),
+        latest_section(latest, checked_at, cfg),
         ["", i18n.t("notice.no_signal.unchanged", lang)],
     ]
     return render_notice(i18n.t("notice.watch.title", lang), checked_at, cfg, sections)
@@ -839,7 +882,7 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
         "",
         "──────────────",
         i18n.t("notice.new_event.heading", lang),
-        i18n.t("notice.time", lang, time=fmt_local(event.timestamp, cfg)),
+        event_time_line(event, checked_at, cfg, lang),
         i18n.t("notice.type", lang, type=event.event_type or i18n.t("notice.type_unlabeled", lang)),
     ]
     if event.message:

@@ -397,6 +397,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     },
     "notice.latest.heading": {"en": "✅ Latest reset", "zh-TW": "✅ 最近一次 Reset"},
     "notice.time": {"en": "🕒 Time: {time}", "zh-TW": "🕒 時間：{time}"},
+    "notice.time_ago": {"en": "🕒 Time: {time} ({ago} ago)", "zh-TW": "🕒 時間：{time}（{ago}前）"},
     "notice.type": {"en": "🏷️ Type: {type}", "zh-TW": "🏷️ 類型：{type}"},
     "notice.type_unlabeled": {"en": "unlabeled", "zh-TW": "未標示"},
     "notice.announcement": {"en": "📝 Announcement: {text}", "zh-TW": "📝 公告：{text}"},

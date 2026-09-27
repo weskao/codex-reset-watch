@@ -55,6 +55,28 @@ class FormattingTests(unittest.TestCase):
         snapshot.avg_interval_days = None
         self.assertNotIn("📈", crw.format_manual(snapshot, {"language": "en"}))
 
+    def test_fmt_ago_truncates_to_the_api_unit(self):
+        now = dt.datetime(2026, 9, 28, 1, 34, 30, tzinfo=dt.timezone.utc)
+        ts = now - dt.timedelta(days=2, hours=23, minutes=17, seconds=40)
+        self.assertEqual(crw.fmt_ago(ts, now, "en", "minute"), "2 Days 23 hours 17 minutes")
+        self.assertEqual(crw.fmt_ago(ts, now, "en", "hour"), "2 Days 23 hours")
+        self.assertEqual(crw.fmt_ago(ts, now, "en", "day"), "2 Days")
+        self.assertEqual(crw.fmt_ago(now - dt.timedelta(hours=23), now, "en", "minute"), "23 hours")
+        self.assertEqual(crw.fmt_ago(now - dt.timedelta(seconds=30), now, "en", "minute"), "< 1 minute")
+        self.assertEqual(crw.fmt_ago(now - dt.timedelta(hours=5), now, "zh-TW", "day"), "< 1 天")
+
+    def test_latest_reset_time_shows_how_long_ago(self):
+        checked = dt.datetime(2026, 9, 27, 17, 34, tzinfo=dt.timezone.utc)
+        latest = crw.Event(event_id="1", timestamp=dt.datetime(2026, 9, 26, 18, 17, 54, tzinfo=dt.timezone.utc),
+                           event_type="regular")
+        snapshot = crw.Snapshot(checked, latest, None, True, True)
+        self.assertIn("🕒 Time: 2026-09-27 02:17 UTC+8 (23 hours 16 minutes ago)",
+                      crw.format_manual(snapshot, {"language": "en"}))
+        self.assertIn("🕒 時間：2026-09-27 02:17 UTC+8（23 小時 16 分鐘前）",
+                      crw.format_manual(snapshot, {"language": "zh-TW"}))
+        self.assertIn("(23 hours 16 minutes ago)", crw.format_no_signal_notice(checked, latest, {"language": "en"}))
+        self.assertIn("(23 hours 16 minutes ago)", crw.format_new_event_notice(latest, checked, {"language": "en"}))
+
     def test_fmt_local_honours_configured_timezone(self):
         t = dt.datetime(2026, 9, 19, 13, 0, tzinfo=dt.timezone.utc)
         self.assertEqual(crw.fmt_local(t, {"timezone": "UTC"}), "2026-09-19 13:00 UTC")

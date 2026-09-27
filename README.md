@@ -724,6 +724,14 @@ Example:
 ⏳ 距離現在：2 Days 1 hour 35 minutes
 ```
 
+Reset times already past (latest reset, new-reset notice) add how long ago they were, largest
+unit Day, smallest unit the API's own precision — a date-only value shows days, an hour-only
+value hours, and anything finer is cut at minutes; zero-value units are left out:
+
+```text
+🕒 Time: 2026-09-27 02:17 UTC+8 (23 hours 16 minutes ago)
+```
+
 ## 10. Event parsing resilience
 
 `event_from_dict` tolerates upstream API schema drift instead of assuming one fixed shape:
