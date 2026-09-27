@@ -274,6 +274,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "ask again once a newer version ships",
         "zh-TW": "有新版本推出後才會再詢問",
     },
+    "update.release_notes": {"en": "Release notes: {url}", "zh-TW": "版本說明：{url}"},
     "update.confirm": {"en": "confirm", "zh-TW": "確認"},
     "update.skip_key": {"en": "skip", "zh-TW": "略過"},
     "update.failed": {

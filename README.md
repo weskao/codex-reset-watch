@@ -397,8 +397,9 @@ a keypress that cannot arrive.
 **Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
 terminal ends with a prompt — **Update now** (runs the `uv tool install --force --from
 git+…@vX.Y.Z codex-reset-watch && crw apply-schedule` steps), **Skip** (ask again next run), or
-**Skip until next version** — drawn with the same cursor and selection style as `crw config`. Off
-a keyboard terminal (piped output, CI) it stays the old two-line hint on stderr instead. The
+**Skip until next version** — drawn with the same cursor and selection style as `crw config`,
+with a link to the release notes on GitHub. Off a keyboard terminal (piped output, CI) it stays
+the old two-line hint on stderr, plus the release-notes link, instead. The
 GitHub request runs in the background while the command works, at most once every 10 minutes
 (cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
 scheduled jobs stay silent, and the exit code never changes. Turn it off with

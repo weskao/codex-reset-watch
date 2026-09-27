@@ -1208,7 +1208,8 @@ SKIP = "skip"
 SKIP_VERSION = "skip-version"
 
 
-def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: int) -> List[str]:
+def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: int,
+                  release_url: str = "") -> List[str]:
     """Same visual language as :func:`_row`'s selected state — the accent
     cursor glyph, the bold near-white label, the saturated row band — without
     the dotted leader or value column a plain choice doesn't need."""
@@ -1250,8 +1251,10 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
             mark = " " * cursor_width
             row = f" {mark} {text}{pad}  {paint.muted}{detail}{paint.reset}{tail}"
         body.append(row)
-    footer = [
-        "",
+    footer = [""]
+    if release_url:
+        footer.append(f" {paint.muted}{i18n.t('update.release_notes', lang, url=release_url)}{paint.reset}")
+    footer += [
         " " + f" {paint.frame}·{paint.reset} ".join([
             f"{paint.accent}↑↓{paint.reset} {paint.muted}{i18n.t('menu.move', lang)}{paint.reset}",
             f"{paint.accent}⏎{paint.reset} {paint.muted}{i18n.t('update.confirm', lang)}{paint.reset}",
@@ -1263,7 +1266,7 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
 
 def update_prompt(current: str, latest: str, *,
                   read: Callable[[], keys.KeyEvent] = keys.read_key,
-                  out: Optional[IO[str]] = None) -> str:
+                  out: Optional[IO[str]] = None, release_url: str = "") -> str:
     """Ask what to do about a newer release; returns UPDATE_NOW / SKIP /
     SKIP_VERSION. An exhausted key source (tests), Ctrl-C, ``q`` or Esc are
     all SKIP — backing out of a question changes nothing.
@@ -1280,7 +1283,7 @@ def update_prompt(current: str, latest: str, *,
     painted = 0
     with keys.raw_mode():
         while True:
-            painted = _draw(_update_lines(paint, lang, current, latest, selected), out, painted)
+            painted = _draw(_update_lines(paint, lang, current, latest, selected, release_url), out, painted)
             try:
                 event = read()
             except (KeyboardInterrupt, StopIteration):

@@ -150,7 +150,10 @@ class MaybeHintInteractiveTests(unittest.TestCase):
     def test_update_now_runs_install_then_apply_schedule(self):
         done = mock.Mock(returncode=0)
         prompt, run_mock = self._run(uc.ui.UPDATE_NOW, run=mock.Mock(return_value=done))
-        prompt.assert_called_once_with("0.4.2", "v9.9.0")
+        prompt.assert_called_once_with(
+            "0.4.2", "v9.9.0",
+            release_url="https://github.com/weskao/codex-reset-watch/releases/tag/v9.9.0",
+        )
         self.assertEqual(
             run_mock.call_args_list[0].args[0],
             ["uv", "tool", "install", "--force", "--from",

@@ -176,19 +176,22 @@ def maybe_hint() -> None:
         if latest is None:
             return
         current = ui.package_version()
+        release_url = f"https://github.com/{REPO}/releases/tag/{latest}"
         if keys.is_interactive_tty():
-            answer = ui.update_prompt(current, latest)
+            answer = ui.update_prompt(current, latest, release_url=release_url)
             if answer == ui.SKIP_VERSION:
                 skip_version(latest)
             elif answer == ui.UPDATE_NOW:
                 _run_upgrade(latest)
             return
         paint = ui.Paint(ui.colour_enabled(sys.stderr))
-        message = i18n.t("update.available", i18n.current_language(),
-                         latest=latest.lstrip("vV"), current=current)
+        lang = i18n.current_language()
+        message = i18n.t("update.available", lang, latest=latest.lstrip("vV"), current=current)
+        notes = i18n.t("update.release_notes", lang, url=release_url)
         print(f"{paint.warn}{message}{paint.reset}\n"
               f"  uv tool install --force --from git+https://github.com/{REPO}.git@{latest} codex-reset-watch"
-              " && crw apply-schedule",
+              " && crw apply-schedule\n"
+              f"  {notes}",
               file=sys.stderr)
     except (Exception, KeyboardInterrupt):  # noqa: BLE001 - a hint must never fail the command
         return
