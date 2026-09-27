@@ -130,4 +130,29 @@ class ParserTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(crw.event_from_dict({"id": "x", "announced_at": raw}).time_unit, unit)
 
+    def _with_scheduled(self, scheduled_for):
+        data = self.fixture("status_active_watch.json")
+        data["data"]["scheduled_reset"] = {
+            "id": "sched-1", "status": "scheduled", "reset_type": "regular",
+            "announced_at": "2026-09-27T05:00:00.000Z", "scheduled_for": scheduled_for,
+            "text": "More resets coming next week",
+            "source": {"type": "x_post", "author": "example", "url": "https://x.com/example/status/1"},
+        }
+        return data
+
+    def test_scheduled_reset_outranks_active_watch(self):
+        # Explicit announcement beats the AI-classified watch, even with no time yet.
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        u = crw.upcoming_from_status(self._with_scheduled(None), now=now)
+        self.assertEqual(u.status, "scheduled")
+        self.assertEqual(u.event_type, "regular")
+        self.assertIsNone(u.timestamp)
+
+    def test_passed_scheduled_for_is_still_awaiting_execution(self):
+        # API docs: "A passed scheduled_for does not imply completion."
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        u = crw.upcoming_from_status(self._with_scheduled("2026-09-27T12:00:00.000Z"), now=now)
+        self.assertEqual(u.status, "scheduled")
+        self.assertEqual(crw.iso_utc(u.timestamp), "2026-09-27T12:00:00Z")
+
 if __name__ == "__main__": unittest.main()

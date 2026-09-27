@@ -414,6 +414,9 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "🕒 Forecast window closes: {time}", "zh-TW": "🕒 預測窗口截止：{time}"},
     "notice.upcoming.remaining": {
         "en": "⏳ Time remaining: {remaining}", "zh-TW": "⏳ 距離現在：{remaining}"},
+    "notice.upcoming.overdue": {
+        "en": "⏳ Scheduled time passed — waiting for the reset to land",
+        "zh-TW": "⏳ 已過預定時間，等待 Reset 執行"},
     "notice.upcoming.chance": {"en": "🎯 Chance: {pct}%", "zh-TW": "🎯 機率：{pct}%"},
     "notice.upcoming.confidence": {
         "en": "📊 Confidence: {confidence}", "zh-TW": "📊 信心：{confidence}"},

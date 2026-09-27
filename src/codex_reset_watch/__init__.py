@@ -440,9 +440,6 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
             maybe = parse_time(val)
             if maybe:
                 ts, raw_field, timing_kind = maybe, f"{container_name}.{nested_path}", "forecast_window"
-        if ts is not None and ts <= now:
-            continue
-
         # source.type ("x_post", "observed") describes the post, not the reset.
         event_type_raw, _ = deep_first({k: v for k, v in d.items() if normalize_key(k) != "source"},
                                        UPCOMING_TYPE_KEYS)
@@ -464,6 +461,11 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
         title = str(title_raw).strip() if title_raw is not None else ""
         time_text = str(time_text_raw).strip() if time_text_raw is not None else ""
         message = str(message_raw).strip() if message_raw is not None else ""
+
+        # API docs: "A passed scheduled_for does not imply completion" — an explicit
+        # scheduled announcement stays until the tracker drops it; forecasts expire.
+        if ts is not None and ts <= now and normalize_key(status_text) != "scheduled":
+            continue
 
         # A scheduled reset is useful information even when the upstream tracker has
         # not published an exact timestamp yet (e.g. "Time to be announced").
@@ -495,9 +497,11 @@ def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> O
     if not found:
         return None
 
-    # Exact/forecast times sort before TBA signals. If all are TBA, preserve the
+    # An explicit scheduled announcement beats a forecast/watch, even without a time.
+    # Then exact/forecast times sort before TBA signals. If all are TBA, preserve the
     # API/container order because that is the tracker's own priority.
-    found.sort(key=lambda u: (u.timestamp is None, u.timestamp or dt.datetime.max.replace(tzinfo=UTC)))
+    found.sort(key=lambda u: (normalize_key(u.status) != "scheduled", u.timestamp is None,
+                              u.timestamp or dt.datetime.max.replace(tzinfo=UTC)))
     return found[0]
 
 
@@ -801,8 +805,11 @@ def upcoming_section(
         key = ("notice.upcoming.time_announced" if upcoming.timing_kind == "announced_or_estimated_time"
                else "notice.upcoming.time_window_end")
         lines.append(i18n.t(key, lang, time=fmt_local(upcoming.timestamp, cfg)))
-        lines.append(i18n.t("notice.upcoming.remaining", lang,
-                            remaining=fmt_remaining(upcoming.timestamp, checked_at, lang)))
+        if upcoming.timestamp <= checked_at:
+            lines.append(i18n.t("notice.upcoming.overdue", lang))
+        else:
+            lines.append(i18n.t("notice.upcoming.remaining", lang,
+                                remaining=fmt_remaining(upcoming.timestamp, checked_at, lang)))
     if upcoming.chance_percent is not None:
         lines.append(i18n.t("notice.upcoming.chance", lang, pct=f"{upcoming.chance_percent:g}"))
     if upcoming.confidence:

@@ -77,6 +77,16 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("(23 hours 16 minutes ago)", crw.format_no_signal_notice(checked, latest, {"language": "en"}))
         self.assertIn("(23 hours 16 minutes ago)", crw.format_new_event_notice(latest, checked, {"language": "en"}))
 
+    def test_passed_scheduled_time_says_awaiting_not_zero_countdown(self):
+        checked = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(timestamp=checked - dt.timedelta(hours=5), timing_kind="announced_or_estimated_time",
+                                event_type="regular", status="scheduled")
+        text = crw.format_manual(crw.Snapshot(checked, None, upcoming, True, True), {"language": "en"})
+        self.assertIn("⏳ Scheduled time passed — waiting for the reset to land", text)
+        self.assertNotIn("Time remaining", text)
+        zh = crw.format_manual(crw.Snapshot(checked, None, upcoming, True, True), {"language": "zh-TW"})
+        self.assertIn("⏳ 已過預定時間，等待 Reset 執行", zh)
+
     def test_fmt_local_honours_configured_timezone(self):
         t = dt.datetime(2026, 9, 19, 13, 0, tzinfo=dt.timezone.utc)
         self.assertEqual(crw.fmt_local(t, {"timezone": "UTC"}), "2026-09-19 13:00 UTC")

@@ -404,7 +404,7 @@ GitHub request runs in the background while the command works, at most once ever
 (cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
 scheduled jobs stay silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
-this — any subcommand, `--help`, `--version`, or a mistyped command.
+this — any subcommand, `--help`, `--version`, no arguments, or a mistyped command.
 
 ### Language
 
@@ -748,6 +748,10 @@ value hours, and anything finer is cut at minutes; zero-value units are left out
   `forecast`, …) including the tracker's `active_watch`, whose `expires_at` is shown as the
   forecast window close and drops the signal once passed. `crw check` also prints
   `stats.avg_interval_days` as "Avg. reset interval" when the API provides it.
+- An explicit `scheduled_reset` (status `scheduled`) always wins over a forecast or
+  `active_watch`, even while its time is still to be announced. Once its `scheduled_for`
+  passes it stays on screen as "waiting for the reset to land" — per the
+  [API docs](https://codex-resets.com/api/docs), a passed time does not mean it happened.
 
 ## 11. Logs and disk usage
 
