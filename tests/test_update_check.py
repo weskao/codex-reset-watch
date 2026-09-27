@@ -1,11 +1,15 @@
 """GitHub update hint: version compare, short-TTL cache, background check, TTY gate."""
+import contextlib
+import importlib
 import io
 import json
 import os
 import pathlib
+import re
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from codex_reset_watch import update_check as uc
@@ -181,6 +185,34 @@ class MaybeHintInteractiveTests(unittest.TestCase):
             uc.maybe_hint()
         prompt.assert_not_called()
         self.assertIn("9.9.0", stream.getvalue())
+
+
+def _console_scripts():
+    """``[project.scripts]`` from pyproject.toml: name → ``module:func``."""
+    text = (pathlib.Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    section = text.split("[project.scripts]", 1)[1].split("\n[", 1)[0]
+    return dict(re.findall(r'^([\w-]+)\s*=\s*"([^"]+)"', section, re.M))
+
+
+class EveryEntryPointChecksTests(unittest.TestCase):
+    """Every console script runs the update check on every way out — --help,
+    --version, no args, a typo. A new script that skips the flow fails here."""
+
+    def test_every_script_starts_and_reports_the_check(self):
+        scripts = _console_scripts()
+        self.assertIn("crw", scripts)
+        for name, target in scripts.items():
+            module, func = target.split(":")
+            main = getattr(importlib.import_module(module), func)
+            for argv in (["--help"], ["--version"], [], ["bogus"], ["doctor", "--help"]):
+                with self.subTest(script=name, argv=argv), \
+                        mock.patch.object(uc, "start_check") as start, \
+                        mock.patch.object(uc, "maybe_hint") as hint, \
+                        redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    with contextlib.suppress(SystemExit):
+                        main(argv)
+                    start.assert_called_once()
+                    hint.assert_called_once()
 
 
 if __name__ == "__main__":

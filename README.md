@@ -403,7 +403,8 @@ the old two-line hint on stderr, plus the release-notes link, instead. The
 GitHub request runs in the background while the command works, at most once every 10 minutes
 (cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
 scheduled jobs stay silent, and the exit code never changes. Turn it off with
-`crw config --set update_check=off`.
+`crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
+this — any subcommand, `--help`, `--version`, or a mistyped command.
 
 ### Language
 

@@ -1280,10 +1280,12 @@ def config_cmd(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
-    args = build_parser().parse_args(_normalize_argv(raw))
+    # Started before argparse so --help, --version, no args and a usage error
+    # (argparse's SystemExit) get the update prompt too — every subcommand,
+    # present or future, goes through this one try/finally.
     update_check.start_check()
     try:
-        return _dispatch(args)
+        return _dispatch(build_parser().parse_args(_normalize_argv(raw)))
     finally:
         update_check.maybe_hint()
 
