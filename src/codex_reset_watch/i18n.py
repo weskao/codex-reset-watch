@@ -450,6 +450,57 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     },
     "notice.new_event.title": {"en": "✅ Codex Reset update", "zh-TW": "✅ Codex Reset 更新"},
 
+    # ── CLI help (`crw --help` / `crw <command> --help`) ───────────────────
+    "cli.description": {
+        "en": "Monitor codex-resets.com and notify via Telegram.",
+        "zh-TW": "監控 codex-resets.com 並透過 Telegram 通知。",
+    },
+    "cli.check.help": {
+        "en": "Query now, update status, print to terminal, and Telegram-notify by default",
+        "zh-TW": "立即查詢、更新狀態、輸出到 Terminal，預設同時 Telegram 通知",
+    },
+    "cli.check.no_notify.help": {"en": "Print only, skip Telegram", "zh-TW": "只顯示，不傳 Telegram"},
+    "cli.monitor.help": {
+        "en": "Scheduler background scan (interval set via `crw config`; notifies only on new information)",
+        "zh-TW": "排程器背景掃描（間隔由 `crw config` 設定，只通知新資訊）",
+    },
+    "cli.daily.help": {
+        "en": "Daily catch-up check (time set via `crw config`)",
+        "zh-TW": "每日 catch-up 檢查（時間由 `crw config` 設定）",
+    },
+    "cli.daily.force.help": {
+        "en": "Ignore today's time gate, for testing", "zh-TW": "忽略當日時間 gate，用於測試"},
+    "cli.doctor.help": {
+        "en": "Check Python/API/Telegram/schedule setup", "zh-TW": "檢查 Python/API/Telegram/排程設定"},
+    "cli.logs.help": {"en": "Show recent event logs", "zh-TW": "顯示最近事件 logs"},
+    "cli.config.help": {
+        "en": "Interactive settings menu (schedule times, scan interval, notifications, paths…)",
+        "zh-TW": "互動式設定選單（排程時間、掃描間隔、通知、路徑…）",
+    },
+    "cli.config.list.help": {
+        "en": "List current settings then exit, no menu", "zh-TW": "列出目前設定後結束，不進入選單"},
+    "cli.config.set.help": {
+        "en": "Change one setting non-interactively, repeatable; keys affecting the schedule "
+              "re-apply automatically",
+        "zh-TW": "非互動式修改一項設定，可重複；影響排程的鍵會自動重新套用",
+    },
+    "cli.config.token_stdin.help": {
+        "en": "Set the Telegram Bot Token securely from standard input",
+        "zh-TW": "從標準輸入安全設定 Telegram Bot Token",
+    },
+    "cli.config.apply_schedule.help": {
+        "en": "With --set, force the OS schedule to re-apply", "zh-TW": "搭配 --set 時，強制重新套用 OS 排程"},
+    "cli.config.export.help": {
+        "en": "Write portable settings as JSON (`-` for standard output); secrets are not exported",
+        "zh-TW": "把可攜設定寫成 JSON（`-` 代表標準輸出）；機密不會匯出",
+    },
+    "cli.config.import.help": {
+        "en": "Import settings from JSON (all-or-nothing)", "zh-TW": "從 JSON 匯入設定（全有全無）"},
+    "cli.apply_schedule.help": {
+        "en": "Re-apply the OS schedule from current settings (launchd/systemd/schtasks)",
+        "zh-TW": "依目前設定重新套用 OS 排程（launchd/systemd/schtasks）",
+    },
+
     # ── countdown units (fmt_remaining) ─────────────────────────────────────
     "remaining.day": {"en": "{n} Day", "zh-TW": "{n} 天"},
     "remaining.days": {"en": "{n} Days", "zh-TW": "{n} 天"},

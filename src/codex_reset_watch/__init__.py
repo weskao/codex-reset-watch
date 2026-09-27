@@ -1039,28 +1039,28 @@ def apply_schedule_cmd() -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="codex-reset-watch", description="Monitor codex-resets.com and notify via Telegram.")
+    t = i18n.t
+    p = argparse.ArgumentParser(prog="codex-reset-watch", description=t("cli.description"))
     p.add_argument("--version", "-V", action="version", version=f"%(prog)s {ui.package_version()}")
     sub = p.add_subparsers(dest="command", required=True)
-    check = sub.add_parser("check", aliases=["update"], help="立即查詢、更新狀態、輸出到 Terminal，預設同時 Telegram 通知")
-    check.add_argument("--no-notify", action="store_true", help="只顯示，不傳 Telegram")
-    mon = sub.add_parser("monitor", help="排程器背景掃描（間隔由 `crw config` 設定，只通知新資訊）")
+    check = sub.add_parser("check", aliases=["update"], help=t("cli.check.help"))
+    check.add_argument("--no-notify", action="store_true", help=t("cli.check.no_notify.help"))
+    mon = sub.add_parser("monitor", help=t("cli.monitor.help"))
     mon.add_argument("--no-notify", action="store_true")
-    daily = sub.add_parser("daily", help="每日 catch-up 檢查（時間由 `crw config` 設定）")
-    daily.add_argument("--force", action="store_true", help="忽略當日時間 gate，用於測試")
+    daily = sub.add_parser("daily", help=t("cli.daily.help"))
+    daily.add_argument("--force", action="store_true", help=t("cli.daily.force.help"))
     daily.add_argument("--no-notify", action="store_true")
-    sub.add_parser("doctor", help="檢查 Python/API/Telegram/排程設定")
-    logs = sub.add_parser("logs", help="顯示最近事件 logs")
+    sub.add_parser("doctor", help=t("cli.doctor.help"))
+    logs = sub.add_parser("logs", help=t("cli.logs.help"))
     logs.add_argument("-n", "--lines", type=int, default=30)
-    cfgp = sub.add_parser("config", help="互動式設定選單（排程時間、掃描間隔、通知、路徑…）")
-    cfgp.add_argument("--list", action="store_true", help="列出目前設定後結束，不進入選單")
-    cfgp.add_argument("--set", action="append", metavar="KEY=VALUE",
-                      help="非互動式修改一項設定，可重複；影響排程的鍵會自動重新套用")
-    cfgp.add_argument("--token-stdin", action="store_true", help="從標準輸入安全設定 Telegram Bot Token")
-    cfgp.add_argument("--apply-schedule", action="store_true", help="搭配 --set 時，強制重新套用 OS 排程")
-    cfgp.add_argument("--export", metavar="FILE", help="把可攜設定寫成 JSON（`-` 代表標準輸出）；機密不會匯出")
-    cfgp.add_argument("--import", dest="import_file", metavar="FILE", help="從 JSON 匯入設定（全有全無）")
-    sub.add_parser("apply-schedule", help="依目前設定重新套用 OS 排程（launchd/systemd/schtasks）")
+    cfgp = sub.add_parser("config", help=t("cli.config.help"))
+    cfgp.add_argument("--list", action="store_true", help=t("cli.config.list.help"))
+    cfgp.add_argument("--set", action="append", metavar="KEY=VALUE", help=t("cli.config.set.help"))
+    cfgp.add_argument("--token-stdin", action="store_true", help=t("cli.config.token_stdin.help"))
+    cfgp.add_argument("--apply-schedule", action="store_true", help=t("cli.config.apply_schedule.help"))
+    cfgp.add_argument("--export", metavar="FILE", help=t("cli.config.export.help"))
+    cfgp.add_argument("--import", dest="import_file", metavar="FILE", help=t("cli.config.import.help"))
+    sub.add_parser("apply-schedule", help=t("cli.apply_schedule.help"))
     return p
 
 
