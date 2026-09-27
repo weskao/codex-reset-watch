@@ -9,6 +9,7 @@ import argparse
 import contextlib
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -909,6 +910,28 @@ def notice_image(kind: str) -> Optional[pathlib.Path]:
     return random.choice(images) if images else None
 
 
+def send_photo(token: str, chat_id: str, image: pathlib.Path, caption: str) -> bool:
+    """Upload one bundled photo to Telegram; let the caller fall back to text on failure."""
+    boundary = os.urandom(16).hex()
+    content_type = "image/png" if image.suffix.lower() == ".png" else "image/jpeg"
+    try:
+        body = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="{image.name}"\r\n'
+            f'Content-Type: {content_type}\r\n\r\n'
+        ).encode("utf-8") + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode("ascii")
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendPhoto", data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.loads(response.read()).get("ok") is True
+    except (urllib.error.URLError, OSError, ValueError, AttributeError,
+            http.client.HTTPException):
+        return False
+
+
 def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger,
                   image: Optional[pathlib.Path] = None) -> bool:
     # The keychain-backed config first, then the environment — see
@@ -918,7 +941,7 @@ def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger,
         logger.event("ERROR", "telegram_credentials_missing")
         return False
     # A rejected photo must not cost the notice itself: fall back to the text alone.
-    ok = bool(image) and telegram_kit.send_photo(token, chat_id, image, message)
+    ok = bool(image) and send_photo(token, chat_id, image, message)
     ok = ok or telegram_kit.send_message(token, chat_id, message)
     logger.event("INFO" if ok else "ERROR", "telegram_send", ok=ok)
     return ok

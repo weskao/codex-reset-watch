@@ -208,7 +208,7 @@ class TelegramCredentialWiringTests(unittest.TestCase):
     def test_an_image_goes_out_with_the_text_in_one_photo_message(self):
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
         image = crw.notice_image("reset")
-        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_photo", return_value=True) as photo, \
+        with self._no_env(), mock.patch.object(crw, "send_photo", return_value=True) as photo, \
                 mock.patch.object(crw.telegram_kit, "send_message") as send:
             self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=image))
         photo.assert_called_once_with("stored-token", "stored-chat", image, "hello")
@@ -216,16 +216,32 @@ class TelegramCredentialWiringTests(unittest.TestCase):
 
     def test_a_failed_photo_still_delivers_the_text(self):
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
-        with self._no_env(), mock.patch.object(crw.telegram_kit, "send_photo", return_value=False), \
+        with self._no_env(), mock.patch.object(crw.urllib.request, "urlopen") as open_url, \
                 mock.patch.object(crw.telegram_kit, "send_message", return_value=True) as send:
+            open_url.return_value.__enter__.return_value.read.return_value = b'{"ok": false}'
             self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=crw.notice_image("upcoming")))
         send.assert_called_once_with("stored-token", "stored-chat", "hello")
 
+    def test_photo_upload_includes_image_and_caption(self):
+        with tempfile.TemporaryDirectory() as d:
+            image = pathlib.Path(d) / "notice.jpeg"
+            image.write_bytes(b"\xff\xd8photo\xff\xd9")
+            with mock.patch.object(crw.urllib.request, "urlopen") as open_url:
+                open_url.return_value.__enter__.return_value.read.return_value = b'{"ok": true}'
+                self.assertTrue(crw.send_photo("stored-token", "stored-chat", image, "hello \u4e16\u754c"))
+            request = open_url.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.telegram.org/botstored-token/sendPhoto")
+        self.assertIn("multipart/form-data; boundary=", request.get_header("Content-type"))
+        self.assertIn(b'name="chat_id"\r\n\r\nstored-chat', request.data)
+        self.assertIn(b'name="caption"\r\n\r\nhello \xe4\xb8\x96\xe7\x95\x8c', request.data)
+        self.assertIn(b'name="photo"; filename="notice.jpeg"', request.data)
+        self.assertIn(b"\xff\xd8photo\xff\xd9", request.data)
+
     def test_notice_image_picks_from_the_bundled_folder_of_that_kind(self):
-        reset = {crw.notice_image("reset") for _ in range(200)}
-        self.assertEqual({p.name for p in reset}, {f"reset_{i}.jpeg" for i in range(1, 6)})
-        self.assertTrue(all(p.is_file() for p in reset))
-        self.assertEqual(crw.notice_image("upcoming").name, "upcoming_1.jpeg")
+        for kind in ("reset", "upcoming"):
+            image = crw.notice_image(kind)
+            self.assertEqual(image.parent, crw.ASSETS_DIR / kind)
+            self.assertTrue(image.is_file())
         self.assertIsNone(crw.notice_image("no-such-kind"))
 
     def test_missing_credentials_are_logged_not_sent(self):
