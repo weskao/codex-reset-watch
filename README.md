@@ -267,7 +267,8 @@ all work too (see [§3](#--is-optional-everywhere)).
 | `Esc` | cancel the current edit (or quit from the row list) |
 | `Tab` | switch Basic ↔ Advanced mode (`m` in the numbered fallback menu) |
 | `a` | apply the OS schedule now |
-| `d` | restore every default (asks `y` to confirm) |
+| `d` | reset the highlighted row to its default (asks `y` to confirm) |
+| `D` | restore every default (asks `y` to confirm; `d` in the numbered fallback menu) |
 | `e` / `i` | export / import settings — type a path, `Enter` |
 | `q` / `Ctrl-C` | quit |
 

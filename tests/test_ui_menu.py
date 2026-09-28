@@ -325,9 +325,70 @@ class EditorHintTests(unittest.TestCase):
         self.assertIn("30m", hint)
 
 
+class ResetRowTests(unittest.TestCase):
+    """``d``: ask before resetting the highlighted row (undo for autosave)."""
+
+    def _at(self, key, **overrides):
+        index = SETTINGS.index(config.BY_KEY[key])
+        overrides.setdefault("values", dict(config.DEFAULTS))
+        return fresh(cursor=index, **overrides)
+
+    def test_d_asks_for_confirmation_instead_of_resetting_immediately(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"))
+        state = ui.step(state, char("d"), SETTINGS)
+        self.assertEqual(state.confirm_reset_row, "daily_time")
+        self.assertEqual(state.values["daily_time"], "03:00")
+        self.assertFalse(state.pending_save)
+
+    def test_d_on_a_row_already_at_its_default_is_a_no_op(self):
+        state = self._at("daily_time")  # already default
+        self.assertEqual(ui.step(state, char("d"), SETTINGS), state)
+
+    def test_d_does_not_open_the_confirm_all_prompt(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"))
+        self.assertFalse(ui.step(state, char("d"), SETTINGS).confirm_defaults)
+
+    def test_y_confirms_and_restores_the_row_to_its_default(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"),
+                         confirm_reset_row="daily_time")
+        state = ui.step(state, char("y"), SETTINGS)
+        self.assertEqual(state.values["daily_time"], config.DEFAULTS["daily_time"])
+        self.assertIsNone(state.confirm_reset_row)
+
+    def test_y_goes_through_the_normal_save_path(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"),
+                         confirm_reset_row="daily_time")
+        self.assertTrue(ui.step(state, char("y"), SETTINGS).pending_save)
+
+    def test_y_marks_the_schedule_dirty_when_the_row_affects_it(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"),
+                         confirm_reset_row="daily_time")
+        self.assertTrue(ui.step(state, char("y"), SETTINGS).schedule_dirty)
+
+    def test_y_leaves_a_non_schedule_row_reset_with_the_schedule_clean(self):
+        state = self._at("request_retries", values=dict(config.DEFAULTS, request_retries=9),
+                         confirm_reset_row="request_retries")
+        self.assertFalse(ui.step(state, char("y"), SETTINGS).schedule_dirty)
+
+    def test_y_leaves_other_rows_untouched(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00",
+                                                     request_retries=9),
+                         confirm_reset_row="daily_time")
+        state = ui.step(state, char("y"), SETTINGS)
+        self.assertEqual(state.values["request_retries"], 9)
+
+    def test_any_other_key_cancels_without_changing_the_value(self):
+        state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"),
+                         confirm_reset_row="daily_time")
+        state = ui.step(state, char("n"), SETTINGS)
+        self.assertEqual(state.values["daily_time"], "03:00")
+        self.assertIsNone(state.confirm_reset_row)
+        self.assertFalse(state.pending_save)
+
+
 class RestoreDefaultsTests(unittest.TestCase):
-    def test_d_asks_for_confirmation_first(self):
-        state = ui.step(fresh(), char("d"), SETTINGS)
+    def test_shift_d_asks_for_confirmation_first(self):
+        state = ui.step(fresh(), char("D"), SETTINGS)
         self.assertTrue(state.confirm_defaults)
 
     def test_y_restores_every_default(self):

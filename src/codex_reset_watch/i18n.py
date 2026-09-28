@@ -239,6 +239,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.mode": {"en": "mode", "zh-TW": "模式"},
     "menu.apply": {"en": "apply schedule", "zh-TW": "套用排程"},
     "menu.defaults": {"en": "defaults", "zh-TW": "還原預設"},
+    "menu.reset_row": {"en": "reset", "zh-TW": "重設"},
     "menu.export": {"en": "export", "zh-TW": "匯出"},
     "menu.import": {"en": "import", "zh-TW": "匯入"},
     "menu.quit": {"en": "quit", "zh-TW": "離開"},
@@ -310,6 +311,10 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "menu.confirm_defaults": {
         "en": "Restore every setting to its default? y / any other key cancels",
         "zh-TW": "確定要把所有設定還原成預設值？y 確認，其他鍵取消",
+    },
+    "menu.confirm_reset_row": {
+        "en": 'Reset "{label}" to {default}? [y/N]',
+        "zh-TW": "確定要把「{label}」重設為 {default}？[y/N]",
     },
     "menu.invalid_choice": {
         "en": "Enter 1-{count}, or a / d / e / i / m / q",

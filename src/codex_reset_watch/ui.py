@@ -524,15 +524,16 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
         nav += " " * max(1, pad) + f"{paint.muted}{position}{paint.reset}"
     return [
         nav,
-        bar([key("a", "menu.apply"), key("d", "menu.defaults"), key("e", "menu.export"),
-             key("i", "menu.import"), key("q", "menu.quit")]),
+        bar([key("a", "menu.apply"), key("d", "menu.reset_row"), key("D", "menu.defaults"),
+             key("e", "menu.export"), key("i", "menu.import"), key("q", "menu.quit")]),
     ]
 
 
 def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = None,
                 lang: Optional[str] = None, editing: bool = False, edit_buffer: str = "",
                 error: Optional[str] = None, notice: Optional[str] = None,
-                confirm_defaults: bool = False, prompt: Optional[str] = None,
+                confirm_defaults: bool = False, confirm_reset_row: Optional[str] = None,
+                prompt: Optional[str] = None,
                 prompt_buffer: str = "", height: Optional[int] = None,
                 pulse_frame: int = 0,
                 settings: Optional[Sequence[config.Setting]] = None) -> List[str]:
@@ -559,6 +560,11 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     foot: List[str] = [f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}"]
     if confirm_defaults:
         foot.append(f" {paint.warn}{i18n.t('menu.confirm_defaults', lang)}{paint.reset}")
+    elif confirm_reset_row:
+        target = config.BY_KEY[confirm_reset_row]
+        message = i18n.t("menu.confirm_reset_row", lang, label=config.label(target, lang),
+                         default=config.render(target, target.default, lang))
+        foot.append(f" {paint.warn}{message}{paint.reset}")
     elif prompt:
         foot.append(f" {paint.accent}{GLYPH_PROMPT}{paint.reset} "
                     f"{i18n.t(f'menu.{prompt}_prompt', lang)} "
@@ -624,6 +630,8 @@ class MenuState:
     error: Optional[str] = None
     notice: Optional[str] = None
     confirm_defaults: bool = False
+    #: Key of the single row awaiting ``d``'s y/N confirmation, or ``None``.
+    confirm_reset_row: Optional[str] = None
     prompt: Optional[str] = None       # "export" | "import"
     prompt_buffer: str = ""
     pending_save: bool = False
@@ -838,6 +846,32 @@ def _step_confirm(state: MenuState, event: keys.KeyEvent) -> MenuState:
     )
 
 
+def _reset_row(state: MenuState, setting: config.Setting) -> MenuState:
+    """Perform the actual reset of *setting* to its default.
+
+    Goes through :func:`_touched` — the normal save path — so it autosaves and
+    ``schedule_dirty`` (derived from ``applied`` vs ``values``) updates exactly
+    as a manual edit back to the default would. Already at default: no-op,
+    same policy as a toggle cycled back to where it started.
+    """
+    if state.values.get(setting.key, setting.default) == setting.default:
+        return state
+    return _touched(state, setting, setting.default)
+
+
+def _step_confirm_reset_row(state: MenuState, event: keys.KeyEvent) -> MenuState:
+    """``d``'s y/N gate: ``y`` performs the reset; ANY other key cancels.
+
+    Same cancel-by-default policy as :func:`_step_confirm` — a stray keypress
+    must never be read as "yes". Unlike the reset-all prompt, this one can
+    only clear one row's value, so it stays scoped to *setting*.
+    """
+    setting = config.BY_KEY[state.confirm_reset_row]
+    if not (event.key is keys.Key.CHAR and event.char in ("y", "Y")):
+        return replace(state, confirm_reset_row=None, error=None)
+    return replace(_reset_row(state, setting), confirm_reset_row=None)
+
+
 def _toggle_mode(state: MenuState) -> MenuState:
     """Flip Basic/Advanced. :func:`_refit_cursor` keeps the selected row
     selected, so this only has to change the value."""
@@ -849,19 +883,23 @@ def _step_browsing(state: MenuState, event: keys.KeyEvent,
                    settings: Sequence[config.Setting]) -> MenuState:
     if event.key is keys.Key.TAB:
         return _toggle_mode(state)
+    setting = settings[state.cursor]
     if event.key is keys.Key.CHAR:
         if event.char == "q":
             return replace(state, quitting=True)
         if event.char == "a":
             return replace(state, pending_action="apply", error=None, notice=None)
         if event.char == "d":
+            if state.values.get(setting.key, setting.default) == setting.default:
+                return state  # already at default: nothing to confirm
+            return replace(state, confirm_reset_row=setting.key, error=None, notice=None)
+        if event.char == "D":
             return replace(state, confirm_defaults=True, error=None, notice=None)
         if event.char in ("e", "i"):
             return replace(state, prompt="export" if event.char == "e" else "import",
                            prompt_buffer="", error=None, notice=None)
     if event.key is keys.Key.ESCAPE:
         return replace(state, quitting=True)
-    setting = settings[state.cursor]
     if event.key is keys.Key.UP:
         return replace(state, cursor=(state.cursor - 1) % len(settings), error=None, notice=None)
     if event.key is keys.Key.DOWN:
@@ -902,9 +940,12 @@ def step(state: MenuState, event: keys.KeyEvent,
     An undecoded key returns *state* unchanged rather than raising.
     """
     if event.key is keys.Key.CTRL_C:
-        return replace(state, quitting=True, editing=False, confirm_defaults=False, prompt=None)
+        return replace(state, quitting=True, editing=False, confirm_defaults=False,
+                       confirm_reset_row=None, prompt=None)
     if state.confirm_defaults:
         after = _step_confirm(state, event)
+    elif state.confirm_reset_row:
+        after = _step_confirm_reset_row(state, event)
     elif state.prompt:
         after = _step_prompt(state, event)
     elif state.editing:
@@ -1025,7 +1066,8 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
             painted = _draw(render_menu(
                 state.values, state.cursor, paint=paint, lang=lang, editing=state.editing,
                 edit_buffer=state.edit_buffer, error=state.error, notice=state.notice,
-                confirm_defaults=state.confirm_defaults, prompt=state.prompt,
+                confirm_defaults=state.confirm_defaults,
+                confirm_reset_row=state.confirm_reset_row, prompt=state.prompt,
                 prompt_buffer=state.prompt_buffer, height=height,
                 pulse_frame=pulse_frame, settings=settings), out, painted)
             try:
