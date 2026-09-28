@@ -44,6 +44,11 @@ MIN_INTERVAL_MINUTES = 1
 MAX_INTERVAL_MINUTES = 1440  # one day: the largest unit the scanner offers
 FALLBACK_TZ = dt.timezone(dt.timedelta(hours=8), name="UTC+8")
 
+#: Backstop for any free-text setting that declares no ``max_len`` of its
+#: own — a paste-flood/held-key guard, not a format check. Well above any
+#: real URL/path/timezone value this schema stores.
+DEFAULT_TEXT_MAX_LEN = 512
+
 
 @dataclass(frozen=True)
 class Setting:
@@ -64,6 +69,9 @@ class Setting:
     minimum: Optional[int] = None
     maximum: Optional[int] = None
     choices: Optional[Tuple[str, ...]] = None
+    #: Longest a free-text value may grow to; ``None`` falls back to
+    #: :data:`DEFAULT_TEXT_MAX_LEN` for the text-like kinds (see :func:`coerce`).
+    max_len: Optional[int] = None
     #: "basic" rows are the curated subset Basic mode shows; everything else
     #: ("advanced", the default) is hidden there and shown only in Advanced
     #: mode. A row added to SETTINGS with no explicit tier is advanced-only,
@@ -108,10 +116,10 @@ SETTINGS: Tuple[Setting, ...] = (
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
             "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN.",
-            tier="basic", portable=False),
+            max_len=telegram_kit.MAX_TOKEN_LEN, tier="basic", portable=False),
     Setting("telegram_chat_id", "text_optional", "", "telegram", "Chat ID",
             "Telegram chat that receives the notifications; used ahead of TG_CHAT_ID.",
-            tier="basic", portable=False),
+            max_len=telegram_kit.MAX_CHAT_ID_LEN, tier="basic", portable=False),
     # ── API ──────────────────────────────────────────────────────────────
     Setting("api_base", "text", DEFAULT_API_BASE, "api", "API base",
             "Base URL of the tracked source.", portable=False),
@@ -330,10 +338,20 @@ _TRUE = {"1", "true", "yes", "y", "on", "開", "是"}
 _FALSE = {"0", "false", "no", "n", "off", "關", "否"}
 
 
+#: Kinds that hold an arbitrary typed string, as opposed to bool/int/interval/
+#: time/choice, each of which already validates its own bounds below.
+_TEXT_KINDS = ("text", "text_optional", "secret", "path", "tz")
+
+
 def coerce(setting: Setting, raw: Any) -> Any:
     """Turn user/file input into the stored type. Raises ValueError with a message."""
     if isinstance(raw, str) and any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
         raise ValueError("Control characters are not allowed")
+    if setting.kind in _TEXT_KINDS:
+        cap = setting.max_len if setting.max_len is not None else DEFAULT_TEXT_MAX_LEN
+        length = len(str(raw))
+        if length > cap:
+            raise ValueError(i18n.t("error.max_len", max_len=cap, length=length))
     if setting.kind == "bool":
         if isinstance(raw, bool):
             return raw

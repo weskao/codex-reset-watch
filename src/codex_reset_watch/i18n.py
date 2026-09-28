@@ -387,6 +387,10 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "error.max": {"en": "Must not be greater than {maximum}", "zh-TW": "不得大於 {maximum}"},
     "error.blank": {"en": "Must not be blank", "zh-TW": "不可留空"},
     "error.tz_blank": {"en": "The timezone must not be blank", "zh-TW": "時區不可留空"},
+    "error.max_len": {
+        "en": "Must be at most {max_len} characters (got {length})",
+        "zh-TW": "最多 {max_len} 個字元（目前 {length} 個）",
+    },
     "error.choice": {
         "en": "Must be one of: {choices}", "zh-TW": "必須是下列其中之一：{choices}"},
 

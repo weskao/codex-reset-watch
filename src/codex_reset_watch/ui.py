@@ -761,6 +761,9 @@ def _typed(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
         return _typed_interval(buffer, ch)
     if setting.kind == "time":
         return _typed_time(buffer, ch)
+    cap = setting.max_len if setting.max_len is not None else config.DEFAULT_TEXT_MAX_LEN
+    if len(buffer) >= cap:
+        return None
     return buffer + ch
 
 
@@ -803,6 +806,10 @@ def _step_prompt(state: MenuState, event: keys.KeyEvent) -> MenuState:
     if event.key is keys.Key.BACKSPACE:
         return replace(state, prompt_buffer=state.prompt_buffer[:-1])
     if event.key is keys.Key.CHAR and event.char:
+        # A file path — same paste-flood/held-key backstop as the setting
+        # editor above, well past any real path length.
+        if len(state.prompt_buffer) >= config.DEFAULT_TEXT_MAX_LEN:
+            return state
         return replace(state, prompt_buffer=state.prompt_buffer + event.char)
     if event.key is keys.Key.ENTER:
         if not state.prompt_buffer.strip():

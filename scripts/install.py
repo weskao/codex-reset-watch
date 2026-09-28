@@ -138,7 +138,7 @@ def prompt_telegram_setup(cfg: Dict[str, Any], *, ask: Callable[[str], str] = in
               file=out)
         return False
 
-    chat_id = ask("  Telegram chat id: ").strip()
+    chat_id = ask("  Telegram chat id: ").strip()[: telegram_kit.MAX_CHAT_ID_LEN]
     token = telegram_kit.read_hidden("  Telegram bot token (hidden): ", ask=ask_secret)
     if token is None:
         print("  ❌ Could not hide token input; configure it later in a terminal.", file=out)
