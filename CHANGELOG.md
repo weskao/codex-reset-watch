@@ -1,3 +1,8 @@
+## [0.12.0] - 2026-09-28
+
+### 🚀 Features
+
+- **menu:** [**breaking**] Split d reset-all into d row-reset / D reset-all
 ## [0.11.1] - 2026-09-28
 ## [0.11.0] - 2026-09-28
 
