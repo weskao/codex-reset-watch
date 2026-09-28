@@ -1,3 +1,9 @@
+## [0.11.0] - 2026-09-28
+
+### 🚀 Features
+
+- **notifications:** Include launchd job and log path
+- **config:** Cap free-text setting length
 ## [0.10.1] - 2026-09-27
 
 ### 💼 Other
