@@ -1050,6 +1050,8 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if notify:
                 for message, image in messages:
+                    message += (f"\nlaunchd: com.wes.codex-reset-watch.{mode}"
+                                f"\nlog: {logger.log_dir / 'events.jsonl'}")
                     send_telegram(cfg, message, logger, image=image)
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
