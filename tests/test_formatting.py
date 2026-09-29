@@ -159,12 +159,16 @@ class FormattingTests(unittest.TestCase):
         checked = dt.datetime(2026, 9, 29, 7, 0, tzinfo=dt.timezone.utc)
         upcoming = crw.Upcoming(timestamp=checked + dt.timedelta(hours=24), confidence="strong")
         zh = crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"})
-        self.assertIn("📊 信心：Strong", zh)
+        self.assertIn("📊 信心：高", zh)
         self.assertIn("📌 狀態：即將重置", zh)
         self.assertIn("🔮 發現尚未發生的重置訊號", zh)
         en = crw.format_upcoming_notice(upcoming, checked)
         self.assertIn("📊 Confidence: Strong", en)
         self.assertIn("📌 Status: Upcoming reset", en)
+        elevated = crw.Upcoming(timestamp=checked + dt.timedelta(hours=24), confidence="elevated")
+        self.assertIn("📊 信心：偏高", crw.format_upcoming_notice(elevated, checked, {"language": "zh-TW"}))
+        unknown = crw.Upcoming(timestamp=checked + dt.timedelta(hours=24), confidence="medium")
+        self.assertIn("📊 信心：Medium", crw.format_upcoming_notice(unknown, checked, {"language": "zh-TW"}))
 
     def test_no_signal_notice_shows_latest_reset_like_manual(self):
         checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)

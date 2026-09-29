@@ -431,6 +431,9 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.upcoming.chance": {"en": "🎯 Chance: {pct}%", "zh-TW": "🎯 機率：{pct}%"},
     "notice.upcoming.confidence": {
         "en": "📊 Confidence: {confidence}", "zh-TW": "📊 信心：{confidence}"},
+    # Upstream Watch.level enum (openapi.json): elevated | strong. Unknown values fall back to the raw text.
+    "notice.upcoming.confidence.elevated": {"en": "Elevated", "zh-TW": "偏高"},
+    "notice.upcoming.confidence.strong": {"en": "Strong", "zh-TW": "高"},
     "notice.upcoming.window": {"en": "🪟 Window: {label}", "zh-TW": "🪟 預測窗口：{label}"},
     "notice.upcoming.window.devday": {
         "en": "around OpenAI DevDay 2026 on September 29 (Pacific Time)",

@@ -817,8 +817,9 @@ def upcoming_section(
     if upcoming.chance_percent is not None:
         lines.append(i18n.t("notice.upcoming.chance", lang, pct=f"{upcoming.chance_percent:g}"))
     if upcoming.confidence:
-        lines.append(i18n.t("notice.upcoming.confidence", lang,
-                            confidence=upcoming.confidence[:1].upper() + upcoming.confidence[1:]))
+        lines.append(i18n.t("notice.upcoming.confidence", lang, confidence=i18n.t(
+            f"notice.upcoming.confidence.{normalize_key(upcoming.confidence)}", lang,
+            default=upcoming.confidence[:1].upper() + upcoming.confidence[1:])))
     if upcoming.window_label:
         label = upcoming.window_label
         if label == i18n.t("notice.upcoming.window.devday", "en"):
