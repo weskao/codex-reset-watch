@@ -1023,9 +1023,12 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         snapshot = client.snapshot()
         logger.event("INFO", "snapshot", mode=mode, **snapshot_to_log(snapshot))
 
+        if mode == "manual":
+            footer = f"\n{host_identity.device_label()}"
+            print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())) + footer)
+
         if not snapshot.status_ok:
             if mode == "manual":
-                print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())))
                 return 1
             logger.event("WARNING", "scheduled_status_api_failed", mode=mode, error=snapshot.status_error)
             if mode == "daily":
@@ -1039,10 +1042,8 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         messages: List[Tuple[str, Optional[pathlib.Path]]] = []
 
         if mode == "manual":
-            text = format_manual(snapshot, cfg)
-            print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())))
             if notify:
-                send_telegram(cfg, f"{text}\n{host_identity.device_label()}", logger)
+                send_telegram(cfg, format_manual(snapshot, cfg) + footer, logger)
         else:
             if snapshot.latest and bool(cfg.get("notify_new_reset_events", True)):
                 changed = snapshot.latest.key != prev_latest
@@ -1061,11 +1062,14 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     # No upcoming signal at all is itself "unchanged" — without this branch
                     # notify_when_unchanged never fires on days with nothing to report.
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
-            if notify:
+            if messages:
                 job = scheduler.job_ref(mode)
                 footer = f"\n{host_identity.device_label()}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
                 for message, image in messages:
-                    send_telegram(cfg, message + footer, logger, image=image)
+                    text = message + footer
+                    print(text)
+                    if notify:
+                        send_telegram(cfg, text, logger, image=image)
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
         state["last_check_at"] = iso_utc(snapshot.checked_at)

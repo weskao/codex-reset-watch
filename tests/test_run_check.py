@@ -14,6 +14,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import socketserver
 import tempfile
 import threading
@@ -159,7 +160,10 @@ class NoticeImageTests(unittest.TestCase):
                 state_dir.mkdir(parents=True, exist_ok=True)
                 (state_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
             with mock.patch.object(crw, "send_telegram", return_value=True) as send:
-                crw.run_check("monitor", notify=True)
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    crw.run_check("monitor", notify=True)
+                self.assertEqual(out.getvalue(), "".join(c.args[1] + "\n" for c in send.call_args_list))
         return [(c.args[1], c.kwargs.get("image")) for c in send.call_args_list]
 
     def test_new_reset_and_upcoming_each_carry_their_own_image(self):
@@ -182,11 +186,17 @@ class NoticeImageTests(unittest.TestCase):
         self.assertEqual([image for _text, image in sent], [None])
 
     def test_manual_notify_stays_text_only(self):
-        with isolated_run({"timezone": "UTC"}), mock.patch.object(crw, "send_telegram") as send, \
-                contextlib.redirect_stdout(io.StringIO()):
-            crw.run_check("manual", notify=True)
-        send.assert_called_once()
-        self.assertNotIn("image", send.call_args.kwargs)
+        for colour in (False, True):
+            with self.subTest(colour=colour), isolated_run({"timezone": "UTC"}), \
+                    mock.patch.object(crw, "send_telegram") as send, \
+                    mock.patch.object(crw.ui, "colour_enabled", return_value=colour), \
+                    mock.patch.object(crw.host_identity, "device_label", return_value="💻 Test laptop · TEST******"), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                crw.run_check("manual", notify=True)
+            send.assert_called_once()
+            self.assertNotIn("image", send.call_args.kwargs)
+            self.assertEqual(re.sub(r"\x1b\[[0-9;]*m", "", out.getvalue()), send.call_args.args[1] + "\n")
+            self.assertTrue(out.getvalue().endswith("💻 Test laptop · TEST******\n"))
 
 
 class ManualCheckTests(unittest.TestCase):
@@ -194,13 +204,15 @@ class ManualCheckTests(unittest.TestCase):
         import contextlib as _c
         import io
 
-        with isolated_run({"timezone": "UTC"}) as (_state_dir, _log_dir):
+        with isolated_run({"timezone": "UTC"}) as (_state_dir, _log_dir), \
+                mock.patch.object(crw.host_identity, "device_label", return_value="💻 Test laptop · TEST******"):
             out = io.StringIO()
             with _c.redirect_stdout(out):
                 code = crw.run_check("manual", notify=False)
             self.assertEqual(code, 0)
             self.assertIn("UTC", out.getvalue())
             self.assertNotIn("UTC+8", out.getvalue())
+            self.assertTrue(out.getvalue().endswith("💻 Test laptop · TEST******\n"))
 
 
 if __name__ == "__main__":
