@@ -170,6 +170,10 @@ Immediate API check + terminal output + Telegram notification:
 crw check
 ```
 
+Example output:
+
+![crw check result output example](docs/images/crw-check-result-output.png)
+
 Alias of `check`:
 
 ```bash
@@ -732,6 +736,10 @@ Example:
 🕒 預測窗口截止：2026-09-21 23:09 UTC+8
 ⏳ 距離現在：2 Days 1 hour 35 minutes
 ```
+
+Example upcoming-event result:
+
+![Upcoming reset result](docs/images/upcoming-event-result.png)
 
 Reset times already past (latest reset, new-reset notice) add how long ago they were, largest
 unit Day, smallest unit the API's own precision — a date-only value shows days, an hour-only
