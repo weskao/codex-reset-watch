@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import enum
 import hashlib
 import http.client
 import json
@@ -907,9 +908,15 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
 ASSETS_DIR = pathlib.Path(__file__).parent / "assets"
 
 
-def notice_image(kind: str) -> Optional[pathlib.Path]:
+class NoticeKind(enum.Enum):
+    """Notices that carry an image; each value is its ``assets/`` subfolder."""
+    RESET = "reset"
+    UPCOMING = "upcoming"
+
+
+def notice_image(kind: NoticeKind) -> Optional[pathlib.Path]:
     """A random image from ``assets/<kind>/`` to send with that notice; None if there is none."""
-    images = [p for p in (ASSETS_DIR / kind).glob("*") if p.suffix.lower() in (".jpeg", ".jpg", ".png")]
+    images = [p for p in (ASSETS_DIR / kind.value).glob("*") if p.suffix.lower() in (".jpeg", ".jpg", ".png")]
     return random.choice(images) if images else None
 
 
@@ -1039,14 +1046,14 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                 # First run establishes a baseline; only notify an already-existing event if very recent.
                 if changed and (not is_first or is_recent_event(snapshot.latest, snapshot.checked_at)):
                     messages.append((format_new_event_notice(snapshot.latest, snapshot.checked_at, cfg),
-                                     notice_image("reset")))
+                                     notice_image(NoticeKind.RESET)))
             if bool(cfg.get("notify_upcoming_reset", True)):
                 notify_unchanged = bool(cfg.get("monitor_notify_when_unchanged" if mode == "monitor" else "daily_notify_when_unchanged", False))
                 if snapshot.upcoming:
                     changed = snapshot.upcoming.key != prev_upcoming
                     if changed or notify_unchanged:
                         messages.append((format_upcoming_notice(snapshot.upcoming, snapshot.checked_at, cfg),
-                                         notice_image("upcoming")))
+                                         notice_image(NoticeKind.UPCOMING)))
                 elif notify_unchanged:
                     # No upcoming signal at all is itself "unchanged" — without this branch
                     # notify_when_unchanged never fires on days with nothing to report.

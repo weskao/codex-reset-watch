@@ -207,7 +207,7 @@ class TelegramCredentialWiringTests(unittest.TestCase):
 
     def test_an_image_goes_out_with_the_text_in_one_photo_message(self):
         cfg = {"telegram_bot_token": "stored-token", "telegram_chat_id": "stored-chat"}
-        image = crw.notice_image("reset")
+        image = crw.notice_image(crw.NoticeKind.RESET)
         with self._no_env(), mock.patch.object(crw, "send_photo", return_value=True) as photo, \
                 mock.patch.object(crw.telegram_kit, "send_message") as send:
             self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=image))
@@ -219,7 +219,7 @@ class TelegramCredentialWiringTests(unittest.TestCase):
         with self._no_env(), mock.patch.object(crw.urllib.request, "urlopen") as open_url, \
                 mock.patch.object(crw.telegram_kit, "send_message", return_value=True) as send:
             open_url.return_value.__enter__.return_value.read.return_value = b'{"ok": false}'
-            self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=crw.notice_image("upcoming")))
+            self.assertTrue(crw.send_telegram(cfg, "hello", mock.Mock(), image=crw.notice_image(crw.NoticeKind.UPCOMING)))
         send.assert_called_once_with("stored-token", "stored-chat", "hello")
 
     def test_photo_upload_includes_image_and_caption(self):
@@ -238,11 +238,11 @@ class TelegramCredentialWiringTests(unittest.TestCase):
         self.assertIn(b"\xff\xd8photo\xff\xd9", request.data)
 
     def test_notice_image_picks_from_the_bundled_folder_of_that_kind(self):
-        for kind in ("reset", "upcoming"):
+        self.assertEqual({k.value for k in crw.NoticeKind}, {"reset", "upcoming"})
+        for kind in crw.NoticeKind:
             image = crw.notice_image(kind)
-            self.assertEqual(image.parent, crw.ASSETS_DIR / kind)
+            self.assertEqual(image.parent, crw.ASSETS_DIR / kind.value)
             self.assertTrue(image.is_file())
-        self.assertIsNone(crw.notice_image("no-such-kind"))
 
     def test_missing_credentials_are_logged_not_sent(self):
         logger = mock.Mock()
