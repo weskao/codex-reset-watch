@@ -43,7 +43,7 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("🏷️ 類型：banked", text)
         self.assertIn("🕒 時間：尚未公布（Time to be announced）", text)
         self.assertNotIn("⏳ 距離現在：", text)
-        self.assertIn("🔗 公告：https://x.com/thsottiaux/status/2101352781219258527", text)
+        self.assertIn("🔗 來源：https://x.com/thsottiaux/status/2101352781219258527", text)
         self.assertIn("🌐 Codex Resets：https://codex-resets.com/", text)
 
     def test_manual_output_shows_avg_reset_interval(self):
@@ -123,6 +123,37 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("Banked reset scheduled", text)
         self.assertIn("Time to be announced", text)
         self.assertNotIn("距離現在", text)
+
+    def test_upcoming_source_uses_the_same_line_as_check(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(
+            timing_kind="scheduled_tba", status="scheduled",
+            source_url="https://x.com/example/status/123",
+        )
+        for lang, expected in (("en", "🔗 Source: https://x.com/example/status/123"),
+                               ("zh-TW", "🔗 來源：https://x.com/example/status/123")):
+            with self.subTest(lang=lang):
+                cfg = {"language": lang}
+                manual = crw.format_manual(crw.Snapshot(checked, None, upcoming, True, True), cfg)
+                notice = crw.format_upcoming_notice(upcoming, checked, cfg)
+                self.assertIn(expected, manual)
+                self.assertIn(expected, notice)
+
+    def test_window_label_uses_notice_language(self):
+        checked = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(window_label="around example event")
+        self.assertIn("🪟 Window: around example event",
+                      crw.format_upcoming_notice(upcoming, checked, {"language": "en"}))
+        self.assertIn("🪟 預測窗口：around example event",
+                      crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"}))
+
+    def test_known_window_description_uses_notice_language(self):
+        checked = dt.datetime(2026, 9, 29, 4, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(
+            window_label="around OpenAI DevDay 2026 on September 29 (Pacific Time)",
+        )
+        self.assertIn("🪟 預測窗口：9 月 29 日（美國太平洋時間）的 OpenAI DevDay 2026 前後",
+                      crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"}))
 
     def test_no_signal_notice_shows_latest_reset_like_manual(self):
         checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)

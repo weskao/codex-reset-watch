@@ -753,7 +753,7 @@ def tracker_line() -> str:
 
 def append_upcoming_links(lines: List[str], upcoming: Upcoming, lang: str) -> None:
     if upcoming.source_url:
-        lines.append(i18n.t("notice.upcoming.link", lang, url=upcoming.source_url))
+        lines.append(i18n.t("notice.source", lang, url=upcoming.source_url))
 
 
 def heading(paint: ui.Paint, colour: str, text: str) -> str:
@@ -817,7 +817,10 @@ def upcoming_section(
     if upcoming.confidence:
         lines.append(i18n.t("notice.upcoming.confidence", lang, confidence=upcoming.confidence))
     if upcoming.window_label:
-        lines.append(i18n.t("notice.upcoming.window", lang, label=upcoming.window_label))
+        label = upcoming.window_label
+        if label == i18n.t("notice.upcoming.window.devday", "en"):
+            label = i18n.t("notice.upcoming.window.devday", lang)
+        lines.append(i18n.t("notice.upcoming.window", lang, label=label))
     if upcoming.message:
         lines.append(i18n.t("notice.upcoming.signal", lang, text=safe_text(upcoming.message)))
     append_upcoming_links(lines, upcoming, lang)
