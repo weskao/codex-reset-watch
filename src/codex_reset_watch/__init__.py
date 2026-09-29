@@ -729,6 +729,22 @@ def safe_text(s: str, max_len: int = 900) -> str:
     return s if len(s) <= max_len else s[:max_len - 1] + "…"
 
 
+def format_event_type(event_type: str, lang: str) -> str:
+    """Localize a reset type for the notice type line.
+
+    Known API values (``regular``, ``banked``) have catalogue entries; anything
+    else keeps the raw text with the first letter uppercased — same fallback
+    style as confidence.
+    """
+    if not event_type:
+        return i18n.t("notice.type_unlabeled", lang)
+    return i18n.t(
+        f"notice.type.{normalize_key(event_type)}",
+        lang,
+        default=event_type[:1].upper() + event_type[1:],
+    )
+
+
 def upcoming_status_label(upcoming: Upcoming, lang: str = "en") -> str:
     if upcoming.title:
         return upcoming.title
@@ -775,7 +791,7 @@ def latest_section(latest: Optional[Event], checked_at: dt.datetime, cfg: Option
         divider,
         heading(p, p.ok, i18n.t("notice.latest.heading", lang)),
         event_time_line(latest, checked_at, cfg, lang),
-        i18n.t("notice.type", lang, type=latest.event_type or i18n.t("notice.type_unlabeled", lang)),
+        i18n.t("notice.type", lang, type=format_event_type(latest.event_type, lang)),
     ]
     if latest.message:
         lines.append(i18n.t("notice.announcement", lang, text=safe_text(latest.message)))
@@ -801,7 +817,7 @@ def upcoming_section(
     lines = ["", divider, header,
              i18n.t("notice.upcoming.status", lang, icon=status_icon, label=upcoming_status_label(upcoming, lang))]
     if upcoming.event_type:
-        lines.append(i18n.t("notice.type", lang, type=upcoming.event_type))
+        lines.append(i18n.t("notice.type", lang, type=format_event_type(upcoming.event_type, lang)))
     if upcoming.timestamp is None:
         lines.append(i18n.t("notice.upcoming.time_tba", lang,
                             time_text=upcoming.time_text or "Time to be announced"))
@@ -899,7 +915,7 @@ def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional
         "──────────────",
         i18n.t("notice.new_event.heading", lang),
         event_time_line(event, checked_at, cfg, lang),
-        i18n.t("notice.type", lang, type=event.event_type or i18n.t("notice.type_unlabeled", lang)),
+        i18n.t("notice.type", lang, type=format_event_type(event.event_type, lang)),
     ]
     if event.message:
         section.append(i18n.t("notice.announcement", lang, text=safe_text(event.message)))

@@ -409,6 +409,10 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.time_ago": {"en": "🕒 Time: {time} ({ago} ago)", "zh-TW": "🕒 時間：{time}（{ago}前）"},
     "notice.type": {"en": "🏷️ Type: {type}", "zh-TW": "🏷️ 類型：{type}"},
     "notice.type_unlabeled": {"en": "unlabeled", "zh-TW": "未標示"},
+    # Upstream reset categories seen in the API: regular | banked. Unknown values
+    # fall back to the raw text with the first letter uppercased.
+    "notice.type.regular": {"en": "Regular", "zh-TW": "一般"},
+    "notice.type.banked": {"en": "Banked", "zh-TW": "累積"},
     "notice.announcement": {"en": "📝 Announcement: {text}", "zh-TW": "📝 公告：{text}"},
     "notice.source": {"en": "🔗 Source: {url}", "zh-TW": "🔗 來源：{url}"},
     "notice.avg_interval": {"en": "📈 Avg. reset interval: {days} days", "zh-TW": "📈 平均 Reset 間隔：{days} 天"},
