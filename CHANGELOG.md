@@ -1,3 +1,8 @@
+## [0.14.0] - 2026-09-29
+
+### 🚀 Features
+
+- Identify device in telegram notices
 ## [0.13.0] - 2026-09-29
 
 ### 🚀 Features
