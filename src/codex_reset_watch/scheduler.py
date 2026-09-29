@@ -288,7 +288,8 @@ def apply_systemd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
         stop_all=lambda: _each(JOBS, _stop_systemd_timer),
     )
     for job in enabled_jobs(cfg):
-        subprocess.check_call(["systemctl", "--user", "enable", "--now", f"{SYSTEMD_UNITS[job]}.timer"])
+        subprocess.check_call(["systemctl", "--user", "enable", f"{SYSTEMD_UNITS[job]}.timer"])
+        subprocess.check_call(["systemctl", "--user", "restart", f"{SYSTEMD_UNITS[job]}.timer"])
     return enabled_jobs(cfg)
 
 

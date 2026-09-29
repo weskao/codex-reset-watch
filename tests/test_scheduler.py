@@ -114,6 +114,20 @@ class LaunchdRenderTests(unittest.TestCase):
 
 
 class SystemdRenderTests(unittest.TestCase):
+    def test_apply_restarts_enabled_timers_after_reloading_units(self):
+        with tempfile.TemporaryDirectory() as d, no_ambient_telegram_env(), \
+                unittest.mock.patch.object(scheduler, "systemd_user_dir", return_value=pathlib.Path(d)), \
+                unittest.mock.patch.object(scheduler.subprocess, "check_call") as systemctl:
+            scheduler.apply_systemd("/bin/crw", pathlib.Path(d) / "logs", cfg())
+
+        self.assertEqual(systemctl.call_args_list, [
+            unittest.mock.call(["systemctl", "--user", "daemon-reload"]),
+            unittest.mock.call(["systemctl", "--user", "enable", "codex-reset-watch-daily.timer"]),
+            unittest.mock.call(["systemctl", "--user", "restart", "codex-reset-watch-daily.timer"]),
+            unittest.mock.call(["systemctl", "--user", "enable", "codex-reset-watch-monitor.timer"]),
+            unittest.mock.call(["systemctl", "--user", "restart", "codex-reset-watch-monitor.timer"]),
+        ])
+
     def test_default_daily_oncalendar_and_monitor_onactivesec(self):
         units = scheduler.systemd_units("/bin/crw", pathlib.Path("/tmp/logs"), cfg())
         self.assertIn("OnCalendar=*-*-* 10:00:00", units["codex-reset-watch-daily.timer"])

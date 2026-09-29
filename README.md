@@ -536,6 +536,11 @@ defaults below are what ships in `config.example.json`. Either job can also be t
 disabled stub. All rendering lives in `src/codex_reset_watch/scheduler.py`, shared by
 `scripts/install.py` (first install) and `crw config` / `crw apply-schedule` (re-apply after a
 settings change) — the per-OS scripts under `scripts/` are thin wrappers around it.
+These are per-user scheduled jobs, not system daemons. To restart/re-register
+them from current settings on macOS, Linux, or Windows, run `crw apply-schedule`.
+From this checkout on macOS/Linux, `make restart-schedule` does the same thing.
+The interactive update flow calls `crw apply-schedule` after a successful
+upgrade; schedule-related `crw --config` changes also re-apply automatically.
 
 ### Daily job
 
@@ -561,7 +566,7 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 - `~/.config/systemd/user/codex-reset-watch-daily.{service,timer}` (`OnCalendar=*-*-* HH:MM:00`)
 - `~/.config/systemd/user/codex-reset-watch-monitor.{service,timer}` (`OnBootSec=`/`OnUnitActiveSec=<N>min`)
-- installer/`crw apply-schedule` runs `systemctl --user daemon-reload` then `enable --now` on each enabled timer (and `disable --now` a job that was just turned off)
+- installer/`crw apply-schedule` runs `systemctl --user daemon-reload`, then `enable` and `restart` on each enabled timer (and `disable --now` a job that was just turned off), so a changed interval takes effect immediately
 - requires a systemd user instance (lingering, if you want jobs to run without an active login session: `loginctl enable-linger $USER`)
 
 ### Windows — Task Scheduler
