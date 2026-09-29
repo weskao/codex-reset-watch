@@ -167,6 +167,14 @@ class NoticeImageTests(unittest.TestCase):
                           status_fixture="status_scheduled_tba.json")
         self.assertEqual([image.parent.name for _text, image in sent], ["reset", "upcoming"])
 
+    def test_scheduled_notice_names_the_os_job_and_log(self):
+        with mock.patch.object(crw.scheduler.platform, "system", return_value="Linux"):
+            sent = self._sent({"timezone": "UTC"})
+        self.assertTrue(sent)
+        for text, _image in sent:
+            self.assertIn("\nsystemd: codex-reset-watch-monitor.timer\nlog: ", text)
+            self.assertTrue(text.endswith("events.jsonl"))
+
     def test_the_no_signal_notice_stays_text_only(self):
         sent = self._sent({"timezone": "UTC", "monitor_notify_when_unchanged": True},
                           status_fixture="status_no_upcoming.json")

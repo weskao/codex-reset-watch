@@ -66,8 +66,8 @@ class EnabledJobsTests(unittest.TestCase):
 class LaunchdRenderTests(unittest.TestCase):
     def test_default_daily_calendar_and_monitor_interval(self):
         plists = scheduler.launchd_plists("/bin/crw", pathlib.Path("/tmp/logs"), cfg())
-        daily = plists["com.wes.codex-reset-watch.daily.plist"]
-        monitor = plists["com.wes.codex-reset-watch.monitor.plist"]
+        daily = plists["codex-reset-watch.daily.plist"]
+        monitor = plists["codex-reset-watch.monitor.plist"]
         self.assertEqual(daily["StartCalendarInterval"], {"Hour": 10, "Minute": 0})
         self.assertEqual(daily["ProgramArguments"], ["/bin/crw", "daily"])
         self.assertNotIn("StartInterval", daily)
@@ -78,12 +78,12 @@ class LaunchdRenderTests(unittest.TestCase):
     def test_custom_interval_and_daily_time(self):
         plists = scheduler.launchd_plists(
             "/bin/crw", pathlib.Path("/tmp"), cfg(scan_interval_minutes=15, daily_time="07:30"))
-        self.assertEqual(plists["com.wes.codex-reset-watch.monitor.plist"]["StartInterval"], 900)
+        self.assertEqual(plists["codex-reset-watch.monitor.plist"]["StartInterval"], 900)
 
     def test_disabled_job_is_not_rendered(self):
         plists = scheduler.launchd_plists("/bin/crw", pathlib.Path("/tmp"), cfg(daily_enabled=False))
-        self.assertNotIn("com.wes.codex-reset-watch.daily.plist", plists)
-        self.assertIn("com.wes.codex-reset-watch.monitor.plist", plists)
+        self.assertNotIn("codex-reset-watch.daily.plist", plists)
+        self.assertIn("codex-reset-watch.monitor.plist", plists)
 
     def test_env_cannot_be_baked_into_any_job(self):
         with self.assertRaises(ValueError):
@@ -94,16 +94,16 @@ class LaunchdRenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = pathlib.Path(d)
             scheduler.write_launchd(out, scheduler.launchd_plists("/bin/crw", pathlib.Path("/tmp"), cfg()))
-            self.assertTrue((out / "com.wes.codex-reset-watch.daily.plist").exists())
+            self.assertTrue((out / "codex-reset-watch.daily.plist").exists())
             scheduler.write_launchd(out, scheduler.launchd_plists("/bin/crw", pathlib.Path("/tmp"), cfg(daily_enabled=False)))
-            self.assertFalse((out / "com.wes.codex-reset-watch.daily.plist").exists())
-            self.assertTrue((out / "com.wes.codex-reset-watch.monitor.plist").exists())
+            self.assertFalse((out / "codex-reset-watch.daily.plist").exists())
+            self.assertTrue((out / "codex-reset-watch.monitor.plist").exists())
 
     def test_existing_env_is_recovered_from_a_legacy_plist(self):
         with tempfile.TemporaryDirectory() as d:
             out = pathlib.Path(d)
             out.mkdir(exist_ok=True)
-            (out / "com.wes.codex-reset-watch.daily.plist").write_bytes(
+            (out / "codex-reset-watch.daily.plist").write_bytes(
                 plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"}}))
             recovered = scheduler.launchd_existing_env(out)
         self.assertEqual(recovered, {"TG_BOT_TOKEN": "tok", "TG_CHAT_ID": "42"})

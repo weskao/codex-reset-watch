@@ -729,7 +729,7 @@ def safe_text(s: str, max_len: int = 900) -> str:
     return s if len(s) <= max_len else s[:max_len - 1] + "…"
 
 
-def upcoming_status_label(upcoming: Upcoming) -> str:
+def upcoming_status_label(upcoming: Upcoming, lang: str = "en") -> str:
     if upcoming.title:
         return upcoming.title
     parts: List[str] = []
@@ -745,7 +745,8 @@ def upcoming_status_label(upcoming: Upcoming) -> str:
         if "reset" not in label.lower() and upcoming.event_type:
             label = label.split()[0] + " reset" + (" " + " ".join(label.split()[1:]) if len(label.split()) > 1 else "")
         return label
-    return "Reset scheduled" if upcoming.timestamp is None else "Upcoming reset"
+    return i18n.t("notice.upcoming.status_scheduled" if upcoming.timestamp is None
+                  else "notice.upcoming.status_upcoming", lang)
 
 
 def tracker_line() -> str:
@@ -798,7 +799,7 @@ def upcoming_section(
     p = paint or ui.Paint(False)
     divider = f"{p.frame}──────────────{p.reset}"
     lines = ["", divider, header,
-             i18n.t("notice.upcoming.status", lang, icon=status_icon, label=upcoming_status_label(upcoming))]
+             i18n.t("notice.upcoming.status", lang, icon=status_icon, label=upcoming_status_label(upcoming, lang))]
     if upcoming.event_type:
         lines.append(i18n.t("notice.type", lang, type=upcoming.event_type))
     if upcoming.timestamp is None:
@@ -816,7 +817,8 @@ def upcoming_section(
     if upcoming.chance_percent is not None:
         lines.append(i18n.t("notice.upcoming.chance", lang, pct=f"{upcoming.chance_percent:g}"))
     if upcoming.confidence:
-        lines.append(i18n.t("notice.upcoming.confidence", lang, confidence=upcoming.confidence))
+        lines.append(i18n.t("notice.upcoming.confidence", lang,
+                            confidence=upcoming.confidence[:1].upper() + upcoming.confidence[1:]))
     if upcoming.window_label:
         label = upcoming.window_label
         if label == i18n.t("notice.upcoming.window.devday", "en"):
@@ -1059,10 +1061,10 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     # notify_when_unchanged never fires on days with nothing to report.
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if notify:
+                job = scheduler.job_ref(mode)
+                footer = (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
                 for message, image in messages:
-                    message += (f"\nlaunchd: com.wes.codex-reset-watch.{mode}"
-                                f"\nlog: {logger.log_dir / 'events.jsonl'}")
-                    send_telegram(cfg, message, logger, image=image)
+                    send_telegram(cfg, message + footer, logger, image=image)
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
         state["last_check_at"] = iso_utc(snapshot.checked_at)

@@ -63,7 +63,7 @@ class SecurityTests(unittest.TestCase):
     def test_failed_launchd_migration_stops_job_and_scrubs_legacy_plist(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            old = root / "com.wes.codex-reset-watch.daily.plist"
+            old = root / "codex-reset-watch.daily.plist"
             old.write_bytes(plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "fake-token"}}))
             calls = []
             with mock.patch.object(scheduler, "launch_agents_dir", return_value=root), mock.patch.object(scheduler, "_launchctl", side_effect=lambda *args, **kwargs: calls.append(args)), mock.patch.dict(os.environ, {}, clear=True):
@@ -88,7 +88,7 @@ class SecurityTests(unittest.TestCase):
     def test_launchd_migrates_legacy_token_to_store_before_rewriting(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            old = root / "com.wes.codex-reset-watch.daily.plist"
+            old = root / "codex-reset-watch.daily.plist"
             old.write_bytes(plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "fake-token", "TG_CHAT_ID": "111"}}))
             vault = {}
             cfg = dict(config.DEFAULTS)
@@ -104,7 +104,7 @@ class SecurityTests(unittest.TestCase):
             root = pathlib.Path(d)
             for job, env in (("daily", {"TG_CHAT_ID": "111"}),
                              ("monitor", {"TG_BOT_TOKEN": "fake-token"})):
-                (root / f"com.wes.codex-reset-watch.{job}.plist").write_bytes(
+                (root / f"codex-reset-watch.{job}.plist").write_bytes(
                     plistlib.dumps({"EnvironmentVariables": env}))
             vault = {}
             cfg = dict(config.DEFAULTS)
@@ -117,7 +117,7 @@ class SecurityTests(unittest.TestCase):
     def test_launchd_failed_stop_is_reported_after_disk_scrub(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            old = root / "com.wes.codex-reset-watch.daily.plist"
+            old = root / "codex-reset-watch.daily.plist"
             old.write_bytes(plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "fake-token"}}))
             def launchctl(*args, **kwargs):
                 if args[0] == "bootout":
@@ -146,7 +146,7 @@ class SecurityTests(unittest.TestCase):
             subprocess.CompletedProcess([], 0, b"loaded", b""),
         ]):
             with self.assertRaisesRegex(OSError, "may retain old credentials"):
-                scheduler._launchctl("bootout", "gui/1/com.wes.codex-reset-watch.daily")
+                scheduler._launchctl("bootout", "gui/1/codex-reset-watch.daily")
 
     def test_systemd_failed_disable_detects_active_timer(self):
         with mock.patch.object(scheduler.subprocess, "run", side_effect=[
@@ -207,7 +207,7 @@ class SecurityTests(unittest.TestCase):
 
     def test_render_wrappers_scrub_old_files_when_vault_is_missing(self):
         for wrapper, name, content in (
-            (render_launchd, "com.wes.codex-reset-watch.daily.plist",
+            (render_launchd, "codex-reset-watch.daily.plist",
              plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "fake-token"}})),
             (render_systemd, "codex-reset-watch-daily.service",
              b"[Service]\nEnvironment=TG_BOT_TOKEN=fake-token\n"),
@@ -433,7 +433,7 @@ class ReviewRegressionTests(unittest.TestCase):
     def test_uninstall_removes_plists_when_bootout_fails(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            plist = root / "com.wes.codex-reset-watch.daily.plist"
+            plist = root / "codex-reset-watch.daily.plist"
             plist.write_bytes(plistlib.dumps({}))
             with mock.patch.object(scheduler, "launch_agents_dir", return_value=root), \
                     mock.patch.object(scheduler, "_launchctl", side_effect=OSError("wedged")):
@@ -457,7 +457,7 @@ class ReviewRegressionTests(unittest.TestCase):
     def test_legacy_token_with_trailing_newline_migrates(self):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
-            (root / "com.wes.codex-reset-watch.daily.plist").write_bytes(
+            (root / "codex-reset-watch.daily.plist").write_bytes(
                 plistlib.dumps({"EnvironmentVariables": {"TG_BOT_TOKEN": "fake-token\n"}}))
             vault = {}
             with mock.patch.object(scheduler, "launch_agents_dir", return_value=root), \

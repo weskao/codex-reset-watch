@@ -51,8 +51,8 @@ tool-uninstall:
 	$(UV) tool uninstall codex-reset-watch
 
 launch-status:
-	@launchctl print gui/$$(id -u)/com.wes.codex-reset-watch.daily 2>/dev/null | head -50 || true
-	@launchctl print gui/$$(id -u)/com.wes.codex-reset-watch.monitor 2>/dev/null | head -50 || true
+	@launchctl print gui/$$(id -u)/codex-reset-watch.daily 2>/dev/null | head -50 || true
+	@launchctl print gui/$$(id -u)/codex-reset-watch.monitor 2>/dev/null | head -50 || true
 
 reload:
 	CRW_UV_PYTHON=$(UV_PYTHON) $(UV) run python scripts/install.py

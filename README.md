@@ -51,11 +51,13 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 | Config | `~/Library/Application Support/codex-reset-watch/config.json` | `$XDG_CONFIG_HOME/codex-reset-watch/config.json` (default `~/.config/...`) | `%APPDATA%\codex-reset-watch\config.json` |
 | State | `~/Library/Application Support/codex-reset-watch/state.json` | `$XDG_STATE_HOME/codex-reset-watch/state.json` (default `~/.local/state/...`) | `%LOCALAPPDATA%\codex-reset-watch\state.json` |
 | Logs | `~/Library/Logs/codex-reset-watch/` | `$XDG_STATE_HOME/codex-reset-watch/log/` | `%LOCALAPPDATA%\codex-reset-watch\Logs\` |
-
-Telegram notices sent by macOS launchd include the complete daily or monitor
-job label and the absolute path to `events.jsonl` in the configured log folder.
-| Scheduler units | `~/Library/LaunchAgents/com.wes.codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
+| Scheduler units | `~/Library/LaunchAgents/codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
 | CLI | `~/.local/bin/{codex-reset-watch,crw}` | `~/.local/bin/{codex-reset-watch,crw}` | `%USERPROFILE%\.local\bin\{codex-reset-watch,crw}.exe` |
+
+Scheduled Telegram notices end with the job that sent them and the absolute path to
+`events.jsonl` in the configured log folder — `launchd: codex-reset-watch.monitor` on macOS,
+`systemd: codex-reset-watch-monitor.timer` on Linux, `Task Scheduler: CodexResetWatchMonitor`
+on Windows (or the `daily` equivalent).
 
 Resolution logic lives in `src/codex_reset_watch/paths.py` (defaults) and `config.py` (overrides).
 Override any of the three with the env vars `CRW_CONFIG`, `CRW_STATE_DIR`, `CRW_LOG_DIR`, or set
@@ -549,8 +551,8 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 ### macOS — launchd
 
-- `~/Library/LaunchAgents/com.wes.codex-reset-watch.daily.plist` (`StartCalendarInterval`)
-- `~/Library/LaunchAgents/com.wes.codex-reset-watch.monitor.plist` (`StartInterval`, in seconds)
+- `~/Library/LaunchAgents/codex-reset-watch.daily.plist` (`StartCalendarInterval`)
+- `~/Library/LaunchAgents/codex-reset-watch.monitor.plist` (`StartInterval`, in seconds)
 - installer/`crw apply-schedule` runs `launchctl bootout` (both, to clear a disabled job) then `bootstrap`/`enable` for each enabled job
 
 ### Linux — systemd --user timers
@@ -827,8 +829,8 @@ macOS:
 ```bash
 make launch-status
 # or
-launchctl print gui/$(id -u)/com.wes.codex-reset-watch.daily
-launchctl print gui/$(id -u)/com.wes.codex-reset-watch.monitor
+launchctl print gui/$(id -u)/codex-reset-watch.daily
+launchctl print gui/$(id -u)/codex-reset-watch.monitor
 ```
 
 Linux:

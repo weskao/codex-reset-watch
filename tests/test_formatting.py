@@ -155,6 +155,17 @@ class FormattingTests(unittest.TestCase):
         self.assertIn("🪟 預測窗口：9 月 29 日（美國太平洋時間）的 OpenAI DevDay 2026 前後",
                       crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"}))
 
+    def test_upcoming_notice_capitalizes_confidence_and_localizes_status(self):
+        checked = dt.datetime(2026, 9, 29, 7, 0, tzinfo=dt.timezone.utc)
+        upcoming = crw.Upcoming(timestamp=checked + dt.timedelta(hours=24), confidence="strong")
+        zh = crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"})
+        self.assertIn("📊 信心：Strong", zh)
+        self.assertIn("📌 狀態：即將重置", zh)
+        self.assertIn("🔮 發現尚未發生的重置訊號", zh)
+        en = crw.format_upcoming_notice(upcoming, checked)
+        self.assertIn("📊 Confidence: Strong", en)
+        self.assertIn("📌 Status: Upcoming reset", en)
+
     def test_no_signal_notice_shows_latest_reset_like_manual(self):
         checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
         latest = crw.Event(

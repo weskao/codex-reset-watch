@@ -38,8 +38,8 @@ class LaunchdTests(unittest.TestCase):
     def test_default_config_renders_both_jobs(self):
         with tempfile.TemporaryDirectory() as d:
             out, program = self.render(pathlib.Path(d))
-            daily = plistlib.loads((out / "com.wes.codex-reset-watch.daily.plist").read_bytes())
-            monitor = plistlib.loads((out / "com.wes.codex-reset-watch.monitor.plist").read_bytes())
+            daily = plistlib.loads((out / "codex-reset-watch.daily.plist").read_bytes())
+            monitor = plistlib.loads((out / "codex-reset-watch.monitor.plist").read_bytes())
             self.assertEqual(daily["ProgramArguments"], [str(program), "daily"])
             self.assertEqual(daily["StartCalendarInterval"], {"Hour": 10, "Minute": 0})
             self.assertEqual(monitor["ProgramArguments"], [str(program), "monitor"])
@@ -51,16 +51,16 @@ class LaunchdTests(unittest.TestCase):
             out, _ = self.render(pathlib.Path(d), config_raw={
                 "daily_time": "07:15", "scan_interval_minutes": 20,
             })
-            daily = plistlib.loads((out / "com.wes.codex-reset-watch.daily.plist").read_bytes())
-            monitor = plistlib.loads((out / "com.wes.codex-reset-watch.monitor.plist").read_bytes())
+            daily = plistlib.loads((out / "codex-reset-watch.daily.plist").read_bytes())
+            monitor = plistlib.loads((out / "codex-reset-watch.monitor.plist").read_bytes())
             self.assertEqual(daily["StartCalendarInterval"], {"Hour": 7, "Minute": 15})
             self.assertEqual(monitor["StartInterval"], 20 * 60)
 
     def test_disabling_daily_removes_its_plist(self):
         with tempfile.TemporaryDirectory() as d:
             out, _ = self.render(pathlib.Path(d), config_raw={"daily_enabled": False})
-            self.assertFalse((out / "com.wes.codex-reset-watch.daily.plist").exists())
-            self.assertTrue((out / "com.wes.codex-reset-watch.monitor.plist").exists())
+            self.assertFalse((out / "codex-reset-watch.daily.plist").exists())
+            self.assertTrue((out / "codex-reset-watch.monitor.plist").exists())
 
     def test_environment_only_credentials_cannot_be_scheduled(self):
         with tempfile.TemporaryDirectory() as d:
@@ -72,7 +72,7 @@ class LaunchdTests(unittest.TestCase):
             root = pathlib.Path(d)
             out, _ = self.render(root)
             out, _ = self.render(root, config_raw={"daily_time": "11:00"})
-            daily = plistlib.loads((out / "com.wes.codex-reset-watch.daily.plist").read_bytes())
+            daily = plistlib.loads((out / "codex-reset-watch.daily.plist").read_bytes())
             self.assertNotIn("EnvironmentVariables", daily)
             self.assertEqual(daily["StartCalendarInterval"], {"Hour": 11, "Minute": 0})
 

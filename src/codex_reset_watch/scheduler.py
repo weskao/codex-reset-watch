@@ -29,7 +29,7 @@ BACKENDS = {"Darwin": "launchd", "Linux": "systemd", "Windows": "schtasks"}
 JOBS = ("daily", "monitor")
 SECRET_ENV_KEYS = ("TG_BOT_TOKEN", "TG_CHAT_ID")
 
-LAUNCHD_LABELS = {job: f"com.wes.codex-reset-watch.{job}" for job in JOBS}
+LAUNCHD_LABELS = {job: f"codex-reset-watch.{job}" for job in JOBS}
 SYSTEMD_UNITS = {job: f"codex-reset-watch-{job}" for job in JOBS}
 SCHTASKS_NAMES = {"daily": "CodexResetWatchDaily", "monitor": "CodexResetWatchMonitor"}
 DAILY_TASK_NAME = SCHTASKS_NAMES["daily"]
@@ -45,6 +45,15 @@ def backend_for(system: str) -> str:
 
 def current_backend() -> str:
     return backend_for(platform.system())
+
+
+def job_ref(job: str, system: Optional[str] = None) -> str:
+    """``"<scheduler>: <name>"`` for *job* on this OS, or ``""`` on an unsupported one."""
+    return {
+        "launchd": f"launchd: {LAUNCHD_LABELS[job]}",
+        "systemd": f"systemd: {SYSTEMD_UNITS[job]}.timer",
+        "schtasks": f"Task Scheduler: {SCHTASKS_NAMES[job]}",
+    }.get(BACKENDS.get(system or platform.system(), ""), "")
 
 
 def enabled_jobs(cfg: Dict[str, Any]) -> Tuple[str, ...]:
@@ -500,12 +509,16 @@ def demo() -> None:
     cfg = dict(config.DEFAULTS)
     cfg["scan_interval_minutes"] = 15
     plists = launchd_plists("/bin/crw", pathlib.Path("/tmp/logs"), cfg)
-    assert plists["com.wes.codex-reset-watch.monitor.plist"]["StartInterval"] == 900
-    assert "StartCalendarInterval" in plists["com.wes.codex-reset-watch.daily.plist"]
+    assert plists["codex-reset-watch.monitor.plist"]["StartInterval"] == 900
+    assert "StartCalendarInterval" in plists["codex-reset-watch.daily.plist"]
+    assert job_ref("monitor", "Darwin") == "launchd: codex-reset-watch.monitor"
+    assert job_ref("daily", "Linux") == "systemd: codex-reset-watch-daily.timer"
+    assert job_ref("monitor", "Windows") == "Task Scheduler: CodexResetWatchMonitor"
+    assert job_ref("daily", "FreeBSD") == ""
 
     cfg["daily_enabled"] = False
     assert enabled_jobs(cfg) == ("monitor",)
-    assert "com.wes.codex-reset-watch.daily.plist" not in launchd_plists("/bin/crw", pathlib.Path("/tmp"), cfg)
+    assert "codex-reset-watch.daily.plist" not in launchd_plists("/bin/crw", pathlib.Path("/tmp"), cfg)
     units = systemd_units("/bin/crw", pathlib.Path("/tmp"), cfg)
     assert set(units) == {"codex-reset-watch-monitor.service", "codex-reset-watch-monitor.timer"}
     assert "OnUnitActiveSec=15min" in units["codex-reset-watch-monitor.timer"]

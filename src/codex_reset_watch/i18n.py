@@ -413,6 +413,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.source": {"en": "🔗 Source: {url}", "zh-TW": "🔗 來源：{url}"},
     "notice.avg_interval": {"en": "📈 Avg. reset interval: {days} days", "zh-TW": "📈 平均 Reset 間隔：{days} 天"},
     "notice.upcoming.status": {"en": "{icon} Status: {label}", "zh-TW": "{icon} 狀態：{label}"},
+    "notice.upcoming.status_upcoming": {"en": "Upcoming reset", "zh-TW": "即將重置"},
+    "notice.upcoming.status_scheduled": {"en": "Reset scheduled", "zh-TW": "已排定重置"},
     "notice.upcoming.time_tba": {
         "en": "🕒 Time: not yet announced ({time_text})",
         "zh-TW": "🕒 時間：尚未公布（{time_text}）",
@@ -440,7 +442,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "🌙 No upcoming reset signal detected.", "zh-TW": "🌙 尚未偵測到未來 Reset 訊號。"},
     "notice.manual.title": {"en": "🔎 Codex Reset live check", "zh-TW": "🔎 Codex Reset 即時查詢"},
     "notice.manual.upcoming_header": {
-        "en": "🔮 Upcoming reset signal", "zh-TW": "🔮 尚未發生的 Reset 訊號"},
+        "en": "🔮 Upcoming reset signal", "zh-TW": "🔮 尚未發生的重置訊號"},
     "notice.manual.disclaimer": {
         "en": "⚠️ This is a third-party public tracking/prediction signal, not OpenAI's "
               "guaranteed time for your account.",
@@ -450,7 +452,7 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.manual.resets_error": {
         "en": "⚠️ resets API (optional): {error}", "zh-TW": "⚠️ resets API（非必要）：{error}"},
     "notice.upcoming_notice.header": {
-        "en": "🔮 Upcoming reset signal detected", "zh-TW": "🔮 發現尚未發生的 Reset 訊號"},
+        "en": "🔮 Upcoming reset signal detected", "zh-TW": "🔮 發現尚未發生的重置訊號"},
     "notice.upcoming_notice.disclaimer": {
         "en": "⚠️ Third-party public tracking/prediction — not a guarantee your personal "
               "Codex quota resets at this time.",
