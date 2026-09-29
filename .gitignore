@@ -290,3 +290,7 @@ debug/
 # Local test output
 test-results/
 .playwright-mcp/
+
+# CodeGraph index directory
+.codegraph/
+
