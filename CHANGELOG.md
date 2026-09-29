@@ -1,3 +1,29 @@
+## [0.13.0] - 2026-09-29
+
+### 🚀 Features
+
+- **scheduler:** [**breaking**] Standardize scheduler notice references
+- **i18n:** Localize confidence levels
+
+### 🐛 Bug Fixes
+
+- **notice:** [**breaking**] Align sources and localize window
+
+### 🚜 Refactor
+
+- **notice:** Use NoticeKind enum for images
+
+### 📚 Documentation
+
+- Add README output examples
+
+### 🧪 Testing
+
+- **paths:** Anonymize home directory fixtures
+
+### ⚙️ Miscellaneous Tasks
+
+- Add upcoming images
 ## [0.12.0] - 2026-09-28
 
 ### 🚀 Features
