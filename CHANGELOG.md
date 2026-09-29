@@ -1,8 +1,17 @@
+## [0.14.1] - 2026-09-29
+
+### 🐛 Bug Fixes
+
+- **codex-reset-watch:** Restart systemd timers
 ## [0.14.0] - 2026-09-29
 
 ### 🚀 Features
 
 - Identify device in telegram notices
+
+### 📚 Documentation
+
+- **changelog:** Release v0.14.0
 ## [0.13.0] - 2026-09-29
 
 ### 🚀 Features
@@ -21,6 +30,7 @@
 ### 📚 Documentation
 
 - Add README output examples
+- **changelog:** Release v0.13.0
 
 ### 🧪 Testing
 
@@ -34,18 +44,34 @@
 ### 🚀 Features
 
 - **menu:** [**breaking**] Split d reset-all into d row-reset / D reset-all
+
+### 📚 Documentation
+
+- **changelog:** Release v0.12.0
 ## [0.11.1] - 2026-09-28
+
+### 📚 Documentation
+
+- **changelog:** Release v0.11.1
 ## [0.11.0] - 2026-09-28
 
 ### 🚀 Features
 
 - **notifications:** Include launchd job and log path
 - **config:** Cap free-text setting length
+
+### 📚 Documentation
+
+- **changelog:** Release v0.11.0
 ## [0.10.1] - 2026-09-27
 
 ### 💼 Other
 
 - **deps:** Bump telegram-kit to v0.1.4
+
+### 📚 Documentation
+
+- **changelog:** Release v0.10.1
 ## [0.10.0] - 2026-09-27
 
 ### 🚀 Features
@@ -59,6 +85,10 @@
 - **cli:** Offer the update prompt on every exit path
 - Keep scheduled reset announcements until executed
 - **telegram:** Upload notice images
+
+### 📚 Documentation
+
+- **changelog:** Release v0.10.0
 
 ### ⚙️ Miscellaneous Tasks
 
