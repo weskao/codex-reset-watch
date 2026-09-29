@@ -172,7 +172,7 @@ class NoticeImageTests(unittest.TestCase):
             sent = self._sent({"timezone": "UTC"})
         self.assertTrue(sent)
         for text, _image in sent:
-            self.assertIn("\nsystemd: codex-reset-watch-monitor.timer\nlog: ", text)
+            self.assertIn(f"\n{crw.host_identity.device_label()}\nsystemd: codex-reset-watch-monitor.timer\nlog: ", text)
             self.assertTrue(text.endswith("events.jsonl"))
 
     def test_the_no_signal_notice_stays_text_only(self):

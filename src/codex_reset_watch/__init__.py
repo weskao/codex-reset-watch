@@ -28,7 +28,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from . import config as cfgmod
 import telegram_kit
 
-from . import filelock, i18n, scheduler, secrets_store, ui, update_check
+from . import filelock, host_identity, i18n, scheduler, secrets_store, ui, update_check
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
@@ -1042,7 +1042,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
             text = format_manual(snapshot, cfg)
             print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())))
             if notify:
-                send_telegram(cfg, text, logger)
+                send_telegram(cfg, f"{text}\n{host_identity.device_label()}", logger)
         else:
             if snapshot.latest and bool(cfg.get("notify_new_reset_events", True)):
                 changed = snapshot.latest.key != prev_latest
@@ -1063,7 +1063,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if notify:
                 job = scheduler.job_ref(mode)
-                footer = (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
+                footer = f"\n{host_identity.device_label()}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
                 for message, image in messages:
                     send_telegram(cfg, message + footer, logger, image=image)
 

@@ -54,7 +54,9 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 | Scheduler units | `~/Library/LaunchAgents/codex-reset-watch.{daily,monitor}.plist` | `~/.config/systemd/user/codex-reset-watch-{daily,monitor}.{service,timer}` | Task Scheduler tasks `CodexResetWatchDaily` / `CodexResetWatchMonitor` |
 | CLI | `~/.local/bin/{codex-reset-watch,crw}` | `~/.local/bin/{codex-reset-watch,crw}` | `%USERPROFILE%\.local\bin\{codex-reset-watch,crw}.exe` |
 
-Scheduled Telegram notices end with the job that sent them and the absolute path to
+Every Telegram notice names the device that sent it (e.g. `🖥️ Mac mini · a1b2********`;
+the id is derived from the MAC address, so only its first 4 hex chars are shown).
+Scheduled notices then end with the job that sent them and the absolute path to
 `events.jsonl` in the configured log folder — `launchd: codex-reset-watch.monitor` on macOS,
 `systemd: codex-reset-watch-monitor.timer` on Linux, `Task Scheduler: CodexResetWatchMonitor`
 on Windows (or the `daily` equivalent).
