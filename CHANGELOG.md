@@ -1,8 +1,23 @@
+## [0.15.0] - 2026-09-30
+
+### 🚀 Features
+
+- **host-identity:** Improve device identification
+- **cli:** Append host identity footer to output
+- **i18n:** Localize reset event types in notices
+
+### ⚙️ Miscellaneous Tasks
+
+- **gitignore:** Ignore .codegraph directory
 ## [0.14.1] - 2026-09-29
 
 ### 🐛 Bug Fixes
 
 - **codex-reset-watch:** Restart systemd timers
+
+### ⚙️ Miscellaneous Tasks
+
+- **release:** Bump version to 0.14.1
 ## [0.14.0] - 2026-09-29
 
 ### 🚀 Features
