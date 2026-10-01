@@ -702,7 +702,7 @@ Python project can depend on it directly and get the same storage and sending gu
 ships to every project that uses it with `uv lock --upgrade-package telegram-kit`:
 
 ```bash
-uv add "telegram-kit>=0.1.3,<0.2"
+uv add "telegram-kit>=0.2.1,<0.3"
 ```
 
 ```python
