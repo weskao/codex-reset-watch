@@ -1,6 +1,6 @@
 # Codex Reset Watch
 
-Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too ([§8](#using-telegram_kit-from-other-projects)).
+Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too.
 
 When a public reset signal is found, `crw check` sends its status and type, estimated reset time
 and countdown, source message and announcement link, Codex Resets link, and check time. The
@@ -577,8 +577,10 @@ The program uses a cross-platform file lock (`src/codex_reset_watch/filelock.py`
 
 ## 8. Telegram
 
-Sends directly through the Telegram Bot API via the `telegram_kit` package — no external
-script dependency. There are two ways to supply the credentials, and what `crw config` stored wins.
+Sends directly through the Telegram Bot API via [`telegram_kit`](https://github.com/weskao/telegram-kit),
+a separate package ([PyPI](https://pypi.org/project/telegram-kit/)) — no external script
+dependency. Other projects can use it with `service="codex-reset-watch"` to reuse the token
+`crw config` stored; its API is documented in its own repository. There are two ways to supply the credentials, and what `crw config` stored wins.
 The installer ([§2](#2-install-codex-reset-watch)) already walks through Option A on first
 install with the token entered echo-off; this section is for setting it up later or changing it.
 
@@ -693,43 +695,6 @@ Then:
 ```bash
 crw check
 ```
-
-### Using `telegram_kit` from other projects
-
-`telegram_kit` lives in its own repository, [weskao/telegram-kit](https://github.com/weskao/telegram-kit),
-is published to [PyPI](https://pypi.org/project/telegram-kit/), and does not import this CLI. Any
-Python project can depend on it directly and get the same storage and sending guarantees; a fix
-ships to every project that uses it with `uv lock --upgrade-package telegram-kit`:
-
-```bash
-uv add "telegram-kit>=0.2.1,<0.3"
-```
-
-```python
-import telegram_kit
-
-# One-off notification with the token stored under your own service name
-telegram_kit.notify("build finished", service="my-app", chat_id="123456789")
-
-# First-time setup in your own CLI
-store = telegram_kit.CredentialStore("my-app")
-token = telegram_kit.read_hidden("Telegram bot token (hidden): ")
-if token and store.set("telegram_bot_token", token):
-    print("Stored as", telegram_kit.mask_secret(token))
-```
-
-| Name | What it does |
-|---|---|
-| `CredentialStore(service)` | Keychain / Secret Service / DPAPI, namespaced by `service`; never stores plaintext |
-| `notify(text, service=, chat_id=)` | Sends with the stored token; returns `False` instead of raising |
-| `resolve_credentials(token, chat_id)` | Configured values first, then `TG_BOT_TOKEN` / `TG_CHAT_ID`, each on its own |
-| `send_message(token, chat_id, text)` | One Bot API `sendMessage` call |
-| `read_hidden(prompt)` | Echo-off input; `None` when echo cannot be disabled |
-| `mask_secret(token)` | `********WXYZ` for display |
-| `write_private(path, text)` | Atomic owner-only file (0600, or a protected ACL on Windows) |
-
-Use `service="codex-reset-watch"` to reuse the token that `crw config` stored. The chat id is
-ordinary configuration, so each project passes its own.
 
 ## 9. Timezone and countdown
 
