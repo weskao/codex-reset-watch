@@ -326,27 +326,27 @@ class EditorHintTests(unittest.TestCase):
 
 
 class ResetRowTests(unittest.TestCase):
-    """``d``: ask before resetting the highlighted row (undo for autosave)."""
+    """``r``: ask before resetting the highlighted row (undo for autosave)."""
 
     def _at(self, key, **overrides):
         index = SETTINGS.index(config.BY_KEY[key])
         overrides.setdefault("values", dict(config.DEFAULTS))
         return fresh(cursor=index, **overrides)
 
-    def test_d_asks_for_confirmation_instead_of_resetting_immediately(self):
+    def test_r_asks_for_confirmation_instead_of_resetting_immediately(self):
         state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"))
-        state = ui.step(state, char("d"), SETTINGS)
+        state = ui.step(state, char("r"), SETTINGS)
         self.assertEqual(state.confirm_reset_row, "daily_time")
         self.assertEqual(state.values["daily_time"], "03:00")
         self.assertFalse(state.pending_save)
 
-    def test_d_on_a_row_already_at_its_default_is_a_no_op(self):
+    def test_r_on_a_row_already_at_its_default_is_a_no_op(self):
         state = self._at("daily_time")  # already default
-        self.assertEqual(ui.step(state, char("d"), SETTINGS), state)
+        self.assertEqual(ui.step(state, char("r"), SETTINGS), state)
 
-    def test_d_does_not_open_the_confirm_all_prompt(self):
+    def test_r_does_not_open_the_confirm_all_prompt(self):
         state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"))
-        self.assertFalse(ui.step(state, char("d"), SETTINGS).confirm_defaults)
+        self.assertFalse(ui.step(state, char("r"), SETTINGS).confirm_defaults)
 
     def test_y_confirms_and_restores_the_row_to_its_default(self):
         state = self._at("daily_time", values=dict(config.DEFAULTS, daily_time="03:00"),
@@ -387,8 +387,8 @@ class ResetRowTests(unittest.TestCase):
 
 
 class RestoreDefaultsTests(unittest.TestCase):
-    def test_shift_d_asks_for_confirmation_first(self):
-        state = ui.step(fresh(), char("D"), SETTINGS)
+    def test_shift_r_asks_for_confirmation_first(self):
+        state = ui.step(fresh(), char("R"), SETTINGS)
         self.assertTrue(state.confirm_defaults)
 
     def test_y_restores_every_default(self):
@@ -480,6 +480,11 @@ class RenderTests(unittest.TestCase):
         # tuple (SETTINGS.index(...), len(SETTINGS) - 1) or target rows
         # (telegram_bot_token, request_retries, api_base) Basic mode hides.
         self.cfg = {**config.DEFAULTS, "ui_mode": "advanced"}
+
+    def test_action_bar_names_the_reset_keys(self):
+        actions = ui.strip_ansi(ui._hint_bars(self.plain, "en")[1])
+        self.assertIn("r reset", actions)
+        self.assertIn("R defaults", actions)
 
     def test_the_frame_has_no_box_drawing_borders(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")

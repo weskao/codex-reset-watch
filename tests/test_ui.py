@@ -237,7 +237,7 @@ class ConfigMenuTests(unittest.TestCase):
 
     def test_restore_defaults_resets_and_saves(self):
         out = io.StringIO()
-        ui.config_menu(io.StringIO("1\nd\nq\n"), out)  # toggle, then restore defaults
+        ui.config_menu(io.StringIO("1\nr\nq\n"), out)  # toggle, then restore defaults
         saved = config.load()
         self.assertEqual(saved, config.DEFAULTS)
 

@@ -524,7 +524,7 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
         nav += " " * max(1, pad) + f"{paint.muted}{position}{paint.reset}"
     return [
         nav,
-        bar([key("a", "menu.apply"), key("d", "menu.reset_row"), key("D", "menu.defaults"),
+        bar([key("a", "menu.apply"), key("r", "menu.reset_row"), key("R", "menu.defaults"),
              key("e", "menu.export"), key("i", "menu.import"), key("q", "menu.quit")]),
     ]
 
@@ -630,7 +630,7 @@ class MenuState:
     error: Optional[str] = None
     notice: Optional[str] = None
     confirm_defaults: bool = False
-    #: Key of the single row awaiting ``d``'s y/N confirmation, or ``None``.
+    #: Key of the single row awaiting ``r``'s y/N confirmation, or ``None``.
     confirm_reset_row: Optional[str] = None
     prompt: Optional[str] = None       # "export" | "import"
     prompt_buffer: str = ""
@@ -860,7 +860,7 @@ def _reset_row(state: MenuState, setting: config.Setting) -> MenuState:
 
 
 def _step_confirm_reset_row(state: MenuState, event: keys.KeyEvent) -> MenuState:
-    """``d``'s y/N gate: ``y`` performs the reset; ANY other key cancels.
+    """``r``'s y/N gate: ``y`` performs the reset; ANY other key cancels.
 
     Same cancel-by-default policy as :func:`_step_confirm` — a stray keypress
     must never be read as "yes". Unlike the reset-all prompt, this one can
@@ -889,11 +889,11 @@ def _step_browsing(state: MenuState, event: keys.KeyEvent,
             return replace(state, quitting=True)
         if event.char == "a":
             return replace(state, pending_action="apply", error=None, notice=None)
-        if event.char == "d":
+        if event.char == "r":
             if state.values.get(setting.key, setting.default) == setting.default:
                 return state  # already at default: nothing to confirm
             return replace(state, confirm_reset_row=setting.key, error=None, notice=None)
-        if event.char == "D":
+        if event.char == "R":
             return replace(state, confirm_defaults=True, error=None, notice=None)
         if event.char in ("e", "i"):
             return replace(state, prompt="export" if event.char == "e" else "import",
@@ -1167,7 +1167,7 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
               file=out)
         print(f"\n {paint.muted}{i18n.t('menu.number_hint', lang)}{paint.reset}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}a{paint.reset} {i18n.t('menu.apply', lang)}  "
-              f"{paint.muted}·{paint.reset}  {paint.accent}d{paint.reset} {i18n.t('menu.defaults', lang)}  "
+              f"{paint.muted}·{paint.reset}  {paint.accent}r{paint.reset} {i18n.t('menu.defaults', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}e{paint.reset} {i18n.t('menu.export', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}i{paint.reset} {i18n.t('menu.import', lang)}  "
               f"{paint.muted}·{paint.reset}  {paint.accent}m{paint.reset} {i18n.t('menu.switch_mode', lang)}  "
@@ -1194,7 +1194,7 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
             if ok:
                 applied = dict(cfg)
             continue
-        if lowered == "d":
+        if lowered == "r":
             cfg = config.restore_defaults(cfg)
             config.save(cfg)
             print(f" {paint.ok}✓ {i18n.t('menu.defaults_done', lang)}{paint.reset}", file=out)
