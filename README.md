@@ -758,6 +758,10 @@ value hours, and anything finer is cut at minutes; zero-value units are left out
 🕒 Time: 2026-09-27 02:17 UTC+8 (23 hours 16 minutes ago)
 ```
 
+Example current-reset-event result (new-reset notice):
+
+![Current reset event result](docs/images/current-reset-event-result.png)
+
 ## 10. Event parsing resilience
 
 `event_from_dict` tolerates upstream API schema drift instead of assuming one fixed shape:
