@@ -1,3 +1,10 @@
+## [0.15.1] - 2026-10-01
+
+### 🐛 Bug Fixes
+
+- **i18n:** Use official reset terminology
+- **ui:** Move reset actions to r shortcut
+
 ## [0.15.0] - 2026-09-30
 
 ### 🚀 Features
@@ -5,6 +12,10 @@
 - **host-identity:** Improve device identification
 - **cli:** Append host identity footer to output
 - **i18n:** Localize reset event types in notices
+
+### 📚 Documentation
+
+- Release 0.15.0
 
 ### ⚙️ Miscellaneous Tasks
 
