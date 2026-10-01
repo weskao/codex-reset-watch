@@ -40,7 +40,7 @@ class FormattingTests(unittest.TestCase):
         snapshot = crw.Snapshot(checked, None, upcoming, True, True)
         text = crw.format_manual(snapshot, {"language": "zh-TW"})
         self.assertIn("🚦 狀態：Banked reset scheduled", text)
-        self.assertIn("🏷️ 類型：累積", text)
+        self.assertIn("🏷️ 類型：預存重設", text)
         self.assertIn("🕒 時間：尚未公布（Time to be announced）", text)
         self.assertNotIn("⏳ 距離現在：", text)
         self.assertIn("🔗 來源：https://x.com/thsottiaux/status/2101352781219258527", text)
@@ -176,14 +176,14 @@ class FormattingTests(unittest.TestCase):
         banked = crw.Event(event_id="2", timestamp=checked, event_type="banked")
         unknown = crw.Event(event_id="3", timestamp=checked, event_type="custom")
         self.assertIn("🏷️ Type: Regular", crw.format_manual(crw.Snapshot(checked, regular, None, True, True), {"language": "en"}))
-        self.assertIn("🏷️ 類型：一般", crw.format_manual(crw.Snapshot(checked, regular, None, True, True), {"language": "zh-TW"}))
+        self.assertIn("🏷️ 類型：全域重設", crw.format_manual(crw.Snapshot(checked, regular, None, True, True), {"language": "zh-TW"}))
         self.assertIn("🏷️ Type: Banked", crw.format_manual(crw.Snapshot(checked, banked, None, True, True), {"language": "en"}))
-        self.assertIn("🏷️ 類型：累積", crw.format_manual(crw.Snapshot(checked, banked, None, True, True), {"language": "zh-TW"}))
+        self.assertIn("🏷️ 類型：預存重設", crw.format_manual(crw.Snapshot(checked, banked, None, True, True), {"language": "zh-TW"}))
         self.assertIn("🏷️ Type: Custom", crw.format_manual(crw.Snapshot(checked, unknown, None, True, True), {"language": "en"}))
         self.assertIn("🏷️ 類型：Custom", crw.format_manual(crw.Snapshot(checked, unknown, None, True, True), {"language": "zh-TW"}))
         upcoming = crw.Upcoming(event_type="regular", status="scheduled")
         self.assertIn("🏷️ Type: Regular", crw.format_upcoming_notice(upcoming, checked, {"language": "en"}))
-        self.assertIn("🏷️ 類型：一般", crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"}))
+        self.assertIn("🏷️ 類型：全域重設", crw.format_upcoming_notice(upcoming, checked, {"language": "zh-TW"}))
 
     def test_no_signal_notice_shows_latest_reset_like_manual(self):
         checked = dt.datetime(2026, 9, 25, 3, 0, tzinfo=dt.timezone.utc)
@@ -199,7 +199,7 @@ class FormattingTests(unittest.TestCase):
         for expected in (
             "✅ 最近一次 Reset",
             "🕒 時間：2026-09-24 11:00 UTC+8",
-            "🏷️ 類型：累積",
+            "🏷️ 類型：預存重設",
             "📝 公告：範例：帳戶額度已重置",
         ):
             self.assertIn(expected, manual_text)

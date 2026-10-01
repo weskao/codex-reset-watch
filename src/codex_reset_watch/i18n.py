@@ -411,8 +411,12 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "notice.type_unlabeled": {"en": "unlabeled", "zh-TW": "未標示"},
     # Upstream reset categories seen in the API: regular | banked. Unknown values
     # fall back to the raw text with the first letter uppercased.
-    "notice.type.regular": {"en": "Regular", "zh-TW": "一般"},
-    "notice.type.banked": {"en": "Banked", "zh-TW": "累積"},
+    # zh-TW follows OpenAI's official Help Center terminology:
+    #   regular = applied directly to all eligible accounts ("全域重設")
+    #   banked  = stored for later use by the user ("預存重設")
+    #   ref: https://help.openai.com/zh-hant/articles/20001498-how-banked-codex-resets-work
+    "notice.type.regular": {"en": "Regular", "zh-TW": "全域重設"},
+    "notice.type.banked": {"en": "Banked", "zh-TW": "預存重設"},
     "notice.announcement": {"en": "📝 Announcement: {text}", "zh-TW": "📝 公告：{text}"},
     "notice.source": {"en": "🔗 Source: {url}", "zh-TW": "🔗 來源：{url}"},
     "notice.avg_interval": {"en": "📈 Avg. reset interval: {days} days", "zh-TW": "📈 平均 Reset 間隔：{days} 天"},
