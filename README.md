@@ -1,6 +1,8 @@
 # Codex Reset Watch
 
-Cross-platform (macOS/Linux/Windows) monitor for `codex-resets.com`, with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too.
+Cross-platform (macOS/Linux/Windows) monitor for [codex-resets.com](https://codex-resets.com/), with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too.
+
+> **Unofficial.** Not affiliated with codex-resets.com â€” an independent client built on its public API. All reset data and forecasts come from there.
 
 When a public reset signal is found, `crw check` sends its status and type, estimated reset time
 and countdown, source message and announcement link, Codex Resets link, and check time. The
@@ -854,3 +856,7 @@ Both are independent of this project's own runtime `TG_BOT_TOKEN`/`TG_CHAT_ID` â
 ## Why the installer does not call `uv run` for scheduled jobs
 
 `uv run` is ideal for project development because it discovers the project, syncs the project environment when needed, and executes within that environment. For a long-running background setup, this project instead installs the CLI with `uv tool install` and lets the OS scheduler call the installed executable directly. That keeps each scheduled invocation small and avoids depending on the current working directory, shell startup files, PATH activation, or project `.venv` state.
+
+## Acknowledgements
+
+Thanks to [codex-resets.com](https://codex-resets.com/) for tracking Codex quota resets and publishing the [public API](https://codex-resets.com/api/docs) this project is built on.
