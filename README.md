@@ -267,7 +267,11 @@ all work too (see [§3](#--is-optional-everywhere)).
 
 ### The interactive menu
 
-`crw config` with no flags opens a keyboard-driven menu on a real terminal:
+`crw config` with no flags opens a keyboard-driven menu on a real terminal. It adapts to the
+window: the panel is as wide as the terminal allows (72–129 columns), a big
+`CODEX RESET WATCH` banner shows on wide windows (≥ 131 columns, ≥ 30 rows), a compact 3-row
+one on narrower ones (≥ 24 rows), and none on short ones. Resizing redraws the whole screen
+rather than leaving a broken frame behind.
 
 | Key | Does |
 |---|---|
