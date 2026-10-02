@@ -106,14 +106,17 @@ GLYPH_MORE_ABOVE = "▴"  # the list is scrolled: more rows off-screen that way
 GLYPH_MORE_BELOW = "▾"
 GLYPH_TAB = "⇥"         # the key that switches mode, named on the tab row
 GLYPH_TAB_RULE = "━"    # heavy run: the hairline thickened under the active tab
-PANEL_WIDTH = 129       # the banner's own width, so the panel lines up under it
+PANEL_MAX = 129         # the full banner's width: a wide terminal lines up under it
+PANEL_MIN = 72          # narrowest the rows still fit their labels and hint bars
 TAB_INDENT = 3          # tabs line up with the config path above them
 TAB_GAP = 3             # space between the two tabs
 AFFORD_WIDTH = 3        # reserved on EVERY row so values never shift
 
 # ── banner ───────────────────────────────────────────────────────────────────
-# "CODEX RESET WATCH" in the ANSI Shadow figlet font: solid ``█`` faces with a
-# box-drawing drop shadow. Six rows, one string per row.
+# "CODEX RESET WATCH" in two tiers, picked per frame from the terminal size so
+# a window that shrinks never wraps it: the ANSI Shadow figlet font (solid
+# ``█`` faces, box-drawing drop shadow) when the panel can be PANEL_MAX wide,
+# the 3-row pagga font (fits PANEL_MIN) below that, and none on a short screen.
 BANNER = (
     " ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗  ██████╗ ███████╗███████╗███████╗████████╗  ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗",
     "██╔════╝██╔═══██╗██╔══██╗██╔════╝╚██╗██╔╝  ██╔══██╗██╔════╝██╔════╝██╔════╝╚══██╔══╝  ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║",
@@ -122,29 +125,47 @@ BANNER = (
     "╚██████╗╚██████╔╝██████╔╝███████╗██╔╝ ██╗  ██║  ██║███████╗███████║███████╗   ██║     ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║",
     " ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝  ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝      ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝",
 )
+BANNER_COMPACT = (
+    "░█▀▀░█▀█░█▀▄░█▀▀░█░█░░░█▀▄░█▀▀░█▀▀░█▀▀░▀█▀░░░█░█░█▀█░▀█▀░█▀▀░█░█",
+    "░█░░░█░█░█░█░█▀▀░▄▀▄░░░█▀▄░█▀▀░▀▀█░█▀▀░░█░░░░█▄█░█▀█░░█░░█░░░█▀█",
+    "░▀▀▀░▀▀▀░▀▀░░▀▀▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀▀▀░░▀░░░░▀░▀░▀░▀░░▀░░▀▀▀░▀░▀",
+)
 # The faces sweep left→right from the brand green to the selected row's mint
-# and the shadow sits in the selected row's dot colour — the same three greens
-# the panel already uses, nothing new.
+# and every other stroke (the shadow, pagga's ░ texture) sits in the selected
+# row's dot colour — the same three greens the panel already uses.
 BANNER_FROM = (16, 163, 127)    # ACCENT  #10A37F
 BANNER_TO = (110, 231, 183)     # SEL_VALUE
 BANNER_SHADOW = SEL_DOT
-#: Below this many terminal rows the banner yields its space to the list.
+BANNER_FACE = frozenset("█▀▄")
+#: Terminal rows each tier needs before it yields its space to the list.
 BANNER_MIN_HEIGHT = 30
+BANNER_COMPACT_MIN_HEIGHT = 24
 
 
-def _banner(paint: Paint) -> List[str]:
-    """:data:`BANNER` plus a blank spacer, gradient-painted when colour is on."""
+def _banner_rows(columns: int, height: int) -> Tuple[str, ...]:
+    """The banner tier that fits *columns* x *height*, or ``()`` for none."""
+    if columns >= len(BANNER[0]) and height >= BANNER_MIN_HEIGHT:
+        return BANNER
+    if columns >= len(BANNER_COMPACT[0]) and height >= BANNER_COMPACT_MIN_HEIGHT:
+        return BANNER_COMPACT
+    return ()
+
+
+def _banner(paint: Paint, rows: Sequence[str] = BANNER) -> List[str]:
+    """*rows* plus a blank spacer, gradient-painted when colour is on."""
+    if not rows:
+        return []
     if not paint.accent:
-        return [f" {row}" for row in BANNER] + [""]
-    span = max(len(row) for row in BANNER) - 1
+        return [f" {row}" for row in rows] + [""]
+    span = max(1, max(len(row) for row in rows) - 1)
     lines = []
-    for row in BANNER:
+    for row in rows:
         out = [" "]
         for i, ch in enumerate(row):
-            if ch == "█":
+            if ch in BANNER_FACE:
                 t = i / span
                 rgb = tuple(round(a + (b - a) * t) for a, b in zip(BANNER_FROM, BANNER_TO))
-                out.append("\033[38;2;%d;%d;%dm█" % rgb)
+                out.append("\033[38;2;%d;%d;%dm%s" % (*rgb, ch))
             elif ch == " ":
                 out.append(" ")
             else:
@@ -162,6 +183,31 @@ _ANSI = re.compile(r"\033\[[0-9;]*m")
 def strip_ansi(text: str) -> str:
     """*text* with every SGR escape removed — what the terminal actually shows."""
     return _ANSI.sub("", text)
+
+
+def panel_width() -> int:
+    """This frame's panel width: as wide as the terminal allows, clamped to
+    PANEL_MIN..PANEL_MAX, and one column short of the edge — a line that fills
+    the last cell wraps on some terminals, and one wrapped line is enough to
+    throw :func:`_draw`'s in-place repaint off by a row."""
+    columns = shutil.get_terminal_size((PANEL_MAX + 2, 40)).columns
+    return max(PANEL_MIN, min(PANEL_MAX, columns - 2))  # every line has a 1-col indent
+
+
+def _fit(line: str, columns: int) -> str:
+    """*line* cut to *columns* display cells, colour escapes left intact."""
+    if width(strip_ansi(line)) <= columns:
+        return line
+    out, used = [], 0
+    for token in re.findall(r"\033\[[0-9;]*m|.", line, re.S):
+        if token.startswith("\033"):
+            out.append(token)
+            continue
+        used += width(token)
+        if used > columns:
+            break
+        out.append(token)
+    return "".join(out) + (RESET if "\033[" in line else "")
 
 
 @functools.lru_cache(maxsize=1)
@@ -308,15 +354,15 @@ def _header(paint: Paint, lang: str, mode: Optional[str] = None,
     tail = f"{paint.muted}{version}{paint.reset}"
     if badge_text:
         tail = f"{badge_colour}{badge_text}{paint.reset} {tail}"
-    gap = (PANEL_WIDTH - 3 - width(title) - width(version)
+    gap = (panel_width() - 3 - width(title) - width(version)
            - (width(badge_text) + 1 if badge_text else 0))
     lines = [
         f" {paint.accent}{GLYPH_MARK}{paint.reset} {paint.bold}{paint.title}{title}{paint.reset}"
         f"{' ' * max(1, gap)}{tail}",
-        f"   {paint.muted}{_clip(_tilde(config.config_path()), PANEL_WIDTH - 3)}{paint.reset}",
+        f"   {paint.muted}{_clip(_tilde(config.config_path()), panel_width() - 3)}{paint.reset}",
     ]
     if rule:
-        lines.append(f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}")
+        lines.append(f" {paint.frame}{'─' * panel_width()}{paint.reset}")
     return lines
 
 
@@ -348,7 +394,7 @@ def _tab_bar(paint: Paint, lang: str, mode: str) -> List[str]:
     row = " " * TAB_INDENT + (" " * TAB_GAP).join(cells)
 
     hint_text = i18n.t("menu.tab_hint", lang)
-    pad = PANEL_WIDTH - width(strip_ansi(row)) - width(GLYPH_TAB) - 1 - width(hint_text)
+    pad = panel_width() - width(strip_ansi(row)) - width(GLYPH_TAB) - 1 - width(hint_text)
     row += (" " * max(1, pad) + f"{paint.accent}{GLYPH_TAB}{paint.reset} "
             f"{paint.muted}{hint_text}{paint.reset}")
 
@@ -356,7 +402,7 @@ def _tab_bar(paint: Paint, lang: str, mode: str) -> List[str]:
     # column a tab sits at is `start` characters into the rule's own run.
     start, span = active
     before = "─" * max(0, start - 1)
-    after = "─" * max(0, PANEL_WIDTH - len(before) - span)
+    after = "─" * max(0, panel_width() - len(before) - span)
     return [
         row,
         f" {paint.frame}{before}{paint.reset}{paint.accent}{GLYPH_TAB_RULE * span}"
@@ -430,12 +476,12 @@ def _row(paint: Paint, index: int, setting: config.Setting, value: Any, lang: st
     cursor_width = width(strip_ansi(cursor_glyph))
     indent = 5 + cursor_width   # " ▶ NN "
     tail = AFFORD_WIDTH   # the reserved hint column on the right
-    # Budget: PANEL_WIDTH - indent - tail - label - (space + 2-cell minimum
+    # Budget: panel_width() - indent - tail - label - (space + 2-cell minimum
     # leader + space). Clipping to anything wider makes the leader hit its
     # floor and pushes the row past the panel edge, which knocks the value
     # column out of alignment on exactly the longest rows.
-    shown = _clip(shown, max(8, PANEL_WIDTH - indent - tail - width(label) - 4))
-    leader = max(2, PANEL_WIDTH - indent - tail - width(label) - width(shown) - 2)
+    shown = _clip(shown, max(8, panel_width() - indent - tail - width(label) - 4))
+    leader = max(2, panel_width() - indent - tail - width(label) - width(shown) - 2)
 
     if selected:
         mark = f"{paint.accent}{glyph}{paint.reset}{paint.sel}"
@@ -562,7 +608,7 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
     if position:
         # Right-aligned on the nav line: which row of how many, so the cursor's
         # place in the list is readable even when the view is scrolled.
-        pad = PANEL_WIDTH - width(strip_ansi(nav)) - width(position)
+        pad = panel_width() - width(strip_ansi(nav)) - width(position)
         nav += " " * max(1, pad) + f"{paint.muted}{position}{paint.reset}"
     return [
         nav,
@@ -598,10 +644,9 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     height = height or shutil.get_terminal_size((80, 40)).lines
 
     head = _header(paint, lang, rule=False) + _tab_bar(paint, lang, mode)
-    if height >= BANNER_MIN_HEIGHT:
-        head = _banner(paint) + head
+    head = _banner(paint, _banner_rows(panel_width(), height)) + head
     setting = settings[cursor]
-    foot: List[str] = [f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}"]
+    foot: List[str] = [f" {paint.frame}{'─' * panel_width()}{paint.reset}"]
     if confirm_defaults:
         foot.append(f" {paint.warn}{i18n.t('menu.confirm_defaults', lang)}{paint.reset}")
     elif confirm_reset_row:
@@ -620,7 +665,7 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
             # While typing, the format the field accepts is more useful than
             # the prose describing what the setting means.
             help_line = _format_hint(setting, lang) or help_line
-        for line in _wrap(help_line, PANEL_WIDTH - 3):
+        for line in _wrap(help_line, panel_width() - 3):
             foot.append(f"   {paint.muted}{line}{paint.reset}")
         if setting.kind == "secret":
             # Say where the token actually lives — or that it cannot be stored
@@ -638,14 +683,14 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
                 note = i18n.t("setting.telegram_bot_token.note", lang,
                               backend=secrets_store.backend_label())
                 colour = paint.muted
-            for line in _wrap(note, PANEL_WIDTH - 3):
+            for line in _wrap(note, panel_width() - 3):
                 foot.append(f"   {colour}{line}{paint.reset}")
     if error:
-        wrapped = _wrap(error, PANEL_WIDTH - 3)
+        wrapped = _wrap(error, panel_width() - 3)
         foot.append(f" {paint.err}✗ {wrapped[0]}{paint.reset}")
         foot.extend(f"   {paint.err}{line}{paint.reset}" for line in wrapped[1:])
     if notice:
-        wrapped = _wrap(notice, PANEL_WIDTH - 3)
+        wrapped = _wrap(notice, panel_width() - 3)
         foot.append(f" {paint.ok}✓ {wrapped[0]}{paint.reset}")
         foot.extend(f"   {paint.ok}{line}{paint.reset}" for line in wrapped[1:])
     foot.extend(_hint_bars(paint, lang, f"{cursor + 1}/{len(settings)}"))
@@ -1074,10 +1119,27 @@ def _perform(state: MenuState, cfg: Dict[str, Any], lang: str) -> MenuState:
 
 # ── terminal shell (thin: draw, read one key, hand it to `step`) ─────────────
 
+#: Terminal width the last frame was drawn at — see :func:`_draw`.
+_drawn_columns: Optional[int] = None
+
+
 def _draw(lines: List[str], out: IO[str], previous: int) -> int:
     """Repaint *lines* in place: move up over the last frame, clear to the end of
-    screen so a frame that lost a line leaves no orphan text behind."""
-    prefix = f"\033[{previous}A" if previous else ""
+    screen so a frame that lost a line leaves no orphan text behind.
+
+    Moving up *previous* lines is only right while every line takes exactly one
+    screen row, so each line is clipped to the terminal width; and after a
+    resize the old frame may already have re-wrapped, so the screen is cleared
+    and redrawn from the top instead.
+    """
+    global _drawn_columns
+    columns = shutil.get_terminal_size((PANEL_MAX + 2, 40)).columns
+    if previous and columns != _drawn_columns:
+        prefix = "\033[H\033[2J"
+    else:
+        prefix = f"\033[{previous}A" if previous else ""
+    _drawn_columns = columns
+    lines = [_fit(line, columns - 1) for line in lines]
     out.write(prefix + "".join(f"{line}\033[K\n" for line in lines) + "\033[J")
     out.flush()
     return len(lines)
@@ -1326,7 +1388,7 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
     label_w = max(width(text) for text, _ in rows)
     cursor_width = width(strip_ansi(GLYPH_CURSOR))
     prefix_w = 2 + cursor_width  # " " + glyph + " "
-    # Same fixed-column trick as _row's PANEL_WIDTH: pad every row out to the
+    # Same fixed-column trick as _row's panel_width(): pad every row out to the
     # widest one (here the "Update now" command line) so the selected row's
     # background band is one consistent length, not however long that row's
     # own text happens to be.

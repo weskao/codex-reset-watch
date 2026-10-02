@@ -6,6 +6,7 @@ The thin shell around it (``run_menu``) is exercised separately with a fake key
 source and a StringIO, so the redraw and the side effects are covered too.
 """
 import io
+import os
 import unittest
 import unittest.mock as mock
 
@@ -486,14 +487,52 @@ class RenderTests(unittest.TestCase):
         self.assertIn("r reset", actions)
         self.assertIn("R defaults", actions)
 
-    def test_banner_spans_the_panel_and_yields_to_a_short_terminal(self):
+    def _at_columns(self, columns, height=50):
+        size = mock.patch("shutil.get_terminal_size",
+                          return_value=os.terminal_size((columns, height)))
+        with size:
+            return ui.panel_width(), ui.render_menu(self.cfg, 0, paint=self.plain,
+                                                    lang="en", height=height)
+
+    def test_banner_tier_follows_the_terminal_size(self):
         for paint in (self.plain, ui.Paint(True)):
-            for line in ui._banner(paint)[:-1]:
-                self.assertEqual(ui.width(ui.strip_ansi(line)), ui.PANEL_WIDTH + 1)
-        tall = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=50)
-        short = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=20)
-        self.assertEqual(tall[0], f" {ui.BANNER[0]}")
-        self.assertNotIn(f" {ui.BANNER[0]}", short)
+            for rows in (ui.BANNER, ui.BANNER_COMPACT):
+                for line in ui._banner(paint, rows)[:-1]:
+                    self.assertEqual(ui.width(ui.strip_ansi(line)), len(rows[0]) + 1)
+        cases = [(200, 50, ui.BANNER), (100, 50, ui.BANNER_COMPACT),
+                 (100, 26, ui.BANNER_COMPACT), (200, 20, ())]
+        for columns, height, expected in cases:
+            _, lines = self._at_columns(columns, height)
+            first = lines[0] if expected else None
+            self.assertEqual(first, f" {expected[0]}" if expected else None,
+                             f"{columns}x{height}")
+            if not expected:
+                self.assertNotIn(f" {ui.BANNER[0]}", lines)
+                self.assertNotIn(f" {ui.BANNER_COMPACT[0]}", lines)
+
+    def test_panel_shrinks_with_the_terminal_and_no_line_overflows_it(self):
+        for columns in (200, 131, 130, 100, 80, 74):
+            width, lines = self._at_columns(columns)
+            self.assertEqual(width, max(ui.PANEL_MIN, min(ui.PANEL_MAX, columns - 2)))
+            for line in lines:
+                self.assertLessEqual(ui.width(ui.strip_ansi(line)), columns - 1,
+                                     f"{columns}: {line!r}")
+
+    def test_draw_clips_to_the_terminal_and_clears_after_a_resize(self):
+        out = io.StringIO()
+        long_line = "\033[1m" + "x" * 300 + "\033[0m"
+        with mock.patch("shutil.get_terminal_size",
+                        return_value=os.terminal_size((80, 40))):
+            painted = ui._draw([long_line], out, 0)
+            ui._draw([long_line], out, painted)
+        with mock.patch("shutil.get_terminal_size",
+                        return_value=os.terminal_size((60, 40))):
+            ui._draw([long_line], out, painted)
+        frames = out.getvalue()
+        self.assertNotIn("x" * 80, frames)
+        self.assertIn("x" * 79, frames)
+        self.assertIn("\033[1A", frames)              # same size: repaint in place
+        self.assertTrue(frames.count("\033[H\033[2J") == 1)  # resize: clear once
 
     def test_the_frame_has_no_box_drawing_borders(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
@@ -514,7 +553,7 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(len(band), 1, "exactly one row is highlighted")
         # The band must reach the full panel width, not stop after the text.
         visible = ui.width(ui.strip_ansi(band[0]))
-        self.assertGreaterEqual(visible, ui.PANEL_WIDTH)
+        self.assertGreaterEqual(visible, ui.panel_width())
 
     def test_unselected_rows_carry_no_highlight(self):
         colour = ui.Paint(True)
@@ -614,13 +653,13 @@ class RenderTests(unittest.TestCase):
         message = "word " * 30
         for line in ui.render_menu(self.cfg, 0, paint=self.plain, lang="en",
                                    error=message, height=44):
-            self.assertLessEqual(ui.width(line), ui.PANEL_WIDTH + 1, repr(line))
+            self.assertLessEqual(ui.width(line), ui.panel_width() + 1, repr(line))
 
     def test_no_line_overflows_the_panel_width(self):
         cfg = dict(self.cfg, user_agent="codex-reset-watch/9.9 (+https://example.invalid/a/very/"
                                         "long/user/agent/string/that/keeps/going)")
         for line in ui.render_menu(cfg, 16, paint=self.plain, lang="en", height=44):
-            self.assertLessEqual(ui.width(line), ui.PANEL_WIDTH + 1, repr(line))
+            self.assertLessEqual(ui.width(line), ui.panel_width() + 1, repr(line))
 
     def test_the_home_directory_is_shortened_in_the_path_line(self):
         import os
@@ -670,7 +709,7 @@ class RenderTests(unittest.TestCase):
             for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=60):
                 plain = ui.strip_ansi(line)
                 if re.match(r"^ .\s*\d+ ", plain):
-                    self.assertEqual(ui.width(plain), ui.PANEL_WIDTH, f"{lang}: {plain!r}")
+                    self.assertEqual(ui.width(plain), ui.panel_width(), f"{lang}: {plain!r}")
 
     def test_the_frame_shows_where_the_cursor_is_in_the_list(self):
         lines = ui.render_menu(self.cfg, 3, paint=self.plain, lang="en", height=44)

@@ -189,13 +189,13 @@ class TabBarTests(unittest.TestCase):
 
     def test_the_rule_still_spans_the_whole_panel(self):
         _, rule = self._tab_and_rule("basic")
-        self.assertEqual(rule.count("━") + rule.count("─"), ui.PANEL_WIDTH)
+        self.assertEqual(rule.count("━") + rule.count("─"), ui.panel_width())
 
     def test_no_tab_bar_line_overflows_the_panel(self):
         for mode in config.UI_MODES:
             tabs, rule = self._tab_and_rule(mode)
-            self.assertLessEqual(ui.width(tabs), ui.PANEL_WIDTH + 1, mode)
-            self.assertLessEqual(ui.width(rule), ui.PANEL_WIDTH + 1, mode)
+            self.assertLessEqual(ui.width(tabs), ui.panel_width() + 1, mode)
+            self.assertLessEqual(ui.width(rule), ui.panel_width() + 1, mode)
 
     def test_the_tabs_and_the_switch_hint_are_translated(self):
         cfg = dict(config.DEFAULTS)
