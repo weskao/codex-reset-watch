@@ -1,3 +1,16 @@
+## [0.16.0] - 2026-10-02
+
+### 🚀 Features
+
+- **ui:** Add banner to menu
+
+### 📚 Documentation
+
+- **images:** Update config and upcoming event screenshots
+- Add current reset event result image
+- **readme:** Point telegram-kit install at 0.2.1
+- **readme:** Drop telegram_kit usage section
+- **readme:** Add unofficial disclaimer and acknowledgements section
 ## [0.15.1] - 2026-10-01
 
 ### 🐛 Bug Fixes
