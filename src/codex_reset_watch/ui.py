@@ -106,10 +106,52 @@ GLYPH_MORE_ABOVE = "▴"  # the list is scrolled: more rows off-screen that way
 GLYPH_MORE_BELOW = "▾"
 GLYPH_TAB = "⇥"         # the key that switches mode, named on the tab row
 GLYPH_TAB_RULE = "━"    # heavy run: the hairline thickened under the active tab
-PANEL_WIDTH = 72
+PANEL_WIDTH = 129       # the banner's own width, so the panel lines up under it
 TAB_INDENT = 3          # tabs line up with the config path above them
 TAB_GAP = 3             # space between the two tabs
 AFFORD_WIDTH = 3        # reserved on EVERY row so values never shift
+
+# ── banner ───────────────────────────────────────────────────────────────────
+# "CODEX RESET WATCH" in the ANSI Shadow figlet font: solid ``█`` faces with a
+# box-drawing drop shadow. Six rows, one string per row.
+BANNER = (
+    " ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗  ██████╗ ███████╗███████╗███████╗████████╗  ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗",
+    "██╔════╝██╔═══██╗██╔══██╗██╔════╝╚██╗██╔╝  ██╔══██╗██╔════╝██╔════╝██╔════╝╚══██╔══╝  ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║",
+    "██║     ██║   ██║██║  ██║█████╗   ╚███╔╝   ██████╔╝█████╗  ███████╗█████╗     ██║     ██║ █╗ ██║███████║   ██║   ██║     ███████║",
+    "██║     ██║   ██║██║  ██║██╔══╝   ██╔██╗   ██╔══██╗██╔══╝  ╚════██║██╔══╝     ██║     ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║",
+    "╚██████╗╚██████╔╝██████╔╝███████╗██╔╝ ██╗  ██║  ██║███████╗███████║███████╗   ██║     ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║",
+    " ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝  ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝      ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝",
+)
+# The faces sweep left→right from the brand green to the selected row's mint
+# and the shadow sits in the selected row's dot colour — the same three greens
+# the panel already uses, nothing new.
+BANNER_FROM = (16, 163, 127)    # ACCENT  #10A37F
+BANNER_TO = (110, 231, 183)     # SEL_VALUE
+BANNER_SHADOW = SEL_DOT
+#: Below this many terminal rows the banner yields its space to the list.
+BANNER_MIN_HEIGHT = 30
+
+
+def _banner(paint: Paint) -> List[str]:
+    """:data:`BANNER` plus a blank spacer, gradient-painted when colour is on."""
+    if not paint.accent:
+        return [f" {row}" for row in BANNER] + [""]
+    span = max(len(row) for row in BANNER) - 1
+    lines = []
+    for row in BANNER:
+        out = [" "]
+        for i, ch in enumerate(row):
+            if ch == "█":
+                t = i / span
+                rgb = tuple(round(a + (b - a) * t) for a, b in zip(BANNER_FROM, BANNER_TO))
+                out.append("\033[38;2;%d;%d;%dm█" % rgb)
+            elif ch == " ":
+                out.append(" ")
+            else:
+                out.append(f"{BANNER_SHADOW}{ch}")
+        lines.append("".join(out) + RESET)
+    return lines + [""]
+
 
 _PAINT_NAMES = ("RESET", "BOLD", "DIM", "ACCENT", "TITLE", "OK", "SEL",
                 "SEL_TEXT", "SEL_VALUE", "SEL_DOT", "FRAME", "MUTED", "WARN", "ERR")
@@ -556,6 +598,8 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     height = height or shutil.get_terminal_size((80, 40)).lines
 
     head = _header(paint, lang, rule=False) + _tab_bar(paint, lang, mode)
+    if height >= BANNER_MIN_HEIGHT:
+        head = _banner(paint) + head
     setting = settings[cursor]
     foot: List[str] = [f" {paint.frame}{'─' * PANEL_WIDTH}{paint.reset}"]
     if confirm_defaults:

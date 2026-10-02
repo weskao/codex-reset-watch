@@ -486,6 +486,15 @@ class RenderTests(unittest.TestCase):
         self.assertIn("r reset", actions)
         self.assertIn("R defaults", actions)
 
+    def test_banner_spans_the_panel_and_yields_to_a_short_terminal(self):
+        for paint in (self.plain, ui.Paint(True)):
+            for line in ui._banner(paint)[:-1]:
+                self.assertEqual(ui.width(ui.strip_ansi(line)), ui.PANEL_WIDTH + 1)
+        tall = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=50)
+        short = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en", height=20)
+        self.assertEqual(tall[0], f" {ui.BANNER[0]}")
+        self.assertNotIn(f" {ui.BANNER[0]}", short)
+
     def test_the_frame_has_no_box_drawing_borders(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
         text = "\n".join(lines)
@@ -658,7 +667,7 @@ class RenderTests(unittest.TestCase):
         import re
         cfg = dict(self.cfg, timezone="Asia/Taipei", telegram_chat_id="-1001234567890")
         for lang in ("en", "zh-TW"):
-            for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=48):
+            for line in ui.render_menu(cfg, 3, paint=self.plain, lang=lang, height=60):
                 plain = ui.strip_ansi(line)
                 if re.match(r"^ .\s*\d+ ", plain):
                     self.assertEqual(ui.width(plain), ui.PANEL_WIDTH, f"{lang}: {plain!r}")
