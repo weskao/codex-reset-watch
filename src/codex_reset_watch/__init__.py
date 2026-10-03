@@ -29,6 +29,7 @@ from . import config as cfgmod
 import telegram_kit
 
 from . import filelock, host_identity, i18n, scheduler, secrets_store, ui, update_check
+from .console import print_console as print
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE

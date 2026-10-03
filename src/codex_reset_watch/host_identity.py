@@ -10,6 +10,8 @@ import subprocess
 import sys
 import uuid
 
+from .console import print_console as print
+
 
 # SMBIOS / Win32_SystemEnclosure.ChassisTypes
 #

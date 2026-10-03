@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, IO, List, Optional, Sequence, Tuple
 import telegram_kit
 
 from . import config, i18n, keys, scheduler, secrets_store
+from .console import print_console as print, printable_text
 
 # ── palette ──────────────────────────────────────────────────────────────────
 # ChatGPT green (#10A37F) is the body colour; the rest is deliberately grey.
@@ -1139,7 +1140,7 @@ def _draw(lines: List[str], out: IO[str], previous: int) -> int:
     else:
         prefix = f"\033[{previous}A" if previous else ""
     _drawn_columns = columns
-    lines = [_fit(line, columns - 1) for line in lines]
+    lines = [_fit(printable_text(line, out), columns - 1) for line in lines]
     out.write(prefix + "".join(f"{line}\033[K\n" for line in lines) + "\033[J")
     out.flush()
     return len(lines)

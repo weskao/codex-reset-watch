@@ -16,6 +16,7 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from codex_reset_watch import config, scheduler  # noqa: E402
+from codex_reset_watch.console import print_console as print  # noqa: E402
 
 backend_for = scheduler.backend_for
 

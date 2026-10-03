@@ -26,6 +26,13 @@ tab (the settings most people touch); `Tab` switches to **Advanced** (every sett
 are always on screen with their row counts, and the rule underlines the one you are on.
 Full reference: [§4](#4-configuration-crw-config).
 
+Windows PowerShell and cmd use plain signs such as `[OK]`, `[ERROR]`, `*`,
+ASCII arrows and separators in all console messages and menus. This also works
+with legacy console code pages; unsupported text is escaped rather than crashing.
+macOS/Linux keep the original emoji and symbols. Telegram messages and JSON
+exports keep their original Unicode on every platform. Powerline glyphs in your
+shell prompt are controlled by your shell theme, outside `crw`.
+
 ![crw config — Basic mode](docs/images/crw-config-basic-mode.png)
 
 This version is **uv-native**:

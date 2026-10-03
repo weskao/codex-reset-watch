@@ -11,6 +11,8 @@ TTY, so the launchd / systemd / schtasks runs never pay for the request.
 """
 from __future__ import annotations
 
+from .console import print_console as print
+
 import contextlib
 import json
 import subprocess
