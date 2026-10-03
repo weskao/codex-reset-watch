@@ -335,7 +335,16 @@ def apply_schtasks(program: str, cfg: Dict[str, Any]) -> Tuple[str, ...]:
     builders = {"daily": daily_task_command, "monitor": monitor_task_command}
     for job in JOBS:
         if job in enabled_jobs(cfg):
-            subprocess.check_call(builders[job](program, cfg))
+            try:
+                subprocess.check_call(builders[job](program, cfg))
+            except subprocess.CalledProcessError as exc:
+                # Typically "access denied": the task was created from an elevated
+                # shell, so a normal-user /F overwrite is refused.
+                raise OSError(
+                    f"schtasks could not create {SCHTASKS_NAMES[job]} (exit {exc.returncode}); "
+                    f"if it was made from an admin shell, delete it there: "
+                    f"schtasks /Delete /F /TN {SCHTASKS_NAMES[job]}"
+                ) from exc
         else:
             subprocess.run(delete_task_command(SCHTASKS_NAMES[job]), capture_output=True)
     return enabled_jobs(cfg)
