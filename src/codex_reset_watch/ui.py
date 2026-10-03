@@ -35,7 +35,7 @@ import shutil
 import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Dict, IO, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Sequence, Tuple
 
 import telegram_kit
 
@@ -1120,30 +1120,48 @@ def _perform(state: MenuState, cfg: Dict[str, Any], lang: str) -> MenuState:
 
 # ── terminal shell (thin: draw, read one key, hand it to `step`) ─────────────
 
-#: Terminal width the last frame was drawn at — see :func:`_draw`.
-_drawn_columns: Optional[int] = None
+#: Terminal size (columns, rows) the last frame was drawn at — see :func:`_draw`.
+_drawn_size: Optional[Tuple[int, int]] = None
 
 
 def _draw(lines: List[str], out: IO[str], previous: int) -> int:
     """Repaint *lines* in place: move up over the last frame, clear to the end of
     screen so a frame that lost a line leaves no orphan text behind.
 
+    The last line gets no trailing newline: a frame as tall as the terminal
+    would otherwise scroll one row on every repaint, pushing its top line (the
+    logo) into scrollback again and again. The cursor stays on the last line,
+    so the next repaint moves up ``previous - 1`` rows and callers end with
+    one ``\\n`` when they are done drawing.
+
     Moving up *previous* lines is only right while every line takes exactly one
     screen row, so each line is clipped to the terminal width; and after a
-    resize the old frame may already have re-wrapped, so the screen is cleared
-    and redrawn from the top instead.
+    resize (columns *or* rows — the banner tier and so the frame height depend
+    on rows) the old frame may already have re-wrapped or scrolled, so the
+    screen is cleared and redrawn from the top instead. A frame taller than the
+    terminal is cut to its rows: the overflow would scroll off the top and
+    ``previous - 1`` could never reach it again.
     """
-    global _drawn_columns
-    columns = shutil.get_terminal_size((PANEL_MAX + 2, 40)).columns
-    if previous and columns != _drawn_columns:
+    global _drawn_size
+    columns, rows = shutil.get_terminal_size((PANEL_MAX + 2, 40))
+    if previous and (columns, rows) != _drawn_size:
         prefix = "\033[H\033[2J"
     else:
-        prefix = f"\033[{previous}A" if previous else ""
-    _drawn_columns = columns
-    lines = [_fit(printable_text(line, out), columns - 1) for line in lines]
-    out.write(prefix + "".join(f"{line}\033[K\n" for line in lines) + "\033[J")
+        prefix = "\r" + (f"\033[{previous - 1}A" if previous > 1 else "") if previous else ""
+    _drawn_size = (columns, rows)
+    lines = [_fit(printable_text(line, out), columns - 1) for line in lines[:rows]]
+    out.write(prefix + "\033[K\n".join(lines) + "\033[K\033[J")
     out.flush()
     return len(lines)
+
+
+@contextlib.contextmanager
+def _leave_frame(out: IO[str]) -> Iterator[None]:
+    """Step off the last line :func:`_draw` left the cursor on."""
+    try:
+        yield
+    finally:
+        out.write("\n")
 
 
 def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
@@ -1166,7 +1184,7 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
     # the whole input source: waiting on msvcrt.kbhit()/select() would ignore
     # it and hang on a Windows console that nobody is typing into.
     pulse = read is keys.read_key
-    with keys.raw_mode():
+    with keys.raw_mode(), _leave_frame(out):
         while True:
             lang = i18n.current_language(state.values)
             settings = config.visible_settings(config.current_ui_mode(state.values))
@@ -1437,7 +1455,7 @@ def update_prompt(current: str, latest: str, *,
     lang = i18n.current_language()
     selected = 1
     painted = 0
-    with keys.raw_mode():
+    with keys.raw_mode(), _leave_frame(out):
         while True:
             painted = _draw(_update_lines(paint, lang, current, latest, selected, release_url), out, painted)
             try:

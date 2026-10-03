@@ -523,16 +523,41 @@ class RenderTests(unittest.TestCase):
         long_line = "\033[1m" + "x" * 300 + "\033[0m"
         with mock.patch("shutil.get_terminal_size",
                         return_value=os.terminal_size((80, 40))):
-            painted = ui._draw([long_line], out, 0)
-            ui._draw([long_line], out, painted)
+            painted = ui._draw([long_line, long_line], out, 0)
+            ui._draw([long_line, long_line], out, painted)
         with mock.patch("shutil.get_terminal_size",
                         return_value=os.terminal_size((60, 40))):
             ui._draw([long_line], out, painted)
         frames = out.getvalue()
         self.assertNotIn("x" * 80, frames)
         self.assertIn("x" * 79, frames)
-        self.assertIn("\033[1A", frames)              # same size: repaint in place
+        self.assertIn("\r\033[1A", frames)            # same size: repaint in place
         self.assertTrue(frames.count("\033[H\033[2J") == 1)  # resize: clear once
+
+    def test_draw_clears_on_a_height_change_and_cuts_an_overtall_frame(self):
+        out = io.StringIO()
+        with mock.patch("shutil.get_terminal_size",
+                        return_value=os.terminal_size((80, 3))):
+            painted = ui._draw(["a", "b", "c", "d", "e"], out, 0)
+        self.assertEqual(painted, 3)                  # cut to the terminal's rows
+        self.assertNotIn("d", out.getvalue())
+        out.truncate(0)
+        with mock.patch("shutil.get_terminal_size",
+                        return_value=os.terminal_size((80, 10))):
+            ui._draw(["a", "b", "c"], out, painted)
+        self.assertIn("\033[H\033[2J", out.getvalue())   # rows changed: clear
+
+    def test_draw_never_scrolls_a_full_height_frame(self):
+        # A trailing newline after the last row scrolls a terminal-tall frame
+        # one row per repaint, stacking the logo's top line in scrollback.
+        out = io.StringIO()
+        with mock.patch("shutil.get_terminal_size",
+                        return_value=os.terminal_size((80, 3))):
+            painted = ui._draw(["a", "b", "c"], out, 0)
+            ui._draw(["a", "b", "c"], out, painted)
+        frames = out.getvalue()
+        self.assertEqual(frames.count("\n"), 4)       # 2 per 3-row frame
+        self.assertFalse(frames.endswith("\n"))
 
     def test_the_frame_has_no_box_drawing_borders(self):
         lines = ui.render_menu(self.cfg, 0, paint=self.plain, lang="en")
