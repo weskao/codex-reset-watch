@@ -1221,7 +1221,7 @@ SUBCOMMAND_FLAGS: Dict[str, Tuple[str, ...]] = {
     "monitor": ("no-notify",),
     "daily": ("force", "no-notify"),
     "logs": ("lines",),
-    "config": ("list", "set", "apply-schedule", "export", "import"),
+    "config": ("list", "set", "token-stdin", "apply-schedule", "export", "import"),
     "doctor": (),
     "apply-schedule": (),
 }
@@ -1265,6 +1265,9 @@ def _normalize_argv(argv: Sequence[str]) -> List[str]:
         if command is not None and token in SUBCOMMAND_FLAGS.get(command, ()):
             out.append(f"--{token}")
             take_value = token in VALUE_FLAGS
+            continue
+        if token == "help" or (token == "version" and command is None):
+            out.append(f"--{token}")  # `help` → `--help`, `version` → `--version`
             continue
         out.append(token)
     return out

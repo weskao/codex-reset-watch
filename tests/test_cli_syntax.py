@@ -47,6 +47,21 @@ class SubcommandDashTests(unittest.TestCase):
         self.assertEqual(args.command, "config")
 
 
+class HelpVersionTests(unittest.TestCase):
+    def test_bare_help_and_version_match_their_dashed_forms(self):
+        n = crw._normalize_argv
+        self.assertEqual(n(["help"]), ["--help"])
+        self.assertEqual(n(["version"]), ["--version"])
+        self.assertEqual(n(["config", "help"]), ["config", "--help"])
+        self.assertEqual(n(["check", "version"]), ["check", "version"])  # subcommands have no --version
+
+    def test_a_value_named_help_is_left_alone(self):
+        self.assertEqual(crw._normalize_argv(["config", "set", "help"]), ["config", "--set", "help"])
+
+    def test_token_stdin_works_bare(self):
+        self.assertEqual(crw._normalize_argv(["config", "token-stdin"]), ["config", "--token-stdin"])
+
+
 class FlagDashTests(unittest.TestCase):
     def test_a_bare_flag_after_its_subcommand_gains_dashes(self):
         self.assertEqual(crw._normalize_argv(["config", "list"]), ["config", "--list"])

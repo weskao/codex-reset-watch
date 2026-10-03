@@ -249,6 +249,9 @@ flags. These pairs are identical:
 | `crw check --no-notify` | `crw check no-notify` |
 | `crw daily --force` | `crw daily force` |
 | `crw logs --lines 50` | `crw logs lines 50` |
+| `crw config --token-stdin` | `crw config token-stdin` |
+| `crw --help` | `crw help` (also `crw config help`) |
+| `crw --version` | `crw version` |
 
 A bare word is only read as a flag after the subcommand that actually declares it, so
 `crw config set export` still sets a key literally named `export`, and anything after a bare
