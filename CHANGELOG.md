@@ -1,3 +1,25 @@
+## [0.17.0] - 2026-10-03
+
+### 🚀 Features
+
+- **console:** Use ascii-safe output on Windows
+
+### 🐛 Bug Fixes
+
+- **ui:** Adapt config menu to terminal size
+- **secrets:** Drop PSModulePath for DPAPI helper
+- **scheduler:** Report schtasks failure as OSError
+- **console:** Preserve windows menu layout
+- **ui:** Stop menu repaint stacking logo rows
+
+### 📚 Documentation
+
+- **readme:** Describe adaptive config menu layout
+
+### ⚙️ Miscellaneous Tasks
+
+- **gitignore:** Ignore shell crash dumps
+- Set daily_notify_when_unchanged default to true in example config
 ## [0.16.0] - 2026-10-02
 
 ### 🚀 Features
