@@ -18,7 +18,8 @@ SERVICE = "codex-reset-watch"
 # Launched from PowerShell 7, we inherit pwsh's PSModulePath; the DPAPI helper
 # (powershell.exe 5.1) then can't autoload ConvertTo-SecureString, so every
 # token save failed and took the whole config save down with it. Unset, 5.1
-# rebuilds its own default path. ponytail: belongs upstream in telegram_kit._run.
+# rebuilds its own default path. ponytail: telegram-kit after 0.2.1 does this
+# itself; delete this block once that release is the minimum dependency.
 if IS_WINDOWS:
     os.environ.pop("PSModulePath", None)
 

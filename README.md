@@ -366,7 +366,7 @@ a keypress that cannot arrive.
 `crw config --list` (values below are an example, not your real settings):
 
 ```text
- ◆ Codex Reset Watch · Settings                     Advanced mode v0.3.1
+ ◆ Codex Reset Watch · Settings                    Advanced mode v0.19.1
    ~/Library/Application Support/codex-reset-watch/config.json
  ────────────────────────────────────────────────────────────────────────
 
@@ -406,6 +406,7 @@ a keypress that cannot arrive.
  ▍ Interface
    24 Language ············································· English
    25 Mode ···················································· Basic
+   26 Check for updates ··········································· On
 
  Times shown in Asia/Taipei; the OS fires each job in its own local time.
 ```
