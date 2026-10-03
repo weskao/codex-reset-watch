@@ -3,7 +3,7 @@ import codex_reset_watch as crw
 
 class ParserTests(unittest.TestCase):
     def fixture(self, name):
-        return json.loads((pathlib.Path(__file__).parent / "fixtures" / name).read_text())
+        return json.loads((pathlib.Path(__file__).parent / "fixtures" / name).read_text(encoding="utf-8"))
 
     def test_latest_event(self):
         e = crw.latest_event(self.fixture("status_upcoming.json"), self.fixture("resets.json"))

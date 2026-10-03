@@ -1,4 +1,5 @@
 import io
+import sys
 import unittest
 import unittest.mock as mock
 
@@ -148,7 +149,7 @@ class EditTests(unittest.TestCase):
         changed = ui._edit(config.BY_KEY["scan_interval_minutes"], cfg, self.paint, io.StringIO("2 weeks\n"), out)
         self.assertFalse(changed)
         self.assertEqual(cfg["scan_interval_minutes"], config.DEFAULTS["scan_interval_minutes"])
-        self.assertIn("✗", out.getvalue())
+        self.assertIn("x" if sys.platform == "win32" else "✗", out.getvalue())
 
     def test_blank_input_keeps_value_unchanged(self):
         cfg = dict(config.DEFAULTS)
@@ -214,14 +215,16 @@ class ConfigMenuTests(unittest.TestCase):
         out = io.StringIO()
         ui.config_menu(io.StringIO("1\nq\n"), out)  # daily_enabled is a SCHEDULE_KEYS member
         self.mock_apply.assert_called_once()
-        self.assertIn("✓ Re-applied the launchd schedule", out.getvalue())
+        sign = "+" if sys.platform == "win32" else "✓"
+        self.assertIn(f"{sign} Re-applied the launchd schedule", out.getvalue())
 
     def test_the_reapply_notice_follows_the_configured_language(self):
         import os
         with mock.patch.dict(os.environ, {"CRW_LANG": "zh-TW"}):
             out = io.StringIO()
             ui.config_menu(io.StringIO("1\nq\n"), out)
-        self.assertIn("✓ 已重新套用 launchd 排程", out.getvalue())
+        sign = "+" if sys.platform == "win32" else "✓"
+        self.assertIn(f"{sign} 已重新套用 launchd 排程", out.getvalue())
 
     def test_non_schedule_change_does_not_reapply(self):
         out = io.StringIO()
@@ -233,7 +236,7 @@ class ConfigMenuTests(unittest.TestCase):
         out = io.StringIO()
         code = ui.config_menu(io.StringIO("999\nq\n"), out)
         self.assertEqual(code, 0)
-        self.assertIn("✗", out.getvalue())
+        self.assertIn("x" if sys.platform == "win32" else "✗", out.getvalue())
 
     def test_restore_defaults_resets_and_saves(self):
         out = io.StringIO()
@@ -282,7 +285,8 @@ class UpdatePromptTests(unittest.TestCase):
         plain = ui.strip_ansi(text)
         self.assertIn("0.12.0", plain)
         self.assertIn("0.11.0", plain)
-        self.assertIn(f"{ui.GLYPH_CURSOR}  1 ", plain)
+        cursor = ">" if sys.platform == "win32" else "▸"
+        self.assertIn(f"{cursor}  1 ", plain)
 
     def test_header_is_one_combined_line_like_aicp_instead_of_two(self):
         """Layout parity with aicp's update prompt: one title line carrying

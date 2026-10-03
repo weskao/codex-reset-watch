@@ -18,10 +18,12 @@ import re
 import socketserver
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
 import codex_reset_watch as crw
+from codex_reset_watch import console
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 
@@ -159,8 +161,9 @@ class NoticeImageTests(unittest.TestCase):
             if state:
                 state_dir.mkdir(parents=True, exist_ok=True)
                 (state_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
-            with mock.patch.object(crw, "send_telegram", return_value=True) as send:
-                out = io.StringIO()
+            out = io.StringIO()
+            with mock.patch.object(crw, "send_telegram", return_value=True) as send, \
+                    mock.patch.object(console, "sys", SimpleNamespace(platform="darwin", stdout=out)):
                 with contextlib.redirect_stdout(out):
                     crw.run_check("monitor", notify=True)
                 self.assertEqual(out.getvalue(), "".join(c.args[1] + "\n" for c in send.call_args_list))
@@ -187,16 +190,39 @@ class NoticeImageTests(unittest.TestCase):
 
     def test_manual_notify_stays_text_only(self):
         for colour in (False, True):
+            out = io.StringIO()
             with self.subTest(colour=colour), isolated_run({"timezone": "UTC"}), \
+                    mock.patch.object(console, "sys", SimpleNamespace(platform="darwin", stdout=out)), \
                     mock.patch.object(crw, "send_telegram") as send, \
                     mock.patch.object(crw.ui, "colour_enabled", return_value=colour), \
                     mock.patch.object(crw.host_identity, "device_label", return_value="💻 Test laptop · TEST******"), \
-                    contextlib.redirect_stdout(io.StringIO()) as out:
+                    contextlib.redirect_stdout(out):
                 crw.run_check("manual", notify=True)
             send.assert_called_once()
             self.assertNotIn("image", send.call_args.kwargs)
             self.assertEqual(re.sub(r"\x1b\[[0-9;]*m", "", out.getvalue()), send.call_args.args[1] + "\n")
             self.assertTrue(out.getvalue().endswith("💻 Test laptop · TEST******\n"))
+
+    def test_windows_manual_notify_converts_console_only(self):
+        out = io.StringIO()
+        with isolated_run({"timezone": "UTC", "language": "zh-TW"}), \
+                mock.patch.dict(os.environ, {"CRW_LANG": "zh-TW"}), \
+                mock.patch.object(console, "sys", SimpleNamespace(platform="win32", stdout=out)), \
+                mock.patch.object(crw, "send_telegram") as send, \
+                mock.patch.object(crw.ui, "colour_enabled", return_value=False), \
+                mock.patch.object(crw.host_identity, "device_label", return_value="💻 Test laptop · TEST******"), \
+                contextlib.redirect_stdout(out):
+            code = crw.run_check("manual", notify=True)
+
+        self.assertEqual(code, 0)
+        send.assert_called_once()
+        console_text = out.getvalue()
+        telegram_text = send.call_args.args[1]
+        self.assertIn("[CHECK] Codex Reset 即時查詢", console_text)
+        self.assertTrue(console_text.endswith("[PC] Test laptop . TEST******\n"))
+        self.assertNotIn("🔎", console_text)
+        self.assertIn("🔎 Codex Reset 即時查詢", telegram_text)
+        self.assertTrue(telegram_text.endswith("💻 Test laptop · TEST******"))
 
 
 class ManualCheckTests(unittest.TestCase):
@@ -204,9 +230,10 @@ class ManualCheckTests(unittest.TestCase):
         import contextlib as _c
         import io
 
+        out = io.StringIO()
         with isolated_run({"timezone": "UTC"}) as (_state_dir, _log_dir), \
+                mock.patch.object(console, "sys", SimpleNamespace(platform="darwin", stdout=out)), \
                 mock.patch.object(crw.host_identity, "device_label", return_value="💻 Test laptop · TEST******"):
-            out = io.StringIO()
             with _c.redirect_stdout(out):
                 code = crw.run_check("manual", notify=False)
             self.assertEqual(code, 0)

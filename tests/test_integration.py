@@ -6,7 +6,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path.startswith('/api/v1/status-tba'):
             body=(FIX/'status_scheduled_tba.json').read_bytes(); code=200
         elif self.path.startswith('/api/v1/status'):
-            data = json.loads((FIX/'status_upcoming.json').read_text())
+            data = json.loads((FIX/'status_upcoming.json').read_text(encoding='utf-8'))
             window_end = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=9)
             data['forecast']['window_end'] = window_end.strftime('%Y-%m-%dT%H:%M:%SZ')
             body = json.dumps(data).encode(); code=200

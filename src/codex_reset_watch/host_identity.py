@@ -10,7 +10,10 @@ import subprocess
 import sys
 import uuid
 
-from .console import print_console as print
+if __package__:
+    from .console import print_console as print
+else:  # This module also supports direct invocation from shell scripts.
+    from console import print_console as print
 
 
 # SMBIOS / Win32_SystemEnclosure.ChassisTypes
