@@ -1122,8 +1122,11 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
         state["last_check_at"] = iso_utc(snapshot.checked_at)
-        state["latest_event_key"] = snapshot.latest.key if snapshot.latest else ""
-        state["latest_event_at"] = iso_utc(snapshot.latest.timestamp) if snapshot.latest else ""
+        # A scan that reads no event keeps the last known one; clearing it would
+        # re-announce that old reset as new once the payload is readable again.
+        if snapshot.latest:
+            state["latest_event_key"] = snapshot.latest.key
+            state["latest_event_at"] = iso_utc(snapshot.latest.timestamp)
         state["upcoming_key"] = snapshot.upcoming.key if snapshot.upcoming else ""
         state["upcoming_at"] = iso_utc(snapshot.upcoming.timestamp) if snapshot.upcoming else ""
         if mode == "daily":

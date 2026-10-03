@@ -274,6 +274,21 @@ class BlindAlertTests(unittest.TestCase):
             cfg_path.write_text(down, encoding="utf-8")
             self.assertEqual(self._scan(send), 2)
 
+    def test_recovery_does_not_reannounce_the_old_reset(self):
+        global _STATUS_FIXTURE
+        cfg = {"resets_path": "/missing", "monitor_notify_when_unchanged": False, "timezone": "UTC"}
+        with isolated_run(cfg) as (state_dir, _), mock.patch.object(crw, "send_telegram") as send:
+            self._scan(send)
+            known = json.loads((state_dir / "state.json").read_text())["latest_event_key"]
+            _STATUS_FIXTURE = "status_unrecognized.json"
+            self._scan(send)
+            self.assertEqual(json.loads((state_dir / "state.json").read_text())["latest_event_key"], known)
+            _STATUS_FIXTURE = "status_upcoming.json"
+            send.reset_mock()
+            self._scan(send)
+        heading = crw.i18n.t("notice.new_event.title", "en")
+        self.assertFalse([c for c in send.call_args_list if c.args[1].startswith(heading)])
+
     def test_zero_turns_the_alert_off(self):
         with isolated_run(dict(self.DOWN, blind_alert_after=0)), \
                 mock.patch.object(crw, "send_telegram") as send:
