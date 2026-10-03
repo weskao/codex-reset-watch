@@ -44,6 +44,20 @@ class SimpleKeyTests(unittest.TestCase):
         self.assertEqual(event.key, keys.Key.CHAR)
         self.assertEqual(event.char, "q")
 
+    def test_unicode_input_preserves_each_character_and_the_following_enter(self):
+        for text in ("💻", "café", "€", "👩🏽‍💻", "❤️"):
+            with self.subTest(text=text):
+                chunks = [bytes([byte]) for byte in text.encode("utf-8")]
+                with feed(*chunks, b"\r"):
+                    events = [keys.read_key() for _ in text]
+                    enter = keys.read_key()
+                self.assertEqual(events, [keys.KeyEvent(keys.Key.CHAR, ch) for ch in text])
+                self.assertEqual(enter.key, keys.Key.ENTER)
+
+    def test_incomplete_utf8_returns_unknown_without_waiting_forever(self):
+        with feed(b"\xf0", None):
+            self.assertEqual(keys.read_key().key, keys.Key.UNKNOWN)
+
     def test_exhausted_source_is_unknown_not_an_exception(self):
         with feed():
             self.assertEqual(keys.read_key().key, keys.Key.UNKNOWN)

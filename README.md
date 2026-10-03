@@ -68,6 +68,9 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 Every Telegram notice names the device that sent it (e.g. `🖥️ Mac mini · a1b2********`;
 the id is derived from the MAC address, so only its first 4 hex chars are shown;
 replace the whole line with your own text via the `device_label` setting).
+On macOS/Linux, the device-label editor accepts Unicode text and emoji, such as
+`💻 Work laptop` or `👩🏽‍💻 Workstation`, up to 64 Unicode code points (a combined emoji
+can count as several code points).
 Scheduled notices then end with the job that sent them and the absolute path to
 `events.jsonl` in the configured log folder — `launchd: codex-reset-watch.monitor` on macOS,
 `systemd: codex-reset-watch-monitor.timer` on Linux, `Task Scheduler: CodexResetWatchMonitor`

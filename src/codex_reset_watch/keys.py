@@ -177,6 +177,17 @@ def read_key() -> KeyEvent:
             return KeyEvent(_POSIX_ARROWS.get(final, Key.UNKNOWN))
         return KeyEvent(Key.UNKNOWN)
 
+    # POSIX reads one byte at a time: gather the whole UTF-8 character before
+    # decoding it, including four-byte emoji. Bound the wait for truncated input.
+    if not IS_WINDOWS and first:
+        size = (2 if 0xC2 <= first[0] <= 0xDF else
+                3 if 0xE0 <= first[0] <= 0xEF else
+                4 if 0xF0 <= first[0] <= 0xF4 else 1)
+        for _ in range(size - 1):
+            tail = _read_byte(timeout=_ESCAPE_SEQUENCE_TIMEOUT)
+            if not tail:
+                return KeyEvent(Key.UNKNOWN)
+            first += tail
     try:
         return KeyEvent(Key.CHAR, first.decode("utf-8"))
     except UnicodeDecodeError:
