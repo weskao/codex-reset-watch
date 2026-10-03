@@ -286,6 +286,7 @@ generated-plists/
 api-dumps/
 debug/
 *.debug.json
+*.stackdump
 
 # Local test output
 test-results/
