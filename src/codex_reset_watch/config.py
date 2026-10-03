@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 import telegram_kit
 from telegram_kit import mask_secret  # noqa: F401 - re-exported
 
-from . import i18n, paths, secrets_store
+from . import host_identity, i18n, paths, secrets_store
 
 DEFAULT_API_BASE = "https://codex-resets.com"
 MIN_INTERVAL_MINUTES = 1
@@ -48,6 +48,10 @@ FALLBACK_TZ = dt.timezone(dt.timedelta(hours=8), name="UTC+8")
 #: own — a paste-flood/held-key guard, not a format check. Well above any
 #: real URL/path/timezone value this schema stores.
 DEFAULT_TEXT_MAX_LEN = 512
+
+#: A notification footer line, not prose: room for an emoji, a long computer
+#: name and a masked id, short enough to stay on one line in Telegram.
+DEVICE_LABEL_MAX_LEN = 64
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,10 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("daily_notify_when_unchanged", "bool", True, "notifications",
             "Notify on unchanged day",
             "Push on every daily run, even when nothing changed.", tier="basic"),
+    Setting("device_label", "text_optional", "", "notifications", "Device label",
+            "Device line at the end of each notice. Blank = automatic "
+            "(emoji, computer name, masked id).",
+            max_len=DEVICE_LABEL_MAX_LEN, tier="basic", portable=False),
     # ── telegram ─────────────────────────────────────────────────────────
     Setting("telegram_bot_token", "secret", "", "telegram", "Bot token",
             "Bot API token. Kept in the OS keychain, never in a file; used ahead of TG_BOT_TOKEN.",
@@ -414,6 +422,8 @@ def render(setting: Setting, value: Any, lang: Optional[str] = None) -> str:
         return str(value) if value else i18n.t("value.platform_default", lang)
     if setting.kind == "secret":
         return mask_secret(str(value)) if value else i18n.t("value.unset", lang)
+    if setting.key == "device_label":
+        return str(value) if value else host_identity.device_label()
     if setting.kind == "text_optional":
         return str(value) if value else i18n.t("value.unset", lang)
     if setting.kind == "choice":
@@ -590,6 +600,11 @@ def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str
                                             cfg.get("telegram_chat_id", ""))
 
 
+def device_label(cfg: Optional[Dict[str, Any]] = None) -> str:
+    """The notification device line: the custom text, else the automatic label."""
+    return str((cfg or {}).get("device_label") or "").strip() or host_identity.device_label()
+
+
 # ── export / import ──────────────────────────────────────────────────────────
 
 def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -669,6 +684,8 @@ def demo() -> None:
     assert tzinfo_for({"timezone": "UTC-05:30"}).utcoffset(None) == dt.timedelta(hours=-5, minutes=-30)
     assert tzinfo_for({"timezone": "nonsense/zone"}) is FALLBACK_TZ
     assert _migrate({"daily_hour": 7, "daily_minute": 30})["daily_time"] == "07:30"
+    assert device_label({"device_label": "Office Mac"}) == "Office Mac"
+    assert device_label({}) == host_identity.device_label()
     print("config.demo: ok")
 
 

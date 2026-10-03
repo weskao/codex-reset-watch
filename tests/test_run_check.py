@@ -182,6 +182,13 @@ class NoticeImageTests(unittest.TestCase):
             self.assertIn(f"\n{crw.host_identity.device_label()}\nsystemd: codex-reset-watch-monitor.timer\nlog: ", text)
             self.assertTrue(text.endswith("events.jsonl"))
 
+    def test_custom_device_label_replaces_the_automatic_one(self):
+        sent = self._sent({"timezone": "UTC", "device_label": "Office Mac"})
+        self.assertTrue(sent)
+        for text, _image in sent:
+            self.assertIn("\nOffice Mac\n", text)
+            self.assertNotIn(crw.host_identity.device_label(), text)
+
     def test_the_no_signal_notice_stays_text_only(self):
         sent = self._sent({"timezone": "UTC", "monitor_notify_when_unchanged": True},
                           status_fixture="status_no_upcoming.json")

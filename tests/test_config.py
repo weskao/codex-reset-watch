@@ -5,6 +5,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+import unittest.mock
 
 from codex_reset_watch import config
 
@@ -278,3 +279,19 @@ class SchemaConsistencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeviceLabelSettingTests(unittest.TestCase):
+    def test_blank_renders_the_automatic_label_and_custom_text_wins(self):
+        setting = config.BY_KEY["device_label"]
+        with unittest.mock.patch.object(config.host_identity, "device_label", return_value="💻 Test · TEST****"):
+            self.assertEqual(config.render(setting, ""), "💻 Test · TEST****")
+            self.assertEqual(config.device_label({}), "💻 Test · TEST****")
+            self.assertEqual(config.render(setting, "Office Mac"), "Office Mac")
+            self.assertEqual(config.device_label({"device_label": "Office Mac"}), "Office Mac")
+
+    def test_length_is_capped(self):
+        setting = config.BY_KEY["device_label"]
+        self.assertEqual(config.coerce(setting, "x" * config.DEVICE_LABEL_MAX_LEN), "x" * config.DEVICE_LABEL_MAX_LEN)
+        with self.assertRaises(ValueError):
+            config.coerce(setting, "x" * (config.DEVICE_LABEL_MAX_LEN + 1))

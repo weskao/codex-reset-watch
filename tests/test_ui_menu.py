@@ -386,6 +386,14 @@ class ResetRowTests(unittest.TestCase):
         self.assertIsNone(state.confirm_reset_row)
         self.assertFalse(state.pending_save)
 
+    def test_prompt_names_the_value_the_row_resets_to(self):
+        cfg = dict(config.DEFAULTS, device_label="Office Mac")
+        index = SETTINGS.index(config.BY_KEY["device_label"])
+        with mock.patch.object(config.host_identity, "device_label", return_value="💻 Test · TEST****"):
+            lines = ui.render_menu(cfg, index, paint=ui.Paint(False), lang="en", settings=SETTINGS,
+                                   confirm_reset_row="device_label")
+        self.assertIn('Reset "Device label" to 💻 Test · TEST****? [y/N]', "\n".join(lines))
+
 
 class RestoreDefaultsTests(unittest.TestCase):
     def test_shift_r_asks_for_confirmation_first(self):

@@ -126,6 +126,12 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "en": "Push on every daily run, even when nothing changed.",
         "zh-TW": "開啟會在每日排程都推播，即使內容沒變。",
     },
+    "setting.device_label.label": {"en": "Device label", "zh-TW": "裝置標籤"},
+    "setting.device_label.help": {
+        "en": "Device line at the end of each notice. Blank = automatic "
+              "(emoji, computer name, masked id).",
+        "zh-TW": "每則通知結尾的裝置列。留空 = 自動（圖示、電腦名稱、遮蔽 ID）。",
+    },
 
     # ── settings: telegram ──────────────────────────────────────────────────
     "setting.telegram_bot_token.label": {"en": "Bot token", "zh-TW": "Bot Token"},

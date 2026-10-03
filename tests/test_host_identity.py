@@ -14,10 +14,12 @@ class DeviceLabelTests(unittest.TestCase):
                     [], 0, '"IOPlatformSerialNumber" = "TEST123456"\nAppleSmartBattery')), \
                 mock.patch.object(host_identity.uuid, "getnode", return_value=0x020000000001):
             host_identity._mac_machine_kind.cache_clear()
+            host_identity.device_label.cache_clear()
             try:
                 self.assertEqual(host_identity.device_label(), "💻 Test MacBook Pro · TEST******")
             finally:
                 host_identity._mac_machine_kind.cache_clear()
+                host_identity.device_label.cache_clear()
 
     def test_unavailable_mac_identity_is_unknown(self):
         for result in (subprocess.CompletedProcess([], 0, ""),

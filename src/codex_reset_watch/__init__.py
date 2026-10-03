@@ -1041,7 +1041,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         logger.event("INFO", "snapshot", mode=mode, **snapshot_to_log(snapshot))
 
         if mode == "manual":
-            footer = f"\n{host_identity.device_label()}"
+            footer = f"\n{cfgmod.device_label(cfg)}"
             print(format_manual(snapshot, cfg, paint=ui.Paint(ui.colour_enabled())) + footer)
 
         if not snapshot.status_ok:
@@ -1081,7 +1081,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if messages:
                 job = scheduler.job_ref(mode)
-                footer = f"\n{host_identity.device_label()}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
+                footer = f"\n{cfgmod.device_label(cfg)}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
                 for message, image in messages:
                     text = message + footer
                     print(text)

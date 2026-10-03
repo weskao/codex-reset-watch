@@ -554,6 +554,7 @@ def masked_device_code() -> str:
     )
 
 
+@functools.cache  # the menu re-renders this row every frame; identity is fixed per process
 def device_label() -> str:
     """
     Full display label for notifications.

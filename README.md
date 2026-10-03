@@ -64,7 +64,8 @@ Native OS scheduling backend, chosen automatically by `scripts/install.py`:
 | CLI | `~/.local/bin/{codex-reset-watch,crw}` | `~/.local/bin/{codex-reset-watch,crw}` | `%USERPROFILE%\.local\bin\{codex-reset-watch,crw}.exe` |
 
 Every Telegram notice names the device that sent it (e.g. `🖥️ Mac mini · a1b2********`;
-the id is derived from the MAC address, so only its first 4 hex chars are shown).
+the id is derived from the MAC address, so only its first 4 hex chars are shown;
+replace the whole line with your own text via the `device_label` setting).
 Scheduled notices then end with the job that sent them and the absolute path to
 `events.jsonl` in the configured log folder — `launchd: codex-reset-watch.monitor` on macOS,
 `systemd: codex-reset-watch-monitor.timer` on Linux, `Task Scheduler: CodexResetWatchMonitor`
@@ -376,34 +377,35 @@ a keypress that cannot arrive.
     7 Upcoming reset signals ····································· On
     8 Notify on unchanged scan ··································· On
     9 Notify on unchanged day ···································· On
+   10 Device label ······················· 🖥️ Mac mini · a1b2********
 
  ▍ Telegram
-   10 Bot token ··········································· (not set)
-   11 Chat ID ········································ -1001234567890
+   11 Bot token ··········································· (not set)
+   12 Chat ID ········································ -1001234567890
 
  ▍ API
-   12 API base ····························· https://codex-resets.com
-   13 status path ···································· /api/v1/status
-   14 resets path ················ /api/v1/resets?limit=20&order=desc
-   15 Timeout (seconds) ·········································· 15
-   16 Retries ····················································· 3
-   17 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com…
+   13 API base ····························· https://codex-resets.com
+   14 status path ···································· /api/v1/status
+   15 resets path ················ /api/v1/resets?limit=20&order=desc
+   16 Timeout (seconds) ·········································· 15
+   17 Retries ····················································· 3
+   18 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com…
 
  ▍ Storage
-   18 State folder ······························· (platform default)
-   19 Log folder ································· (platform default)
-   20 Log size cap ············································ 2 MiB
-   21 Log backups ················································· 3
+   19 State folder ······························· (platform default)
+   20 Log folder ································· (platform default)
+   21 Log size cap ············································ 2 MiB
+   22 Log backups ················································· 3
 
  ▍ Interface
-   22 Language ············································· English
-   23 Mode ···················································· Basic
+   23 Language ············································· English
+   24 Mode ···················································· Basic
 
  Times shown in Asia/Taipei; the OS fires each job in its own local time.
 ```
 
 `--list` always shows the full (Advanced) schema, regardless of the stored mode — the badge and
-`23 Mode` row make that explicit.
+`24 Mode` row make that explicit.
 
 ### Settings
 
@@ -416,6 +418,7 @@ a keypress that cannot arrive.
 | `timezone` | Timezone `daily_time` and rendered timestamps use | `UTC+8`, `UTC-05:30`, `UTC`, `local`, or an IANA name (`Asia/Taipei`) |
 | `notify_new_reset_events` / `notify_upcoming_reset` | Which event types trigger a Telegram push | `on` / `off` |
 | `monitor_notify_when_unchanged` / `daily_notify_when_unchanged` | Push even when nothing changed since last check | `on` / `off` |
+| `device_label` | Device line at the end of every notice — blank = automatic (emoji, computer name, masked id); **max 64 characters**; never exported. The menu shows the automatic label while blank, your text once set, and `r` names the label it resets to | `Office Mac`, blank |
 | `telegram_bot_token` | Bot API token — **stored in the OS keychain, never in a file** (see [§8](#8-telegram)) | masked as `********WXYZ` |
 | `telegram_chat_id` | Chat that receives notifications | `-1001234567890` |
 | `api_base`, `status_path`, `resets_path` | codex-resets.com endpoints | — |
