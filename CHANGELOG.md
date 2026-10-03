@@ -1,3 +1,18 @@
+## [0.18.0] - 2026-10-03
+
+### 🚀 Features
+
+- **cli:** Support bare help and version
+- **config:** Add customizable device label setting
+
+### 🐛 Bug Fixes
+
+- **ui:** Show target value in reset-row prompt
+
+### 📚 Documentation
+
+- **cli:** Note crw is an alias of codex-reset-watch
+- **cli:** Say every command works as crw
 ## [0.17.0] - 2026-10-03
 
 ### 🚀 Features
