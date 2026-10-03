@@ -1,3 +1,8 @@
+## [0.19.1] - 2026-10-03
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump setup-uv to v10.2.0
 ## [0.19.0] - 2026-10-03
 
 ### 🚀 Features
