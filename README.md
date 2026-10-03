@@ -42,7 +42,7 @@ This version is **uv-native**:
 - preferred Python: `.python-version` (`3.13`)
 - runtime: uv-managed Python
 - installed CLI: `uv tool install`
-- CLI entry points: `codex-reset-watch` and `crw`
+- CLI entry points: `codex-reset-watch` and `crw` — `crw` is a short alias that works exactly the same (`crw check` = `codex-reset-watch check`), and `--help` says so
 - the OS scheduler calls the installed uv-tool executable directly; it does **not** depend on shell activation or `.venv`
 
 Native OS scheduling backend, chosen automatically by `scripts/install.py`:
