@@ -653,7 +653,7 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     elif confirm_reset_row:
         target = config.BY_KEY[confirm_reset_row]
         message = i18n.t("menu.confirm_reset_row", lang, label=config.label(target, lang),
-                         default=config.render(target, target.default, lang))
+                         value=config.render(target, target.default, lang))
         foot.append(f" {paint.warn}{message}{paint.reset}")
     elif prompt:
         foot.append(f" {paint.accent}{GLYPH_PROMPT}{paint.reset} "

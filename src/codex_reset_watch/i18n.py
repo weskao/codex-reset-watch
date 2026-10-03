@@ -313,8 +313,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "確定要把所有設定還原成預設值？y 確認，其他鍵取消",
     },
     "menu.confirm_reset_row": {
-        "en": 'Reset "{label}" to {default}? [y/N]',
-        "zh-TW": "確定要把「{label}」重設為 {default}？[y/N]",
+        "en": 'Reset "{label}" to {value}? [y/N]',
+        "zh-TW": "確定要把「{label}」重設為 {value}？[y/N]",
     },
     "menu.invalid_choice": {
         "en": "Enter 1-{count}, or a / d / e / i / m / q",
