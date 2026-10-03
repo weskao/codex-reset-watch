@@ -1,3 +1,16 @@
+## [0.19.0] - 2026-10-03
+
+### 🚀 Features
+
+- **monitor:** Alert after blind scans
+
+### 🐛 Bug Fixes
+
+- **keys:** Decode utf-8 terminal input
+
+### 💼 Other
+
+- **test:** Add pytest development dependency
 ## [0.18.0] - 2026-10-03
 
 ### 🚀 Features
