@@ -15,6 +15,7 @@
   "resets_path": "/api/v1/resets?limit=20&order=desc",
   "request_timeout_seconds": 15,
   "request_retries": 3,
+  "blind_alert_after": 3,
   "user_agent": "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)",
   "state_dir": "",
   "log_dir": "",

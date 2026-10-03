@@ -232,6 +232,68 @@ class NoticeImageTests(unittest.TestCase):
         self.assertTrue(telegram_text.endswith("💻 Test laptop · TEST******"))
 
 
+class BlindAlertTests(unittest.TestCase):
+    """A monitor that cannot see the API must not look like "no reset": after
+    `blind_alert_after` scheduled scans in a row see nothing usable, exactly one
+    notice goes out, and a healthy scan re-arms it."""
+
+    DOWN = {"api_base": "http://127.0.0.1:1", "blind_alert_after": 3,
+            "monitor_notify_when_unchanged": False}
+
+    def _blind_sends(self, send):
+        title = crw.i18n.t("notice.blind.title", "en")
+        return [c for c in send.call_args_list if c.args[1].startswith(title)]
+
+    def _scan(self, send, mode="monitor"):
+        with contextlib.redirect_stdout(io.StringIO()):
+            crw.run_check(mode, notify=True)
+        return len(self._blind_sends(send))
+
+    def test_one_notice_after_n_consecutive_failures(self):
+        with isolated_run(self.DOWN), mock.patch.object(crw, "send_telegram") as send:
+            self.assertEqual([self._scan(send) for _ in range(4)], [0, 0, 1, 1])
+            self.assertIn("3", self._blind_sends(send)[0].args[1])
+
+    def test_an_unrecognized_payload_counts_as_blind(self):
+        cfg = {"blind_alert_after": 1, "resets_path": "/missing", "monitor_notify_when_unchanged": False}
+        with isolated_run(cfg, status_fixture="status_unrecognized.json"), \
+                mock.patch.object(crw, "send_telegram") as send:
+            self.assertEqual(self._scan(send), 1)
+
+    def test_a_healthy_scan_rearms_the_alert(self):
+        with isolated_run({"blind_alert_after": 1, "monitor_notify_when_unchanged": False}) as (state_dir, _), \
+                mock.patch.object(crw, "send_telegram") as send:
+            cfg_path = pathlib.Path(os.environ["CRW_CONFIG"])
+            healthy = cfg_path.read_text(encoding="utf-8")
+            down = json.dumps(dict(json.loads(healthy), api_base=self.DOWN["api_base"]))
+            cfg_path.write_text(down, encoding="utf-8")
+            self.assertEqual(self._scan(send), 1)
+            cfg_path.write_text(healthy, encoding="utf-8")
+            self._scan(send)
+            self.assertEqual(json.loads((state_dir / "state.json").read_text())["blind_streak"], 0)
+            cfg_path.write_text(down, encoding="utf-8")
+            self.assertEqual(self._scan(send), 2)
+
+    def test_zero_turns_the_alert_off(self):
+        with isolated_run(dict(self.DOWN, blind_alert_after=0)), \
+                mock.patch.object(crw, "send_telegram") as send:
+            self.assertEqual([self._scan(send) for _ in range(3)], [0, 0, 0])
+
+    def test_a_failed_daily_counts_but_stays_due(self):
+        with isolated_run(dict(self.DOWN, daily_time="00:00", timezone="UTC")) as (state_dir, _), \
+                mock.patch.object(crw, "send_telegram") as send:
+            self._scan(send, mode="daily")
+            state = json.loads((state_dir / "state.json").read_text())
+        self.assertEqual(state["blind_streak"], 1)
+        self.assertNotIn("last_daily_date", state)
+
+    def test_manual_check_leaves_the_streak_alone(self):
+        with isolated_run(self.DOWN) as (state_dir, _), mock.patch.object(crw, "send_telegram"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            crw.run_check("manual", notify=False)
+            self.assertFalse((state_dir / "state.json").exists())
+
+
 class ManualCheckTests(unittest.TestCase):
     def test_manual_check_prints_configured_timezone(self):
         import contextlib as _c

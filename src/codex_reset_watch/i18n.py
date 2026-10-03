@@ -132,6 +132,12 @@ MESSAGES: Dict[str, Dict[str, str]] = {
               "(emoji, computer name, masked id).",
         "zh-TW": "每則通知結尾的裝置列。留空 = 自動（圖示、電腦名稱、遮蔽 ID）。",
     },
+    "setting.blind_alert_after.label": {"en": "Blind alert after", "zh-TW": "失聯提醒門檻"},
+    "setting.blind_alert_after.help": {
+        "en": "Send one notice after this many scans in a row fail or return nothing "
+              "readable. 0 = off.",
+        "zh-TW": "連續這麼多次掃描失敗或讀不到資料時，發一則提醒。0 = 關閉。",
+    },
 
     # ── settings: telegram ──────────────────────────────────────────────────
     "setting.telegram_bot_token.label": {"en": "Bot token", "zh-TW": "Bot Token"},
@@ -485,6 +491,20 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "zh-TW": "🎉 偵測到新的公開 Reset 事件/公告",
     },
     "notice.new_event.title": {"en": "✅ Codex Reset update", "zh-TW": "✅ Codex Reset 更新"},
+    "notice.blind.title": {
+        "en": "🙈 Codex Reset Watch can't see the API",
+        "zh-TW": "🙈 Codex Reset Watch 讀不到 API",
+    },
+    "notice.blind.body": {
+        "en": "{count} scans in a row failed, so a reset could go unnoticed. "
+              "Next notice after a successful scan.",
+        "zh-TW": "已連續 {count} 次掃描失敗，可能漏掉 Reset。恢復正常後才會再提醒。",
+    },
+    "notice.blind.error": {"en": "Last error: {error}", "zh-TW": "最後錯誤：{error}"},
+    "notice.blind.unparsed": {
+        "en": "The API answered, but no reset event could be read from it (its format may have changed).",
+        "zh-TW": "API 有回應，但讀不到任何 Reset 事件（格式可能已變更）。",
+    },
 
     # ── CLI help (`crw --help` / `crw <command> --help`) ───────────────────
     "cli.description": {

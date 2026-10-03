@@ -140,6 +140,9 @@ SETTINGS: Tuple[Setting, ...] = (
             "Per-request HTTP timeout.", 1, 300),
     Setting("request_retries", "int", 3, "api", "Retries",
             "Attempt limit for retryable errors (429/5xx/connection).", 1, 10),
+    Setting("blind_alert_after", "int", 3, "api", "Blind alert after",
+            "Send one notice after this many scans in a row fail or return nothing "
+            "readable. 0 = off.", 0, 100),
     Setting("user_agent", "text", "codex-reset-watch/1.0 (+https://codex-resets.com/api/docs)",
             "api", "User-Agent", "User-Agent header sent with each request.", portable=False),
     # ── storage ──────────────────────────────────────────────────────────

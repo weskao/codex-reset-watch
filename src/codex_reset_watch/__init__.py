@@ -1007,6 +1007,38 @@ def is_recent_event(event: Event, checked_at: dt.datetime, hours: int = 12) -> b
     return bool(event.timestamp and dt.timedelta(0) <= checked_at - event.timestamp <= dt.timedelta(hours=hours))
 
 
+def scheduled_footer(mode: str, cfg: Dict[str, Any], logger: Logger) -> str:
+    job = scheduler.job_ref(mode)
+    return f"\n{cfgmod.device_label(cfg)}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
+
+
+def format_blind_notice(count: int, snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None) -> str:
+    lang = notice_lang(cfg)
+    reason = (i18n.t("notice.blind.error", lang, error=safe_text(snapshot.status_error, 300))
+              if not snapshot.status_ok else i18n.t("notice.blind.unparsed", lang))
+    section = ["", i18n.t("notice.blind.body", lang, count=count), reason]
+    return render_notice(i18n.t("notice.blind.title", lang), snapshot.checked_at, cfg, [section])
+
+
+def track_blindness(mode: str, snapshot: Snapshot, state: Dict[str, Any], cfg: Dict[str, Any],
+                    logger: Logger, notify: bool) -> None:
+    """Count scheduled scans in a row that saw nothing usable; notice once at the threshold.
+
+    Every real status payload carries a latest reset, so a fetch that parses to
+    none means the format drifted — as blind as a failed fetch.
+    """
+    if snapshot.status_ok and snapshot.latest:
+        state["blind_streak"] = 0
+        return
+    streak = state["blind_streak"] = int(state.get("blind_streak", 0)) + 1
+    logger.event("WARNING", "monitor_blind", mode=mode, streak=streak)
+    if streak == int(cfg.get("blind_alert_after", 3)):
+        text = format_blind_notice(streak, snapshot, cfg) + scheduled_footer(mode, cfg, logger)
+        print(text)
+        if notify:
+            send_telegram(cfg, text, logger)
+
+
 def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
     cfg = load_config()
     logger = Logger(cfg)
@@ -1048,9 +1080,9 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
             if mode == "manual":
                 return 1
             logger.event("WARNING", "scheduled_status_api_failed", mode=mode, error=snapshot.status_error)
-            if mode == "daily":
-                # Do not mark daily complete on network/API failure; the 2-hour monitor or a reload can retry.
-                pass
+            # Only the streak is saved: daily stays undone so the next run can retry.
+            track_blindness(mode, snapshot, state, cfg, logger, notify)
+            store.save(state)
             return 0
 
         prev_latest = state.get("latest_event_key", "")
@@ -1080,13 +1112,13 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
                     # notify_when_unchanged never fires on days with nothing to report.
                     messages.append((format_no_signal_notice(snapshot.checked_at, snapshot.latest, cfg), None))
             if messages:
-                job = scheduler.job_ref(mode)
-                footer = f"\n{cfgmod.device_label(cfg)}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
+                footer = scheduled_footer(mode, cfg, logger)
                 for message, image in messages:
                     text = message + footer
                     print(text)
                     if notify:
                         send_telegram(cfg, text, logger, image=image)
+            track_blindness(mode, snapshot, state, cfg, logger, notify)
 
         state["initialized_at"] = state.get("initialized_at") or iso_utc(snapshot.checked_at)
         state["last_check_at"] = iso_utc(snapshot.checked_at)
