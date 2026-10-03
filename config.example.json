@@ -7,7 +7,7 @@
   "notify_new_reset_events": true,
   "notify_upcoming_reset": true,
   "monitor_notify_when_unchanged": false,
-  "daily_notify_when_unchanged": false,
+  "daily_notify_when_unchanged": true,
   "telegram_chat_id": "",
   "api_base": "https://codex-resets.com",
   "status_path": "/api/v1/status",
