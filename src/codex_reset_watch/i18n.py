@@ -488,8 +488,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
 
     # ── CLI help (`crw --help` / `crw <command> --help`) ───────────────────
     "cli.description": {
-        "en": "Monitor codex-resets.com and notify via Telegram. `crw` is a short alias that works the same as `codex-reset-watch`.",
-        "zh-TW": "監控 codex-resets.com 並透過 Telegram 通知。`crw` 是簡短別名，用法與 `codex-reset-watch` 完全相同。",
+        "en": "Monitor codex-resets.com and notify via Telegram. Every command can also be run as `crw` instead of `codex-reset-watch` (e.g. `crw check`, `crw config`).",
+        "zh-TW": "監控 codex-resets.com 並透過 Telegram 通知。所有指令都可改用 `crw` 開頭，與 `codex-reset-watch` 完全相同（例如 `crw check`、`crw config`）。",
     },
     "cli.check.help": {
         "en": "Query now, update status, print to terminal, and Telegram-notify by default",

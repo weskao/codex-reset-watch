@@ -2,6 +2,8 @@
 
 Cross-platform (macOS/Linux/Windows) monitor for [codex-resets.com](https://codex-resets.com/), with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too.
 
+> **Tip:** `crw` is a short alias for `codex-reset-watch` — every command works with either name (`crw check` = `codex-reset-watch check`). This README uses `crw`.
+
 > **Unofficial.** Not affiliated with codex-resets.com — an independent client built on its public API. All reset data and forecasts come from there.
 
 When a public reset signal is found, `crw check` sends its status and type, estimated reset time
