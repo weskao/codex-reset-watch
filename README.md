@@ -391,23 +391,24 @@ a keypress that cannot arrive.
    15 resets path ················ /api/v1/resets?limit=20&order=desc
    16 Timeout (seconds) ·········································· 15
    17 Retries ····················································· 3
-   18 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com…
+   18 Blind alert after ··········································· 3
+   19 User-Agent ·· codex-reset-watch/1.0 (+https://codex-resets.com…
 
  ▍ Storage
-   19 State folder ······························· (platform default)
-   20 Log folder ································· (platform default)
-   21 Log size cap ············································ 2 MiB
-   22 Log backups ················································· 3
+   20 State folder ······························· (platform default)
+   21 Log folder ································· (platform default)
+   22 Log size cap ············································ 2 MiB
+   23 Log backups ················································· 3
 
  ▍ Interface
-   23 Language ············································· English
-   24 Mode ···················································· Basic
+   24 Language ············································· English
+   25 Mode ···················································· Basic
 
  Times shown in Asia/Taipei; the OS fires each job in its own local time.
 ```
 
 `--list` always shows the full (Advanced) schema, regardless of the stored mode — the badge and
-`24 Mode` row make that explicit.
+`25 Mode` row make that explicit.
 
 ### Settings
 
@@ -425,6 +426,7 @@ a keypress that cannot arrive.
 | `telegram_chat_id` | Chat that receives notifications | `-1001234567890` |
 | `api_base`, `status_path`, `resets_path` | codex-resets.com endpoints | — |
 | `request_timeout_seconds`, `request_retries` | HTTP client tuning | — |
+| `blind_alert_after` | Send one Telegram notice after this many scheduled scans in a row fail, or return a payload with no readable reset event; the next one only after a scan succeeds. `0` = off. At the default 2-hour scan, `3` means about 6 hours blind | `3`, `0` |
 | `state_dir`, `log_dir` | Override the platform-default state/log folders | blank = platform default |
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
@@ -767,6 +769,10 @@ Example current-reset-event result (new-reset notice):
   `active_watch`, even while its time is still to be announced. Once its `scheduled_for`
   passes it stays on screen as "waiting for the reset to land" — per the
   [API docs](https://codex-resets.com/api/docs), a passed time does not mean it happened.
+- When tolerance runs out, the monitor says so instead of going quiet. A scheduled scan whose
+  status request fails, or whose payload yields no reset event at all, counts as blind. After
+  `blind_alert_after` blind scans in a row, one "can't see the API" notice goes out; a
+  healthy scan resets the count.
 
 ## 11. Logs and disk usage
 
@@ -801,6 +807,9 @@ Windows:
 ```powershell
 uv run python -m unittest discover -s tests -t . -v
 ```
+
+`uv run pytest` runs the same suite with pytest, which is a dev dependency installed by
+`uv sync`.
 
 Individual groups (macOS/Linux):
 
