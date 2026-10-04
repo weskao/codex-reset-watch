@@ -80,7 +80,7 @@ class UpdateCheckTests(unittest.TestCase):
     def test_hint_on_a_tty(self):
         out = self._hint(_Tty())
         self.assertIn("9.9.0", out)
-        self.assertIn("git+https://github.com/weskao/codex-reset-watch.git@v9.9.0 codex-reset-watch && crw apply-schedule", out)
+        self.assertIn("uv tool install --force codex-reset-watch==9.9.0 && crw apply-schedule", out)
 
     def test_no_hint_without_a_tty(self):
         self.assertEqual(self._hint(io.StringIO()), "")
@@ -160,8 +160,7 @@ class MaybeHintInteractiveTests(unittest.TestCase):
         )
         self.assertEqual(
             run_mock.call_args_list[0].args[0],
-            ["uv", "tool", "install", "--force", "--from",
-             "git+https://github.com/weskao/codex-reset-watch.git@v9.9.0", "codex-reset-watch"],
+            ["uv", "tool", "install", "--force", "codex-reset-watch==9.9.0"],
         )
         self.assertEqual(run_mock.call_args_list[1].args[0], ["crw", "apply-schedule"])
 

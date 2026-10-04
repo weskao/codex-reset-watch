@@ -1,7 +1,9 @@
 """Tell an interactive user when a newer codex-reset-watch release is on GitHub.
 
-This tool is installed from git tags, not PyPI, so the source of truth is the
-repo's latest GitHub release. The request starts in a background thread when
+The source of truth is the repo's latest GitHub release; the upgrade itself
+installs that version from PyPI. The release workflow uploads to PyPI before it
+creates the GitHub release, so a release seen here is always installable. The
+request starts in a background thread when
 the command starts, so it overlaps the command's own work; at most one per
 ``TTL_SECONDS`` (cached in the state folder, short because several releases
 can land in one day), a sub-second timeout, and every failure — offline,
@@ -136,10 +138,16 @@ def start_check() -> None:
         return
 
 
+def _install_spec(latest: str) -> str:
+    # A pinned PyPI requirement, not `uv tool upgrade`: upgrade keeps an
+    # install's original source, so a git- or checkout-based install would
+    # never move. `install --force` with a pin switches any of them to PyPI.
+    return f"codex-reset-watch=={latest.lstrip('vV')}"
+
+
 def _upgrade_steps(latest: str) -> Tuple[Tuple[str, ...], ...]:
     return (
-        ("uv", "tool", "install", "--force", "--from",
-         f"git+https://github.com/{REPO}.git@{latest}", "codex-reset-watch"),
+        ("uv", "tool", "install", "--force", _install_spec(latest)),
         ("crw", "apply-schedule"),
     )
 
@@ -191,8 +199,7 @@ def maybe_hint() -> None:
         message = i18n.t("update.available", lang, latest=latest.lstrip("vV"), current=current)
         notes = i18n.t("update.release_notes", lang, url=release_url)
         print(f"{paint.warn}{message}{paint.reset}\n"
-              f"  uv tool install --force --from git+https://github.com/{REPO}.git@{latest} codex-reset-watch"
-              " && crw apply-schedule\n"
+              f"  uv tool install --force {_install_spec(latest)} && crw apply-schedule\n"
               f"  {notes}",
               file=sys.stderr)
     except (Exception, KeyboardInterrupt):  # noqa: BLE001 - a hint must never fail the command

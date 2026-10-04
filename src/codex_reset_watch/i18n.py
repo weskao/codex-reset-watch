@@ -288,8 +288,8 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "update.confirm": {"en": "confirm", "zh-TW": "確認"},
     "update.skip_key": {"en": "skip", "zh-TW": "略過"},
     "update.failed": {
-        "en": "upgrade did not finish — run it yourself: uv tool install --force ... codex-reset-watch",
-        "zh-TW": "更新沒有完成 — 請自行執行：uv tool install --force ... codex-reset-watch",
+        "en": "upgrade did not finish — run it yourself: uv tool install --force codex-reset-watch==...",
+        "zh-TW": "更新沒有完成 — 請自行執行：uv tool install --force codex-reset-watch==...",
     },
     "cli.cancelled": {"en": "Cancelled (Ctrl-C)", "zh-TW": "已取消（Ctrl-C）"},
     "menu.cancel_hint": {"en": "Esc cancels", "zh-TW": "Esc 取消"},
