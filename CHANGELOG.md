@@ -1,3 +1,20 @@
+## [0.20.0] - 2026-10-04
+
+### 🚀 Features
+
+- **update:** Install upgrades from PyPI
+
+### 🐛 Bug Fixes
+
+- **update:** Say upgrades come from PyPI in the setting help
+
+### 📚 Documentation
+
+- **readme:** Document the PyPI install
+
+### ⚙️ Miscellaneous Tasks
+
+- **release:** Publish to PyPI on v* tags
 ## [0.19.2] - 2026-10-03
 
 ### 🐛 Bug Fixes
