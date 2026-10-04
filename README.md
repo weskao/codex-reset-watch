@@ -1,5 +1,10 @@
 # Codex Reset Watch
 
+[![PyPI](https://img.shields.io/pypi/v/codex-reset-watch)](https://pypi.org/project/codex-reset-watch/)
+
+Published on PyPI as [`codex-reset-watch`](https://pypi.org/project/codex-reset-watch/) —
+`uv tool install codex-reset-watch` (see [§2](#2-install-codex-reset-watch)).
+
 Cross-platform (macOS/Linux/Windows) monitor for [codex-resets.com](https://codex-resets.com/), with Telegram notifications sent directly via the Bot API. The Telegram layer is [`telegram_kit`](https://github.com/weskao/telegram-kit), a separate stdlib-only package this project depends on and other projects can too.
 
 > **Tip:** `crw` is a short alias for `codex-reset-watch` — every command works with either name (`crw check` = `codex-reset-watch check`). This README uses `crw`.
@@ -17,11 +22,11 @@ more images, drop `.jpeg`/`.jpg`/`.png` files into those folders. Other notices 
 
 Example reset-signal notification:
 
-![Codex Reset Watch Telegram notification showing a scheduled regular reset](docs/images/crw-reset-notification.png)
+![Codex Reset Watch Telegram notification showing a scheduled regular reset](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-reset-notification.png)
 
 Example Telegram configuration (`crw --config`):
 
-![crw --config Telegram notification example](docs/images/crw-config-telegram.png)
+![crw --config Telegram notification example](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-telegram.png)
 
 Everything is tuned through one keyboard-driven menu, `crw config`. It opens on the **Basic**
 tab (the settings most people touch); `Tab` switches to **Advanced** (every setting). Both tabs
@@ -35,7 +40,7 @@ macOS/Linux keep the original emoji and symbols. Telegram messages and JSON
 exports keep their original Unicode on every platform. Powerline glyphs in your
 shell prompt are controlled by your shell theme, outside `crw`.
 
-![crw config — Basic mode](docs/images/crw-config-basic-mode.png)
+![crw config — Basic mode](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-basic-mode.png)
 
 This version is **uv-native**:
 
@@ -43,7 +48,7 @@ This version is **uv-native**:
 - locked resolution: `uv.lock`
 - preferred Python: `.python-version` (`3.13`)
 - runtime: uv-managed Python
-- installed CLI: `uv tool install`
+- installed CLI: `uv tool install codex-reset-watch` from [PyPI](https://pypi.org/project/codex-reset-watch/)
 - CLI entry points: `codex-reset-watch` and `crw` — `crw` is a short alias that works exactly the same (`crw check` = `codex-reset-watch check`), and `--help` says so
 - the OS scheduler calls the installed uv-tool executable directly; it does **not** depend on shell activation or `.venv`
 
@@ -113,7 +118,37 @@ uv --version
 
 ## 2. Install Codex Reset Watch
 
-One command, identical on macOS, Linux and Windows — run it from the extracted project folder.
+### From PyPI (recommended)
+
+The distribution is [`codex-reset-watch`](https://pypi.org/project/codex-reset-watch/) on
+PyPI; it installs both commands, `codex-reset-watch` and `crw`. The same commands work on
+macOS, Linux and Windows:
+
+```bash
+uv tool install codex-reset-watch            # latest release
+uv tool install codex-reset-watch==X.Y.Z     # pin to a specific version
+uv tool update-shell                         # first install only: put ~/.local/bin on PATH
+```
+
+Replace `X.Y.Z` with the release version you want; re-running either install command switches
+an existing install to that version. Then **open a new terminal** and finish the setup the
+source installer below would otherwise do for you:
+
+```bash
+crw config           # Telegram bot token + chat id (Basic tab), schedule, language
+crw apply-schedule   # register the launchd / systemd --user / Task Scheduler jobs
+crw doctor           # every line should be ✅
+crw check            # first real run
+```
+
+`crw config` re-applies the schedule by itself when you change a schedule setting there;
+`crw apply-schedule` is the explicit step for a first install that keeps the defaults.
+
+### From source (installer script)
+
+One command, identical on macOS, Linux and Windows — run it from a clone of
+[the repository](https://github.com/weskao/codex-reset-watch) (or the extracted source archive
+of a [GitHub release](https://github.com/weskao/codex-reset-watch/releases)).
 The installer asks for your Telegram bot token and chat id interactively partway through (see
 below); nothing needs to be exported beforehand.
 
@@ -121,9 +156,9 @@ below); nothing needs to be exported beforehand.
 uv run python scripts/install.py
 ```
 
-That single command installs the CLI, puts it on your `PATH`, stores the Telegram credentials
-and registers the OS scheduler — there is no separate step to forget. Then **open a new
-terminal** (the `PATH` entry only applies to shells started afterwards) and verify:
+That single command installs the CLI from that folder, puts it on your `PATH`, stores the
+Telegram credentials and registers the OS scheduler — there is no separate step to forget. Then
+**open a new terminal** (the `PATH` entry only applies to shells started afterwards) and verify:
 
 ```bash
 crw doctor      # every line should be ✅
@@ -191,7 +226,7 @@ crw check
 
 Example output:
 
-![crw check result output example](docs/images/crw-check-result-output.png)
+![crw check result output example](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-check-result-output.png)
 
 Alias of `check`:
 
@@ -438,8 +473,9 @@ a keypress that cannot arrive.
 | `update_check` | After a command run in a terminal, ask whether to upgrade when a newer GitHub release exists (see below) | `on` / `off` |
 
 **Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
-terminal ends with a prompt — **Update now** (runs the `uv tool install --force --from
-git+…@vX.Y.Z codex-reset-watch && crw apply-schedule` steps), **Skip** (ask again next run), or
+terminal ends with a prompt — **Update now** (runs the `uv tool install --force
+codex-reset-watch==X.Y.Z && crw apply-schedule` steps, installing that release from PyPI — this
+also moves an older git- or source-folder install over to PyPI), **Skip** (ask again next run), or
 **Skip until next version** — drawn with the same cursor and selection style as `crw config`,
 with a link to the release notes on GitHub. Off a keyboard terminal (piped output, CI) it stays
 the old two-line hint on stderr, plus the release-notes link, instead. The
@@ -537,9 +573,20 @@ same override — moved the CLI to `~/.local/bin` and left the scheduler jobs in
 no longer existed. Matching uv's default keeps the two in sync no matter how the tool is
 reinstalled. `crw doctor`'s **Scheduled CLI** line asserts exactly this.
 
-## 6. Reinstall after source changes
+## 6. Upgrade or reinstall
 
-Recommended:
+PyPI install — upgrade to the latest release, then re-register the scheduler jobs:
+
+```bash
+uv tool upgrade codex-reset-watch
+crw apply-schedule
+```
+
+`uv tool upgrade` keeps an install's original source, so an install made from a source folder
+or git URL stays there; switch it to PyPI once with
+`uv tool install --force codex-reset-watch` (the in-app **Update now** does the same).
+
+Source install, after source changes — recommended:
 
 ```bash
 cd ~/Documents/Workspace/codex-reset-watch
@@ -740,7 +787,7 @@ Example:
 
 Example upcoming-event result:
 
-![Upcoming reset result](docs/images/upcoming-event-result.png)
+![Upcoming reset result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/upcoming-event-result.png)
 
 Reset times already past (latest reset, new-reset notice) add how long ago they were, largest
 unit Day, smallest unit the API's own precision — a date-only value shows days, an hour-only
@@ -752,7 +799,7 @@ value hours, and anything finer is cut at minutes; zero-value units are left out
 
 Example current-reset-event result (new-reset notice):
 
-![Current reset event result](docs/images/current-reset-event-result.png)
+![Current reset event result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/current-reset-event-result.png)
 
 ## 10. Event parsing resilience
 
@@ -859,7 +906,17 @@ schtasks /Query /TN CodexResetWatchMonitor /V /FO LIST
 
 ## 14. Uninstall
 
-macOS/Linux:
+PyPI install (any OS) — remove the scheduler jobs first, then the tool:
+
+```bash
+uvx --from codex-reset-watch python -c "from codex_reset_watch import scheduler; scheduler.remove()"
+uv tool uninstall codex-reset-watch
+```
+
+The first line runs the same `scheduler.remove()` as `scripts/uninstall.py`, so no clone is
+needed. Config, state, and logs are kept.
+
+Source install, macOS/Linux:
 
 ```bash
 cd ~/Documents/Workspace/codex-reset-watch
@@ -884,6 +941,25 @@ gh secret set TELEGRAM_CHAT_ID
 ```
 
 Both are independent of this project's own runtime `TG_BOT_TOKEN`/`TG_CHAT_ID` — the CI ones only ever see a failure alert with the repo/branch/commit and a link to the run; they never touch the app's monitoring data.
+
+### Releasing
+
+`.github/workflows/release.yml` runs on a `v*` tag. It repeats the compile/test/build pass,
+installs the wheel into a throwaway venv, and refuses to upload unless that wheel reports the
+version being tagged — so a tag that disagrees with `pyproject.toml` fails before anything
+reaches [PyPI](https://pypi.org/project/codex-reset-watch/). It then publishes with Trusted
+Publishing (OIDC — there is no API token stored in this repo; the job runs in the `pypi`
+GitHub environment, whose required reviewer approves each upload) and attaches the wheel, sdist
+and `SHA256SUMS` to the GitHub release.
+
+The GitHub release is created **after** the PyPI upload on purpose: the in-app update check
+reads the latest GitHub release and then installs that version from PyPI, so a release must
+never be visible before it is installable. Checksums are generated after publishing too:
+`uv publish` uploads everything in `dist/`, and `SHA256SUMS` is not a distribution.
+
+A tag runs the workflow file **as it existed at that tag**, so a release that failed to publish
+can't be repaired by re-running the old tag — the fix isn't in that tree. Bump the version and
+tag again.
 
 ## Why the installer does not call `uv run` for scheduled jobs
 
