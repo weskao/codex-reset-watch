@@ -4,6 +4,7 @@ version = "0.19.2"
 description = "Cross-platform monitor for codex-resets.com with Telegram notifications."
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [{ name = "Wes Kao" }]
 dependencies = [
     "telegram-kit>=0.2.2,<0.3",
 ]
@@ -11,6 +12,11 @@ dependencies = [
 [project.scripts]
 codex-reset-watch = "codex_reset_watch:main"
 crw = "codex_reset_watch:main"
+
+[project.urls]
+Repository = "https://github.com/weskao/codex-reset-watch"
+Issues = "https://github.com/weskao/codex-reset-watch/issues"
+Changelog = "https://github.com/weskao/codex-reset-watch/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]
