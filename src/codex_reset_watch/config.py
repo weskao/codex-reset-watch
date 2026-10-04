@@ -166,8 +166,8 @@ SETTINGS: Tuple[Setting, ...] = (
             "Basic shows the common settings; Advanced shows everything.",
             choices=UI_MODES, tier="basic"),
     Setting("update_check", "bool", True, "interface", "Check for updates",
-            "After a command in a terminal, ask whether to upgrade when a newer release "
-            "is on GitHub (checked in the background, at most every 10 minutes).",
+            "After a command in a terminal, ask whether to upgrade from PyPI when a newer "
+            "release is out (checked in the background, at most every 10 minutes).",
             tier="basic"),
 )
 

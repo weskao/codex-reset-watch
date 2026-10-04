@@ -470,7 +470,7 @@ a keypress that cannot arrive.
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
-| `update_check` | After a command run in a terminal, ask whether to upgrade when a newer GitHub release exists (see below) | `on` / `off` |
+| `update_check` | After a command run in a terminal, ask whether to upgrade from PyPI when a newer release exists (see below) | `on` / `off` |
 
 **Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
 terminal ends with a prompt — **Update now** (runs the `uv tool install --force
