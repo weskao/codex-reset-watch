@@ -1,3 +1,8 @@
+## [0.20.1] - 2026-10-06
+
+### ⚙️ Miscellaneous Tasks
+
+- Add Dependabot config (github-actions, uv)
 ## [0.20.0] - 2026-10-04
 
 ### 🚀 Features
