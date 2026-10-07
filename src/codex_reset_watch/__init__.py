@@ -1043,7 +1043,9 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
     cfg = load_config()
     logger = Logger(cfg)
     store = StateStore(cfg=cfg)
-    with store.lock(blocking=(mode in ("manual", "daily"))) as acquired:
+    # Boot starts daily and monitor together; wait so a disabled daily job
+    # cannot discard the monitor's catch-up scan until the next interval.
+    with store.lock(blocking=True) as acquired:
         if not acquired:
             logger.event("INFO", "skipped_locked", mode=mode)
             if mode == "manual":

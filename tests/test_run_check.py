@@ -129,6 +129,53 @@ class DirectoryHonouredTests(unittest.TestCase):
             self.assertTrue((log_dir / "api.jsonl").exists())
 
 
+class BootCatchUpTests(unittest.TestCase):
+    def test_monitor_waits_for_boot_lock_then_notifies_missed_reset_once(self):
+        cfg = {"language": "zh-TW", "monitor_notify_when_unchanged": False}
+        with isolated_run(cfg, status_fixture="status_no_upcoming.json") as (state_dir, log_dir), \
+                mock.patch.object(crw, "send_telegram", return_value=True) as send, \
+                contextlib.redirect_stdout(io.StringIO()):
+            store = crw.StateStore(state_dir=state_dir)
+            store.save({"initialized_at": "2026-09-01T00:00:00Z", "latest_event_key": "old"})
+            attempted = threading.Event()
+            finished = threading.Event()
+            errors = []
+            real_lock = crw.StateStore.lock
+
+            @contextlib.contextmanager
+            def observed_lock(owner, blocking=False):
+                attempted.set()
+                with real_lock(owner, blocking=blocking) as acquired:
+                    yield acquired
+
+            def monitor():
+                try:
+                    crw.run_check("monitor", notify=True)
+                except Exception as exc:
+                    errors.append(exc)
+                finally:
+                    finished.set()
+
+            with mock.patch.object(crw.StateStore, "lock", observed_lock):
+                with real_lock(store, blocking=True) as acquired:
+                    self.assertTrue(acquired)
+                    worker = threading.Thread(target=monitor, daemon=True)
+                    worker.start()
+                    self.assertTrue(attempted.wait(2))
+                    skipped = finished.wait(0.2)
+                worker.join(timeout=5)
+            self.assertFalse(worker.is_alive())
+            self.assertFalse(errors)
+            self.assertFalse(skipped, "monitor skipped the boot-time lock instead of waiting")
+            self.assertEqual(len(send.call_args_list), 1)
+            text = send.call_args.args[1]
+            self.assertIn("🏷️ 類型：全域重設", text)
+            self.assertIn("📝 公告：Reset all propagated. Sweet dreams.", text)
+            crw.run_check("monitor", notify=True)
+            self.assertEqual(len(send.call_args_list), 1)
+            self.assertNotIn("skipped_locked", (log_dir / "events.jsonl").read_text())
+
+
 class NotifyWhenUnchangedTests(unittest.TestCase):
     """`daily_notify_when_unchanged`/`monitor_notify_when_unchanged` must still push
     on a run with no upcoming signal at all — not only when an existing upcoming
