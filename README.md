@@ -475,7 +475,8 @@ a keypress that cannot arrive.
 **Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
 terminal ends with a prompt — **Update now** (runs the `uv tool install --force
 codex-reset-watch==X.Y.Z && crw apply-schedule` steps, installing that release from PyPI — this
-also moves an older git- or source-folder install over to PyPI), **Skip** (ask again next run), or
+also moves an older git- or source-folder install over to PyPI), **Skip** (press `q` or `Ctrl+C`
+to skip and ask again next run), or
 **Skip until next version** — drawn with the same cursor and selection style as `crw config`,
 with a link to the release notes on GitHub. Off a keyboard terminal (piped output, CI) it stays
 the old two-line hint on stderr, plus the release-notes link, instead. The
