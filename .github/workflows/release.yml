@@ -58,8 +58,8 @@ jobs:
         run: uv publish --trusted-publishing always
 
       # After publish: uv publish uploads dist/*, and SHA256SUMS is not a distribution.
-      # The GitHub release comes last on purpose: the in-app update check reads
-      # releases/latest, so a release must never exist before its PyPI upload.
+      # Attach release artifacts after publication. The in-app update check
+      # reads PyPI directly, independent of when a GitHub release is created.
       - name: Create checksums
         run: sha256sum dist/* > dist/SHA256SUMS
       - name: Create GitHub release

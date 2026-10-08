@@ -1,9 +1,8 @@
-"""Tell an interactive user when a newer codex-reset-watch release is on GitHub.
+"""Tell an interactive user when a newer codex-reset-watch release is on PyPI.
 
-The source of truth is the repo's latest GitHub release; the upgrade itself
-installs that version from PyPI. The release workflow uploads to PyPI before it
-creates the GitHub release, so a release seen here is always installable. The
-request starts in a background thread when
+The source of truth is PyPI, where the upgrade installs the version from.
+A GitHub release can appear before its PyPI upload is approved.
+The request starts in a background thread when
 the command starts, so it overlaps the command's own work; at most one per
 ``TTL_SECONDS`` (cached in the state folder, short because several releases
 can land in one day), a sub-second timeout, and every failure — offline,
@@ -28,7 +27,7 @@ from . import config as cfgmod
 from . import i18n, keys, ui
 
 REPO = "weskao/codex-reset-watch"
-#: Unauthenticated GitHub API allows 60 requests/hour per IP; 6/hour is polite.
+#: Cache the package index response for ten minutes.
 TTL_SECONDS = 600
 TIMEOUT_SECONDS = 0.8
 _check: Optional[threading.Thread] = None
@@ -51,15 +50,16 @@ def version_tuple(version: str) -> Optional[Tuple[int, ...]]:
 
 
 def fetch_latest_tag(timeout: float = TIMEOUT_SECONDS) -> Optional[str]:
-    """The latest release's tag name from the GitHub API, or None."""
+    """The latest published PyPI version as a release tag, or None."""
     request = urllib.request.Request(
-        f"https://api.github.com/repos/{REPO}/releases/latest",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "codex-reset-watch-update-check"},
+        "https://pypi.org/pypi/codex-reset-watch/json",
+        headers={"Accept": "application/json", "User-Agent": "codex-reset-watch-update-check"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         data = json.loads(response.read().decode("utf-8"))
-    tag = data.get("tag_name") if isinstance(data, dict) else None
-    return tag if isinstance(tag, str) and tag else None
+    info = data.get("info") if isinstance(data, dict) else None
+    version = info.get("version") if isinstance(info, dict) else None
+    return f"v{version}" if isinstance(version, str) and version_tuple(version) else None
 
 
 def _read_json(path) -> dict:
@@ -79,8 +79,10 @@ def newer_release(current: str, cfg: Optional[dict] = None, *, now: Optional[flo
     stamp = time.time() if now is None else now
     cache_path = cfgmod.state_dir(cfg) / "update-check.json"
     cached = _read_json(cache_path)
-    latest = cached.get("latest") if isinstance(cached.get("latest"), str) else None
-    checked_at = cached.get("checked_at")
+    # Old GitHub cache entries may name a version that is not installable.
+    pypi_cache = cached.get("source") == "pypi"
+    latest = cached.get("latest") if pypi_cache and isinstance(cached.get("latest"), str) else None
+    checked_at = cached.get("checked_at") if pypi_cache else None
     # A failed fetch is cached too (as the old answer or None), so being
     # offline costs one timeout per TTL, not one per command.
     if not isinstance(checked_at, (int, float)) or stamp - checked_at >= TTL_SECONDS:
@@ -91,7 +93,7 @@ def newer_release(current: str, cfg: Optional[dict] = None, *, now: Optional[flo
         latest = fetched or latest
         # Merge, not overwrite: a "skipped" version set by skip_version()
         # must survive the next refetch.
-        _write_json(cache_path, {**cached, "checked_at": stamp, "latest": latest})
+        _write_json(cache_path, {**cached, "source": "pypi", "checked_at": stamp, "latest": latest})
     if latest is not None and latest == cached.get("skipped"):
         return None
     latest_parts = version_tuple(latest) if latest else None

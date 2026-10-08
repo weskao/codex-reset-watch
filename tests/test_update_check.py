@@ -1,4 +1,4 @@
-"""GitHub update hint: version compare, short-TTL cache, background check, TTY gate."""
+"""PyPI update hint: version compare, short-TTL cache, background check, TTY gate."""
 import contextlib
 import importlib
 import io
@@ -34,6 +34,29 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertGreater(uc.version_tuple("0.10.0"), uc.version_tuple("v0.9.9"))
         self.assertIsNone(uc.version_tuple("dev"))
 
+    def test_update_uses_published_pypi_version_not_github_release(self):
+        def response(request, **kwargs):
+            payload = ({"info": {"version": "0.20.2"}}
+                       if request.full_url == "https://pypi.org/pypi/codex-reset-watch/json"
+                       else {"tag_name": "v0.20.3"})
+            result = mock.MagicMock()
+            result.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+            return result
+
+        with mock.patch.object(uc.urllib.request, "urlopen", side_effect=response):
+            self.assertEqual(uc.fetch_latest_tag(), "v0.20.2")
+
+    def test_legacy_github_cache_is_refetched_even_before_ttl(self):
+        for fetched in ("v0.20.2", None):
+            with self.subTest(fetched=fetched):
+                self.cache.write_text(json.dumps({
+                    "checked_at": 1000, "latest": "v0.20.3", "skipped": "v0.20.0",
+                }))
+                fetch = mock.Mock(return_value=fetched)
+                self.assertEqual(uc.newer_release("0.20.1", now=1001, fetch=fetch), fetched)
+                fetch.assert_called_once()
+                self.assertEqual(json.loads(self.cache.read_text())["skipped"], "v0.20.0")
+
     def test_newer_release_is_found_then_served_from_cache(self):
         calls = []
 
@@ -68,7 +91,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertLessEqual(uc.TTL_SECONDS, 3600)
 
     def _hint(self, stream):
-        self.cache.write_text(json.dumps({"checked_at": time.time(), "latest": "v9.9.0"}))
+        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
         with mock.patch.object(uc.sys, "stderr", stream), \
                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
                 mock.patch.object(uc, "_check", None), \
@@ -90,7 +113,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertEqual(self._hint(_Tty()), "")
 
     def test_hint_without_start_is_silent(self):
-        self.cache.write_text(json.dumps({"checked_at": time.time(), "latest": "v9.9.0"}))
+        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
         stream = _Tty()
         with mock.patch.object(uc.sys, "stderr", stream), mock.patch.object(uc, "_check", None):
             uc.maybe_hint()
@@ -143,7 +166,7 @@ class MaybeHintInteractiveTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.cache = self.tmp / "update-check.json"
-        self.cache.write_text(json.dumps({"checked_at": time.time(), "latest": "v9.9.0"}))
+        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
 
     def _run(self, answer, run=None):
         with mock.patch.object(uc.sys, "stderr", _Tty()),                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"),                 mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []),                 mock.patch.object(uc.keys, "is_interactive_tty", return_value=True),                 mock.patch.object(uc.ui, "update_prompt", return_value=answer) as prompt,                 mock.patch.object(uc.subprocess, "run", run or mock.Mock()) as run_mock:

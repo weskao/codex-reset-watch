@@ -472,7 +472,7 @@ a keypress that cannot arrive.
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
 | `update_check` | After a command run in a terminal, ask whether to upgrade from PyPI when a newer release exists (see below) | `on` / `off` |
 
-**Update check.** When a newer GitHub release exists, a command run on a keyboard-capable
+**Update check.** When a newer version is published on PyPI, a command run on a keyboard-capable
 terminal ends with a prompt — **Update now** (runs the `uv tool install --force
 codex-reset-watch==X.Y.Z && crw apply-schedule` steps, installing that release from PyPI — this
 also moves an older git- or source-folder install over to PyPI), **Skip** (press `q` or `Ctrl+C`
@@ -480,7 +480,7 @@ to skip and ask again next run), or
 **Skip until next version** — drawn with the same cursor and selection style as `crw config`,
 with a link to the release notes on GitHub. Off a keyboard terminal (piped output, CI) it stays
 the old two-line hint on stderr, plus the release-notes link, instead. The
-GitHub request runs in the background while the command works, at most once every 10 minutes
+PyPI request runs in the background while the command works, at most once every 10 minutes
 (cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
 scheduled jobs stay silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
@@ -953,9 +953,9 @@ Publishing (OIDC — there is no API token stored in this repo; the job runs in 
 GitHub environment, whose required reviewer approves each upload) and attaches the wheel, sdist
 and `SHA256SUMS` to the GitHub release.
 
-The GitHub release is created **after** the PyPI upload on purpose: the in-app update check
-reads the latest GitHub release and then installs that version from PyPI, so a release must
-never be visible before it is installable. Checksums are generated after publishing too:
+The workflow creates the GitHub release **after** the PyPI upload. Other release tools may
+create it earlier, while the upload awaits approval; the in-app update check therefore reads
+PyPI directly and discards older GitHub-based cache entries. Checksums are generated after publishing too:
 `uv publish` uploads everything in `dist/`, and `SHA256SUMS` is not a distribution.
 
 A tag runs the workflow file **as it existed at that tag**, so a release that failed to publish
