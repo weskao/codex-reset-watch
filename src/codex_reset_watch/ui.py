@@ -1432,7 +1432,7 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
         " " + f" {paint.frame}·{paint.reset} ".join([
             f"{paint.accent}↑↓{paint.reset} {paint.muted}{i18n.t('menu.move', lang)}{paint.reset}",
             f"{paint.accent}⏎{paint.reset} {paint.muted}{i18n.t('update.confirm', lang)}{paint.reset}",
-            f"{paint.accent}q{paint.reset} {paint.muted}{i18n.t('update.skip_key', lang)}{paint.reset}",
+            f"{paint.accent}q/Ctrl+C{paint.reset} {paint.muted}{i18n.t('update.skip_key', lang)}{paint.reset}",
         ]),
     ]
     return header + body + footer
