@@ -1,3 +1,12 @@
+## [0.20.3] - 2026-10-08
+
+### 🐛 Bug Fixes
+
+- **ui:** Show ctrl-c skip shortcut
+
+### 📚 Documentation
+
+- **update-check:** Document skip shortcut
 ## [0.20.2] - 2026-10-08
 
 ### 🐛 Bug Fixes
