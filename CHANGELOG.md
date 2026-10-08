@@ -1,3 +1,8 @@
+## [0.20.2] - 2026-10-08
+
+### 🐛 Bug Fixes
+
+- Wait for boot lock before reset catch-up
 ## [0.20.1] - 2026-10-06
 
 ### ⚙️ Miscellaneous Tasks
