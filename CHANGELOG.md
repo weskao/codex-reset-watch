@@ -1,3 +1,9 @@
+## [0.20.4] - 2026-10-09
+
+### 🐛 Bug Fixes
+
+- **update-check:** Only offer published pypi versions
+- **ui:** Show ctrl+c in config menu
 ## [0.20.3] - 2026-10-08
 
 ### 🐛 Bug Fixes
