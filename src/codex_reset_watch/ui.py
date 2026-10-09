@@ -601,7 +601,9 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
         return f"{paint.accent}{glyph}{paint.reset} {paint.muted}{i18n.t(msg_id, lang)}{paint.reset}"
 
     def bar(parts: List[str]) -> str:
-        return " " + f" {paint.frame}·{paint.reset} ".join(parts)
+        line = " " + f" {paint.frame}·{paint.reset} ".join(parts)
+        return (line if width(strip_ansi(line)) <= panel_width() + 1
+                else " " + f"{paint.frame}·{paint.reset} ".join(parts))
 
     # No ⇥ here: the tab bar above the list names that key itself, and one
     # key stated twice reads as two different things.
@@ -614,7 +616,7 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
     return [
         nav,
         bar([key("a", "menu.apply"), key("r", "menu.reset_row"), key("R", "menu.defaults"),
-             key("e", "menu.export"), key("i", "menu.import"), key("q", "menu.quit")]),
+             key("e", "menu.export"), key("i", "menu.import"), key("q/Ctrl+C", "menu.quit")]),
     ]
 
 

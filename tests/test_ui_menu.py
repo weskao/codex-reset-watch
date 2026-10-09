@@ -490,10 +490,16 @@ class RenderTests(unittest.TestCase):
         # (telegram_bot_token, request_retries, api_base) Basic mode hides.
         self.cfg = {**config.DEFAULTS, "ui_mode": "advanced"}
 
-    def test_action_bar_names_the_reset_keys(self):
-        actions = ui.strip_ansi(ui._hint_bars(self.plain, "en")[1])
-        self.assertIn("r reset", actions)
-        self.assertIn("R defaults", actions)
+    def test_action_bar_names_action_keys_in_each_language(self):
+        with mock.patch("shutil.get_terminal_size", return_value=os.terminal_size((74, 50))):
+            for lang, reset, defaults, quit_hint in (
+                    ("en", "r reset", "R defaults", "q/Ctrl+C quit"),
+                    ("zh-TW", "r 重設", "R 還原預設", "q/Ctrl+C 離開")):
+                actions = ui.strip_ansi(ui._hint_bars(self.plain, lang)[1])
+                self.assertIn(reset, actions)
+                self.assertIn(defaults, actions)
+                self.assertIn(quit_hint, actions)
+                self.assertLessEqual(ui.width(actions), 73)
 
     def _at_columns(self, columns, height=50):
         size = mock.patch("shutil.get_terminal_size",
