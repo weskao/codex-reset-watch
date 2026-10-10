@@ -1,3 +1,20 @@
+## [0.20.5] - 2026-10-10
+
+### 💼 Other
+
+- Derive version from __version__
+
+### 📚 Documentation
+
+- Add cross-platform rule to CLAUDE.md
+
+### 🎨 Styling
+
+- Fix ruff findings under a pinned rule set
+
+### ⚙️ Miscellaneous Tasks
+
+- Run ruff in ci
 ## [0.20.4] - 2026-10-09
 
 ### 🐛 Bug Fixes
