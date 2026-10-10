@@ -1,6 +1,6 @@
 [project]
 name = "codex-reset-watch"
-version = "0.20.4"
+dynamic = ["version"]
 description = "Cross-platform monitor for codex-resets.com with Telegram notifications."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,9 @@ Changelog = "https://github.com/weskao/codex-reset-watch/blob/main/CHANGELOG.md"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/codex_reset_watch/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/codex_reset_watch"]

@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import contextlib
 import functools
-import importlib.metadata
 import json
 import os
 import pathlib
@@ -211,17 +210,11 @@ def _fit(line: str, columns: int) -> str:
     return "".join(out) + (RESET if "\033[" in line else "")
 
 
-@functools.lru_cache(maxsize=1)
 def package_version() -> str:
-    """The running version, from installed package metadata.
+    """The running version, shown in the header so a stale install is visible at a glance."""
+    from . import __version__
 
-    Shown in the header so a stale install is visible at a glance rather than
-    guessed at. A source checkout that was never installed has no metadata —
-    that is a normal way to run this, so it reports ``dev`` instead of raising.
-    """
-    with contextlib.suppress(importlib.metadata.PackageNotFoundError, Exception):
-        return importlib.metadata.version("codex-reset-watch")
-    return "dev"
+    return __version__
 
 
 @functools.lru_cache(maxsize=1)

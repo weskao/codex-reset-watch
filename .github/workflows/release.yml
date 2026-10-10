@@ -47,7 +47,7 @@ jobs:
           .release-venv/bin/codex-reset-watch --help
           .release-venv/bin/crw --help
           # The wheel must report the version being tagged, so a tag that
-          # disagrees with pyproject.toml fails before anything reaches PyPI.
+          # disagrees with __version__ in __init__.py fails before anything reaches PyPI.
           reported="$(.release-venv/bin/crw --version)"
           expected="codex-reset-watch ${GITHUB_REF_NAME#v}"
           if [ "$reported" != "$expected" ]; then

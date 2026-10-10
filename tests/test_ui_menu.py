@@ -887,14 +887,6 @@ class VersionTests(unittest.TestCase):
         self.assertIsInstance(ui.package_version(), str)
         self.assertTrue(ui.package_version())
 
-    def test_an_uninstalled_package_does_not_crash_the_header(self):
-        import importlib.metadata as md
-
-        with mock.patch.object(md, "version", side_effect=md.PackageNotFoundError):
-            ui.package_version.cache_clear()
-            self.assertTrue(ui.package_version())
-        ui.package_version.cache_clear()
-
 
 if __name__ == "__main__":
     unittest.main()

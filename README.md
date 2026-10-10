@@ -947,7 +947,7 @@ Both are independent of this project's own runtime `TG_BOT_TOKEN`/`TG_CHAT_ID` �
 
 `.github/workflows/release.yml` runs on a `v*` tag. It repeats the compile/test/build pass,
 installs the wheel into a throwaway venv, and refuses to upload unless that wheel reports the
-version being tagged — so a tag that disagrees with `pyproject.toml` fails before anything
+version being tagged — so a tag that disagrees with `__version__` fails before anything
 reaches [PyPI](https://pypi.org/project/codex-reset-watch/). It then publishes with Trusted
 Publishing (OIDC — there is no API token stored in this repo; the job runs in the `pypi`
 GitHub environment, whose required reviewer approves each upload) and attaches the wheel, sdist
