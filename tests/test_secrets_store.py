@@ -12,11 +12,11 @@ still exited 0. Every mocked assertion passed while the feature was inert. A
 contract test cannot catch a tool ignoring the contract; only a real write
 followed by a real read can.
 """
+import pathlib
+import sys
+import tempfile
 import unittest
 import unittest.mock as mock
-import pathlib
-import tempfile
-import sys
 
 import telegram_kit
 from codex_reset_watch import secrets_store as store

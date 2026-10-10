@@ -34,12 +34,13 @@ import shutil
 import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Sequence, Tuple
+from typing import IO, Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import telegram_kit
 
 from . import config, i18n, keys, scheduler, secrets_store
-from .console import print_console as print, printable_text
+from .console import print_console as print
+from .console import printable_text
 
 # ── palette ──────────────────────────────────────────────────────────────────
 # ChatGPT green (#10A37F) is the body colour; the rest is deliberately grey.

@@ -1,5 +1,11 @@
-import sys, datetime as dt, importlib.util, os, pathlib, unittest
+import datetime as dt
+import os
+import pathlib
+import unittest
+
 import codex_reset_watch as crw
+
+
 class FormattingTests(unittest.TestCase):
     def test_utc8(self):
         t = dt.datetime(2026,9,19,13,0,tzinfo=dt.timezone.utc)
@@ -240,4 +246,5 @@ class FormattingTests(unittest.TestCase):
         ):
             self.assertIn(crw.tracker_line(), text)
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+    unittest.main()

@@ -1,5 +1,10 @@
-import os, pathlib, tempfile, unittest
+import os
+import pathlib
+import tempfile
+import unittest
+
 from scripts import install
+
 
 class TrimLaunchdLogsTests(unittest.TestCase):
     def test_leaves_small_file_untouched(self):

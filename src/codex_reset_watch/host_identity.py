@@ -3,12 +3,12 @@
 import functools
 import hmac
 import json
-from pathlib import Path
 import re
 import socket
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 if __package__:
     from .console import print_console as print

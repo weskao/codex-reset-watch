@@ -1,5 +1,10 @@
-import sys, datetime as dt, importlib.util, json, pathlib, unittest
+import datetime as dt
+import json
+import pathlib
+import unittest
+
 import codex_reset_watch as crw
+
 
 class ParserTests(unittest.TestCase):
     def fixture(self, name):
@@ -155,4 +160,5 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(u.status, "scheduled")
         self.assertEqual(crw.iso_utc(u.timestamp), "2026-09-27T12:00:00Z")
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+    unittest.main()

@@ -8,7 +8,6 @@ scheduler-rendering logic itself, exercised without any real OS calls.
 """
 import contextlib
 import io
-import json
 import os
 import pathlib
 import tempfile

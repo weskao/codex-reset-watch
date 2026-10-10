@@ -1,5 +1,7 @@
 import unittest
+
 from scripts import schtasks
+
 
 class SchtasksTests(unittest.TestCase):
     def test_daily_task_runs_once_a_day_at_ten(self):

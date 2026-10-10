@@ -1,5 +1,9 @@
-import contextlib, os, pathlib, tempfile, unittest
+import pathlib
+import tempfile
+import unittest
+
 from codex_reset_watch import filelock
+
 
 class FileLockTests(unittest.TestCase):
     def test_acquire_nonblocking_succeeds_when_free(self):

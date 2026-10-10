@@ -18,8 +18,8 @@ import re
 import socketserver
 import tempfile
 import threading
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 import codex_reset_watch as crw

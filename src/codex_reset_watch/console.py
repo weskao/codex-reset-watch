@@ -4,8 +4,7 @@ from __future__ import annotations
 import builtins
 import sys
 import unicodedata
-from typing import Any, IO
-
+from typing import IO, Any
 
 # UTF-8 support does not imply font support. Use these on every Windows console.
 _SIGNS = {

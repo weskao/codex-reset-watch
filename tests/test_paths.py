@@ -1,5 +1,7 @@
 import unittest
+
 from codex_reset_watch import paths
+
 
 class PathsTests(unittest.TestCase):
     def test_darwin_config_dir(self):

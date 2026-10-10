@@ -668,9 +668,9 @@ class RenderTests(unittest.TestCase):
 
     @staticmethod
     def _message_lines(lines, marker):
-        start = next(i for i, l in enumerate(lines) if marker in l)
+        start = next(i for i, line in enumerate(lines) if marker in line)
         end = next(i for i in range(start + 1, len(lines)) if "↑↓" in lines[i])
-        return [l.strip().lstrip(marker).strip() for l in lines[start:end]]
+        return [line.strip().lstrip(marker).strip() for line in lines[start:end]]
 
     def test_a_long_error_wraps_instead_of_being_cut_off(self):
         # Clipping with "…" used to silently drop the back half of a long

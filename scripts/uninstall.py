@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-import platform
 import shutil
 import subprocess
 import sys

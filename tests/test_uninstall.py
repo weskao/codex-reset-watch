@@ -1,5 +1,7 @@
 import unittest
+
 from scripts import uninstall
+
 
 class UninstallBackendTests(unittest.TestCase):
     def test_reuses_install_backend_mapping(self):

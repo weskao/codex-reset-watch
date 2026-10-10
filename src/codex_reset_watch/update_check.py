@@ -12,8 +12,6 @@ TTY, so the launchd / systemd / schtasks runs never pay for the request.
 """
 from __future__ import annotations
 
-from .console import print_console as print
-
 import contextlib
 import json
 import subprocess
@@ -25,6 +23,7 @@ from typing import Callable, Optional, Tuple
 
 from . import config as cfgmod
 from . import i18n, keys, ui
+from .console import print_console as print
 
 REPO = "weskao/codex-reset-watch"
 #: Cache the package index response for ten minutes.

@@ -1,5 +1,6 @@
 """Security boundaries, using synthetic credentials and isolated files only."""
 import contextlib
+import getpass
 import io
 import json
 import os
@@ -10,14 +11,12 @@ import subprocess
 import tempfile
 import unittest
 import warnings
-import getpass
 from unittest import mock
 
 import codex_reset_watch as crw
 import telegram_kit
 from codex_reset_watch import config, paths, scheduler, secrets_store, ui
 from scripts import install, render_launchd, render_systemd
-
 
 POSIX_BACKEND = unittest.skipIf(os.name == "nt", "launchd/systemd backends never run on Windows")
 

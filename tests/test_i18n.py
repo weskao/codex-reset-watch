@@ -113,7 +113,7 @@ class CatalogueCompletenessTests(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_language_codes_match_the_language_table(self):
-        self.assertEqual(i18n.LANGUAGE_CODES, tuple(l.code for l in i18n.LANGUAGES))
+        self.assertEqual(i18n.LANGUAGE_CODES, tuple(lang.code for lang in i18n.LANGUAGES))
 
     def test_only_english_and_traditional_chinese_are_selectable(self):
         self.assertEqual(i18n.LANGUAGE_CODES, ("en", "zh-TW"))

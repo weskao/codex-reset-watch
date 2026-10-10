@@ -18,19 +18,19 @@ import os
 import pathlib
 import random
 import re
-import shutil
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import config as cfgmod
 import telegram_kit
 
-from . import filelock, host_identity, i18n, scheduler, secrets_store, ui, update_check
+from . import config as cfgmod
+from . import filelock, i18n, scheduler, secrets_store, ui, update_check
+from . import host_identity as host_identity  # re-exported: tests patch crw.host_identity
 from .console import print_console as print
 
 APP_NAME = "codex-reset-watch"

@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-from typing import Any, Callable, Dict, IO, List
+from typing import IO, Any, Callable, Dict, List
 
 try:  # stdlib on macOS/Linux; absent on Windows, where the console
     import readline  # noqa: F401  (imported for its input() line-editing side effect)
@@ -283,7 +283,7 @@ def main() -> int:
         print(f"        ⚠️  `{hit.name}` earlier on PATH shadows this install: {hit}")
         print(f"          remove it, or call {bin_dir / hit.name} directly")
     for hit in rc_shadows():
-        print(f"        ⚠️  a shell alias/function shadows the CLI — delete this line:")
+        print("        ⚠️  a shell alias/function shadows the CLI — delete this line:")
         print(f"          {hit}")
     return 0
 
