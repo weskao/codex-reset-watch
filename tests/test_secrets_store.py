@@ -19,6 +19,7 @@ import unittest
 import unittest.mock as mock
 
 import telegram_kit
+
 from codex_reset_watch import secrets_store as store
 from tests import real_credential_store
 

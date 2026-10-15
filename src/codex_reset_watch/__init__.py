@@ -26,9 +26,8 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-import update_kit
-
 import telegram_kit
+import update_kit
 
 from . import config as cfgmod
 from . import filelock, i18n, scheduler, secrets_store, ui, update_check

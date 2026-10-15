@@ -13,8 +13,9 @@ import unittest
 import warnings
 from unittest import mock
 
-import codex_reset_watch as crw
 import telegram_kit
+
+import codex_reset_watch as crw
 from codex_reset_watch import config, paths, scheduler, secrets_store, ui
 from scripts import install, render_launchd, render_systemd
 
