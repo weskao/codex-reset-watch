@@ -1,6 +1,6 @@
 UV ?= uv
 UV_PYTHON ?= 3.13
-.PHONY: install uninstall sync lock check update check-no-tg monitor daily doctor logs config apply-schedule restart-schedule test test-unit test-integration lint reload launch-status tool-list tool-reinstall tool-uninstall
+.PHONY: install uninstall sync lock check check-no-tg monitor daily doctor logs config apply-schedule restart-schedule test test-unit test-integration lint reload launch-status tool-list tool-reinstall tool-uninstall
 
 install:
 	CRW_UV_PYTHON=$(UV_PYTHON) $(UV) run python scripts/install.py
@@ -16,9 +16,6 @@ lock:
 
 check:
 	$(UV) run codex-reset-watch check
-
-update:
-	$(UV) run codex-reset-watch update
 
 check-no-tg:
 	$(UV) run codex-reset-watch check --no-notify
