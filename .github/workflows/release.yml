@@ -13,6 +13,8 @@ concurrency:
 
 env:
   PYTHONUTF8: "1"
+  # update-kit resolves from the package index here (no sibling checkout).
+  UV_NO_SOURCES: "1"
 
 jobs:
   release:

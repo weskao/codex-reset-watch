@@ -1,3 +1,16 @@
+## [Unreleased]
+
+### ⚠️ BREAKING CHANGES
+
+- **cli:** `update` no longer means `check`; use `check` to query resets. `crw update` and
+  `crw --update` now self-update via update-kit.
+- **update-check:** the interactive Update now / Skip / Skip until next version prompt is gone; a
+  newer release is a one-line stderr hint (`crw update` to install). The `update_check` setting is kept.
+
+### 🚀 Features
+
+- **cli:** `update` / `--update` install the newest release tag (uv or pipx), then re-apply the schedule
+
 ## [0.20.5] - 2026-10-10
 
 ### 💼 Other

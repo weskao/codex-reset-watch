@@ -26,6 +26,8 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+import update_kit
+
 import telegram_kit
 
 from . import config as cfgmod
@@ -1216,12 +1218,23 @@ def apply_schedule_cmd() -> int:
     return 0
 
 
+def update_cmd() -> int:
+    """`crw update` / `crw --update`: install the newest release tag (update_kit; no prompts)."""
+    prog = update_check.prog_name()
+    return update_kit.update(
+        app=prog, repo=update_check.REPO, dist=update_check.DIST,
+        lang=i18n.current_language(),
+        after=[[prog, "apply-schedule"]],  # re-register the schedule with the NEW binary
+        out=sys.stderr,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     t = i18n.t
     p = argparse.ArgumentParser(prog="codex-reset-watch", description=t("cli.description"))
     p.add_argument("--version", "-V", action="version", version=f"%(prog)s {ui.package_version()}")
     sub = p.add_subparsers(dest="command", required=True)
-    check = sub.add_parser("check", aliases=["update"], help=t("cli.check.help"))
+    check = sub.add_parser("check", help=t("cli.check.help"))
     check.add_argument("--no-notify", action="store_true", help=t("cli.check.no_notify.help"))
     mon = sub.add_parser("monitor", help=t("cli.monitor.help"))
     mon.add_argument("--no-notify", action="store_true")
@@ -1239,6 +1252,7 @@ def build_parser() -> argparse.ArgumentParser:
     cfgp.add_argument("--export", metavar="FILE", help=t("cli.config.export.help"))
     cfgp.add_argument("--import", dest="import_file", metavar="FILE", help=t("cli.config.import.help"))
     sub.add_parser("apply-schedule", help=t("cli.apply_schedule.help"))
+    sub.add_parser("update", help=t("cli.update.help"))
     return p
 
 
@@ -1256,7 +1270,7 @@ SUBCOMMANDS: Tuple[str, ...] = (
 #: positional argparse can complain about instead of a flag we invented.
 SUBCOMMAND_FLAGS: Dict[str, Tuple[str, ...]] = {
     "check": ("no-notify",),
-    "update": ("no-notify",),
+    "update": (),
     "monitor": ("no-notify",),
     "daily": ("force", "no-notify"),
     "logs": ("lines",),
@@ -1404,18 +1418,23 @@ def config_cmd(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     # Started before argparse so --help, --version, no args and a usage error
-    # (argparse's SystemExit) get the update prompt too — every subcommand,
+    # (argparse's SystemExit) get the update hint too — every subcommand,
     # present or future, goes through this one try/finally.
-    update_check.start_check()
+    # `update` itself never hints: the hint would name the version it is replacing.
+    parsed = _normalize_argv(raw)
+    if parsed[:1] != ["update"]:
+        update_check.start_check()
     try:
-        return _dispatch(build_parser().parse_args(_normalize_argv(raw)))
+        return _dispatch(build_parser().parse_args(parsed))
     finally:
         update_check.maybe_hint()
 
 
 def _dispatch(args: argparse.Namespace) -> int:
     try:
-        if args.command in ("check", "update"):
+        if args.command == "update":
+            return update_cmd()
+        if args.command == "check":
             return run_check("manual", notify=not args.no_notify)
         if args.command == "monitor":
             return run_check("monitor", notify=not args.no_notify)

@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Wes Kao" }]
 dependencies = [
     "telegram-kit>=0.2.2,<0.3",
+    "update-kit>=0.1,<0.2",
 ]
 
 [project.scripts]
@@ -32,6 +33,9 @@ packages = ["src/codex_reset_watch"]
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.uv.sources]
+update-kit = { path = "../update-kit", editable = true }
 
 [tool.ruff]
 target-version = "py311"

@@ -1,17 +1,16 @@
-"""PyPI update hint: version compare, short-TTL cache, background check, TTY gate."""
+"""Update hint (update-kit): TTY + config gate, one stderr line, `update` wiring."""
 import contextlib
 import importlib
 import io
-import json
 import os
 import pathlib
 import re
 import tempfile
-import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
+import codex_reset_watch as crw
 from codex_reset_watch import update_check as uc
 
 
@@ -20,193 +19,89 @@ class _Tty(io.StringIO):
         return True
 
 
-class UpdateCheckTests(unittest.TestCase):
+class HintTests(unittest.TestCase):
     def setUp(self):
         self.tmp = pathlib.Path(tempfile.mkdtemp())
-        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json")}
+        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json"),
+               "CRW_LANG": "en"}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.cache = self.tmp / "update-check.json"
 
-    def test_version_tuple(self):
-        self.assertEqual(uc.version_tuple("v0.4.2"), (0, 4, 2))
-        self.assertGreater(uc.version_tuple("0.10.0"), uc.version_tuple("v0.9.9"))
-        self.assertIsNone(uc.version_tuple("dev"))
-
-    def test_update_uses_published_pypi_version_not_github_release(self):
-        def response(request, **kwargs):
-            payload = ({"info": {"version": "0.20.2"}}
-                       if request.full_url == "https://pypi.org/pypi/codex-reset-watch/json"
-                       else {"tag_name": "v0.20.3"})
-            result = mock.MagicMock()
-            result.__enter__.return_value.read.return_value = json.dumps(payload).encode()
-            return result
-
-        with mock.patch.object(uc.urllib.request, "urlopen", side_effect=response):
-            self.assertEqual(uc.fetch_latest_tag(), "v0.20.2")
-
-    def test_legacy_github_cache_is_refetched_even_before_ttl(self):
-        for fetched in ("v0.20.2", None):
-            with self.subTest(fetched=fetched):
-                self.cache.write_text(json.dumps({
-                    "checked_at": 1000, "latest": "v0.20.3", "skipped": "v0.20.0",
-                }))
-                fetch = mock.Mock(return_value=fetched)
-                self.assertEqual(uc.newer_release("0.20.1", now=1001, fetch=fetch), fetched)
-                fetch.assert_called_once()
-                self.assertEqual(json.loads(self.cache.read_text())["skipped"], "v0.20.0")
-
-    def test_newer_release_is_found_then_served_from_cache(self):
-        calls = []
-
-        def fetch():
-            calls.append(1)
-            return "v0.5.0"
-
-        self.assertEqual(uc.newer_release("0.4.2", now=1000, fetch=fetch), "v0.5.0")
-        self.assertEqual(uc.newer_release("0.4.2", now=1000 + uc.TTL_SECONDS - 1, fetch=fetch), "v0.5.0")
-        self.assertEqual(calls, [1])
-
-    def test_same_release_is_no_hint(self):
-        self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.4.2"))
-
-    def test_offline_is_silent_and_retried_only_after_the_ttl(self):
-        calls = []
-
-        def fetch():
-            calls.append(1)
-            raise OSError("offline")
-
-        self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=fetch))
-        self.assertIsNone(uc.newer_release("0.4.2", now=10, fetch=fetch))
-        self.assertEqual(calls, [1])
-
-    def test_new_release_seen_within_the_hour(self):
-        # Several releases can land in one day: the next one is seen soon, not tomorrow.
-        self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.4.2"))
-        self.assertEqual(
-            uc.newer_release("0.4.2", now=uc.TTL_SECONDS, fetch=lambda: "v0.5.0"), "v0.5.0"
-        )
-        self.assertLessEqual(uc.TTL_SECONDS, 3600)
-
-    def _hint(self, stream):
-        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
+    def _hint(self, stream, latest="v9.9.0"):
         with mock.patch.object(uc.sys, "stderr", stream), \
                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
-                mock.patch.object(uc, "_check", None), \
-                mock.patch.object(uc, "_latest", []):
+                mock.patch.object(uc.update_kit, "check", return_value=latest) as check, \
+                mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []):
             uc.start_check()
             uc.maybe_hint()
-        return stream.getvalue()
+        return stream.getvalue(), check
 
-    def test_hint_on_a_tty(self):
-        out = self._hint(_Tty())
-        self.assertIn("9.9.0", out)
-        self.assertIn("uv tool install --force codex-reset-watch==9.9.0 && crw apply-schedule", out)
+    def test_one_line_hint_on_a_tty(self):
+        out, check = self._hint(_Tty())
+        self.assertEqual(out.count("\n"), 1)
+        self.assertIn("v9.9.0 is available (you have 0.4.2)", out)
+        self.assertIn("update", out)
+        self.assertEqual(check.call_args.kwargs["repo"], "weskao/codex-reset-watch")
+        self.assertEqual(check.call_args.kwargs["current"], "0.4.2")
 
-    def test_no_hint_without_a_tty(self):
-        self.assertEqual(self._hint(io.StringIO()), "")
+    def test_no_hint_and_no_request_without_a_tty(self):
+        out, check = self._hint(io.StringIO())
+        self.assertEqual(out, "")
+        check.assert_not_called()
 
     def test_no_hint_when_turned_off(self):
         (self.tmp / "config.json").write_text('{"update_check": false}')
-        self.assertEqual(self._hint(_Tty()), "")
+        out, check = self._hint(_Tty())
+        self.assertEqual(out, "")
+        check.assert_not_called()
+
+    def test_up_to_date_is_silent(self):
+        self.assertEqual(self._hint(_Tty(), latest=None)[0], "")
 
     def test_hint_without_start_is_silent(self):
-        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
         stream = _Tty()
         with mock.patch.object(uc.sys, "stderr", stream), mock.patch.object(uc, "_check", None):
             uc.maybe_hint()
         self.assertEqual(stream.getvalue(), "")
 
 
-class SkipVersionTests(unittest.TestCase):
-    """A skipped release stays silent (checked-at/latest are preserved by the
-    skip, and vice versa) until a newer one ships."""
+class UpdateCommandTests(unittest.TestCase):
+    def _run(self, argv, code=0, prog="crw"):
+        with mock.patch.object(crw.update_kit, "update", return_value=code) as update, \
+                mock.patch.object(crw.update_check, "start_check") as start, \
+                mock.patch.object(crw.sys, "argv", [prog]), \
+                mock.patch.dict(os.environ, {"CRW_LANG": "zh-TW"}):
+            result = crw.main(argv)
+        return result, update, start
 
-    def setUp(self):
-        self.tmp = pathlib.Path(tempfile.mkdtemp())
-        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json")}
-        patcher = mock.patch.dict(os.environ, env)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    def test_update_and_dash_dash_update_call_update_kit_and_return_its_code(self):
+        for argv in (["update"], ["--update"]):
+            with self.subTest(argv=argv):
+                result, update, start = self._run(argv, code=2)
+                self.assertEqual(result, 2)
+                kw = update.call_args.kwargs
+                self.assertEqual((kw["app"], kw["repo"], kw["dist"], kw["lang"]),
+                                 ("crw", "weskao/codex-reset-watch", "codex-reset-watch", "zh-TW"))
+                self.assertIs(kw["out"], crw.sys.stderr)
+                start.assert_not_called()  # no "update available" hint right after updating
 
-    def test_a_skipped_release_stays_silent(self):
-        uc.skip_version("v0.5.0")
-        self.assertIsNone(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.5.0"))
+    def test_app_is_the_invoked_program_name(self):
+        _, update, _ = self._run(["update"], prog="/x/bin/codex-reset-watch")
+        self.assertEqual(update.call_args.kwargs["app"], "codex-reset-watch")
 
-    def test_a_release_newer_than_the_skipped_one_is_reported(self):
-        uc.skip_version("v0.5.0")
-        self.assertEqual(uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.6.0"), "v0.6.0")
+    def test_update_no_longer_means_check(self):
+        with mock.patch.object(crw, "run_check") as run_check:
+            self._run(["update"])
+        run_check.assert_not_called()
 
-    def test_a_refetch_keeps_the_skipped_version(self):
-        uc.skip_version("v0.5.0")
-        uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.5.0")
-        cache = self.tmp / "update-check.json"
-        self.assertEqual(json.loads(cache.read_text())["skipped"], "v0.5.0")
+    def test_update_reapplies_the_schedule_with_the_new_binary(self):
+        _, update, _ = self._run(["update"])
+        self.assertEqual(update.call_args.kwargs["after"], [["crw", "apply-schedule"]])
 
-    def test_skipping_keeps_the_existing_cache_entries(self):
-        uc.newer_release("0.4.2", now=0, fetch=lambda: "v0.5.0")
-        uc.skip_version("v0.5.0")
-        cache = self.tmp / "update-check.json"
-        data = json.loads(cache.read_text())
-        self.assertEqual(data["latest"], "v0.5.0")
-        self.assertEqual(data["skipped"], "v0.5.0")
-
-
-class MaybeHintInteractiveTests(unittest.TestCase):
-    """On a keyboard-capable terminal, the flat hint becomes the settings
-    menu's own prompt; off one (redirected stdin/stdout), the flat hint
-    stays exactly as it was."""
-
-    def setUp(self):
-        self.tmp = pathlib.Path(tempfile.mkdtemp())
-        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json")}
-        patcher = mock.patch.dict(os.environ, env)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.cache = self.tmp / "update-check.json"
-        self.cache.write_text(json.dumps({"source": "pypi", "checked_at": time.time(), "latest": "v9.9.0"}))
-
-    def _run(self, answer, run=None):
-        with mock.patch.object(uc.sys, "stderr", _Tty()),                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"),                 mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []),                 mock.patch.object(uc.keys, "is_interactive_tty", return_value=True),                 mock.patch.object(uc.ui, "update_prompt", return_value=answer) as prompt,                 mock.patch.object(uc.subprocess, "run", run or mock.Mock()) as run_mock:
-            uc.start_check()
-            uc.maybe_hint()
-        return prompt, run_mock
-
-    def test_update_now_runs_install_then_apply_schedule(self):
-        done = mock.Mock(returncode=0)
-        prompt, run_mock = self._run(uc.ui.UPDATE_NOW, run=mock.Mock(return_value=done))
-        prompt.assert_called_once_with(
-            "0.4.2", "v9.9.0",
-            release_url="https://github.com/weskao/codex-reset-watch/releases/tag/v9.9.0",
-        )
-        self.assertEqual(
-            run_mock.call_args_list[0].args[0],
-            ["uv", "tool", "install", "--force", "codex-reset-watch==9.9.0"],
-        )
-        self.assertEqual(run_mock.call_args_list[1].args[0], ["crw", "apply-schedule"])
-
-    def test_skip_asks_again_next_run(self):
-        self._run(uc.ui.SKIP)
-        self.assertNotIn("skipped", json.loads(self.cache.read_text()))
-
-    def test_skip_version_is_remembered(self):
-        self._run(uc.ui.SKIP_VERSION)
-        self.assertEqual(json.loads(self.cache.read_text())["skipped"], "v9.9.0")
-
-    def test_a_failed_install_step_skips_apply_schedule(self):
-        done = mock.Mock(returncode=1)
-        _prompt, run_mock = self._run(uc.ui.UPDATE_NOW, run=mock.Mock(return_value=done))
-        self.assertEqual(run_mock.call_count, 1)
-
-    def test_off_a_keyboard_terminal_the_flat_hint_still_prints(self):
-        stream = _Tty()
-        with mock.patch.object(uc.sys, "stderr", stream),                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"),                 mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []),                 mock.patch.object(uc.keys, "is_interactive_tty", return_value=False),                 mock.patch.object(uc.ui, "update_prompt") as prompt:
-            uc.start_check()
-            uc.maybe_hint()
-        prompt.assert_not_called()
-        self.assertIn("9.9.0", stream.getvalue())
+    def test_help_lists_update(self):
+        text = crw.build_parser().format_help()
+        self.assertRegex(text, r"\bupdate\b")
 
 
 def _console_scripts():

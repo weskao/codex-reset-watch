@@ -228,11 +228,18 @@ Example output:
 
 ![crw check result output example](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-check-result-output.png)
 
-Alias of `check`:
+Update codex-reset-watch itself (`update` used to be an alias of `check`; it no longer is — use `check`):
 
 ```bash
-crw update
+crw update        # or: crw --update
 ```
+
+`update` installs the newest `vX.Y.Z` release tag of this repo with `uv tool install` / `pipx`,
+re-applies the schedule with the new binary, and never prompts. It needs `git` on `PATH`, and it
+reinstalls from the git tag even if the current install came from PyPI. Exit codes: `0` updated or already
+current · `1` could not check (offline) or the install failed · `2` dev install (use `git pull`) or
+an unknown install kind (the manual command is printed). On Windows the running `.exe` is locked,
+so the install continues in the background after the command returns.
 
 Check without Telegram:
 
@@ -470,21 +477,15 @@ a keypress that cannot arrive.
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
-| `update_check` | After a command run in a terminal, ask whether to upgrade from PyPI when a newer release exists (see below) | `on` / `off` |
+| `update_check` | After a command run in a terminal, print a one-line hint when a newer release exists (see below) | `on` / `off` |
 
-**Update check.** When a newer version is published on PyPI, a command run on a keyboard-capable
-terminal ends with a prompt — **Update now** (runs the `uv tool install --force
-codex-reset-watch==X.Y.Z && crw apply-schedule` steps, installing that release from PyPI — this
-also moves an older git- or source-folder install over to PyPI), **Skip** (press `q` or `Ctrl+C`
-to skip and ask again next run), or
-**Skip until next version** — drawn with the same cursor and selection style as `crw config`,
-with a link to the release notes on GitHub. Off a keyboard terminal (piped output, CI) it stays
-the old two-line hint on stderr, plus the release-notes link, instead. The
-PyPI request runs in the background while the command works, at most once every 10 minutes
-(cached as `update-check.json` in the state folder, 0.8 s timeout); offline, piped output and the
-scheduled jobs stay silent, and the exit code never changes. Turn it off with
+**Update check.** When a newer release tag exists, a command run in a terminal ends with one
+line on stderr — ``crw vX.Y.Z is available (you have A.B.C) — run `crw update` `` — and nothing else:
+no prompt. The check runs in the background while the command works, at most once a day (cached
+centrally by update-kit in `~/.update-kit/state.json`, 1.5 s timeout); offline, piped output and
+the scheduled jobs stay silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
-this — any subcommand, `--help`, `--version`, no arguments, or a mistyped command.
+this — any subcommand except `update`, `--help`, `--version`, no arguments, or a mistyped command.
 
 ### Language
 
@@ -576,7 +577,8 @@ reinstalled. `crw doctor`'s **Scheduled CLI** line asserts exactly this.
 
 ## 6. Upgrade or reinstall
 
-PyPI install — upgrade to the latest release, then re-register the scheduler jobs:
+Simplest: `crw update` (installs the newest release tag, then re-registers the scheduler jobs).
+Manually, from PyPI:
 
 ```bash
 uv tool upgrade codex-reset-watch
@@ -585,7 +587,7 @@ crw apply-schedule
 
 `uv tool upgrade` keeps an install's original source, so an install made from a source folder
 or git URL stays there; switch it to PyPI once with
-`uv tool install --force codex-reset-watch` (the in-app **Update now** does the same).
+`uv tool install --force codex-reset-watch`.
 
 Source install, after source changes — recommended:
 
@@ -614,7 +616,7 @@ settings change) — the per-OS scripts under `scripts/` are thin wrappers aroun
 These are per-user scheduled jobs, not system daemons. To restart/re-register
 them from current settings on macOS, Linux, or Windows, run `crw apply-schedule`.
 From this checkout on macOS/Linux, `make restart-schedule` does the same thing.
-The interactive update flow calls `crw apply-schedule` after a successful
+`crw update` calls `crw apply-schedule` after a successful
 upgrade; schedule-related `crw --config` changes also re-apply automatically.
 
 ### Daily job
@@ -954,8 +956,8 @@ GitHub environment, whose required reviewer approves each upload) and attaches t
 and `SHA256SUMS` to the GitHub release.
 
 The workflow creates the GitHub release **after** the PyPI upload. Other release tools may
-create it earlier, while the upload awaits approval; the in-app update check therefore reads
-PyPI directly and discards older GitHub-based cache entries. Checksums are generated after publishing too:
+create it earlier, while the upload awaits approval; `crw update` and the update hint read
+the release tags (`vX.Y.Z`) of the GitHub repo, so push the tag only when the release is ready. Checksums are generated after publishing too:
 `uv publish` uploads everything in `dist/`, and `SHA256SUMS` is not a distribution.
 
 A tag runs the workflow file **as it existed at that tag**, so a release that failed to publish

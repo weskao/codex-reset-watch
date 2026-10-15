@@ -3,7 +3,7 @@ import sys
 import unittest
 import unittest.mock as mock
 
-from codex_reset_watch import config, keys, ui
+from codex_reset_watch import config, ui
 
 
 class WidthTests(unittest.TestCase):
@@ -243,87 +243,6 @@ class ConfigMenuTests(unittest.TestCase):
         ui.config_menu(io.StringIO("1\nr\nq\n"), out)  # toggle, then restore defaults
         saved = config.load()
         self.assertEqual(saved, config.DEFAULTS)
-
-
-class UpdatePromptTests(unittest.TestCase):
-    """The interactive update prompt — the settings menu's own cursor
-    (▸, the accent colour, the selected-row band), driven by a fake key
-    source exactly like RunMenuTests drives run_menu."""
-
-    def _pick(self, events):
-        source = iter(events)
-        out = io.StringIO()
-        answer = ui.update_prompt("0.11.0", "v0.12.0", read=lambda: next(source), out=out)
-        return answer, out.getvalue()
-
-    def test_enter_on_the_first_row_is_update_now(self):
-        answer, _ = self._pick([keys.KeyEvent(keys.Key.ENTER)])
-        self.assertEqual(answer, ui.UPDATE_NOW)
-
-    def test_down_moves_to_skip(self):
-        answer, _ = self._pick([keys.KeyEvent(keys.Key.DOWN), keys.KeyEvent(keys.Key.ENTER)])
-        self.assertEqual(answer, ui.SKIP)
-
-    def test_up_from_the_top_wraps_to_skip_version(self):
-        answer, _ = self._pick([keys.KeyEvent(keys.Key.UP), keys.KeyEvent(keys.Key.ENTER)])
-        self.assertEqual(answer, ui.SKIP_VERSION)
-
-    def test_q_backs_out_as_skip(self):
-        answer, _ = self._pick([keys.KeyEvent(keys.Key.CHAR, "q")])
-        self.assertEqual(answer, ui.SKIP)
-
-    def test_ctrl_c_backs_out_as_skip(self):
-        answer, _ = self._pick([keys.KeyEvent(keys.Key.CTRL_C)])
-        self.assertEqual(answer, ui.SKIP)
-
-    def test_an_exhausted_key_source_backs_out_as_skip(self):
-        answer, _ = self._pick([])
-        self.assertEqual(answer, ui.SKIP)
-
-    def test_shows_versions_and_the_projects_own_cursor_glyph(self):
-        _, text = self._pick([keys.KeyEvent(keys.Key.ENTER)])
-        plain = ui.strip_ansi(text)
-        self.assertIn("0.12.0", plain)
-        self.assertIn("0.11.0", plain)
-        cursor = ">" if sys.platform == "win32" else "▸"
-        self.assertIn(f"{cursor}  1 ", plain)
-
-    def test_header_is_one_combined_line_like_aicp_instead_of_two(self):
-        """Layout parity with aicp's update prompt: one title line carrying
-        the name, latest and current version, not a generic caption line
-        plus a separate detail line."""
-        lines = [ui.strip_ansi(ln) for ln in ui._update_lines(ui.Paint(False), "en", "0.11.0", "v0.12.0", 1)]
-        header_lines = [ln for ln in lines if "0.12.0" in ln and "0.11.0" in ln]
-        self.assertEqual(len(header_lines), 1)
-        self.assertFalse(any("Update available" in ln for ln in lines))
-
-    def test_no_dash_separator_rules_around_the_choice_list(self):
-        lines = [ui.strip_ansi(ln) for ln in ui._update_lines(ui.Paint(False), "en", "0.11.0", "v0.12.0", 1)]
-        self.assertFalse(any(set(ln.strip()) == {"─"} for ln in lines if ln.strip()))
-
-    def test_choice_detail_columns_are_aligned_like_aicp(self):
-        """Every row's detail text starts at the same visible column,
-        regardless of how long that row's own label is."""
-        lines = [ui.strip_ansi(ln) for ln in ui._update_lines(ui.Paint(False), "en", "0.11.0", "v0.12.0", 1)]
-        row_detail = [
-            (" 1 Update now", "uv tool install"),
-            (" 2 Skip", "ask again next run"),
-            (" 3 Skip until next version", "ask again once a newer version ships"),
-        ]
-        offsets = []
-        for label, detail in row_detail:
-            row = next(ln for ln in lines if label in ln)
-            offsets.append(row.index(detail))
-        self.assertEqual(len(set(offsets)), 1)
-
-    def test_choice_numbers_match_the_settings_menus_own_style(self):
-        """The settings menu (``_row``) numbers a row as a bare right-aligned
-        digit — no ``)`` — and this prompt is meant to look like that menu,
-        not like aicp's own ``N)`` convention."""
-        lines = [ui.strip_ansi(ln) for ln in ui._update_lines(ui.Paint(False), "en", "0.11.0", "v0.12.0", 1)]
-        choice_lines = lines[1:4]  # header and footer are allowed their own punctuation
-        self.assertFalse(any(")" in ln for ln in choice_lines))
-        self.assertTrue(any(" 1 Update now" in ln for ln in choice_lines))
 
 
 if __name__ == "__main__":
