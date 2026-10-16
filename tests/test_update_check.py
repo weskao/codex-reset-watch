@@ -211,9 +211,48 @@ def _console_scripts():
 
 
 class EveryEntryPointChecksTests(unittest.TestCase):
-    """Every entrypoint offers updates before output, including argparse exits."""
+    """Every entrypoint offers updates after output, including argparse exits."""
 
-    def test_every_command_offers_update_before_its_output_except_update(self):
+    def test_command_finishes_before_prompt_and_only_confirmation_updates(self):
+        cases = ((uc.ui.UPDATE_NOW, 0, 0), (uc.ui.UPDATE_NOW, 7, 1),
+                 (uc.ui.SKIP, 0, 0), (uc.ui.SKIP_VERSION, 7, 0))
+        for answer, command_code, update_code in cases:
+            with self.subTest(answer=answer, command_code=command_code), \
+                    tempfile.TemporaryDirectory() as folder:
+                events = []
+
+                def command():
+                    events.extend(["command started", "command finished"])
+                    return command_code
+
+                def prompt(*args, **kwargs):
+                    events.append("prompt")
+                    return answer
+
+                def update(**kwargs):
+                    events.append("update")
+                    return update_code
+
+                env = {"CRW_CONFIG": str(pathlib.Path(folder) / "config.json"),
+                       "CRW_STATE_DIR": folder, "CRW_LANG": "en"}
+                with mock.patch.dict(os.environ, env), \
+                        mock.patch.object(uc.sys, "stderr", _Tty()), \
+                        mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
+                        mock.patch.object(uc.update_kit, "check", return_value="v9.9.0"), \
+                        mock.patch.object(uc, "_check", None), \
+                        mock.patch.object(uc, "_latest", []), \
+                        mock.patch.object(uc, "_cfg", {}), \
+                        mock.patch.object(uc.keys, "is_interactive_tty", return_value=True), \
+                        mock.patch.object(uc.ui, "update_prompt", side_effect=prompt), \
+                        mock.patch.object(uc.update_kit, "update", side_effect=update), \
+                        mock.patch.object(crw, "doctor", side_effect=command):
+                    self.assertEqual(crw.main(["doctor"]), command_code)
+                expected = ["command started", "command finished", "prompt"]
+                if answer == uc.ui.UPDATE_NOW:
+                    expected.append("update")
+                self.assertEqual(events, expected)
+
+    def test_every_command_offers_update_after_its_output_except_update(self):
         commands = sorted(crw.SUBCOMMANDS)
         cases = [[prefix + command] for command in commands for prefix in ("", "--")]
         cases += [["--help"], ["--version"], [], ["bogus"], ["doctor", "--help"]]
@@ -236,7 +275,7 @@ class EveryEntryPointChecksTests(unittest.TestCase):
                         start.assert_not_called()
                     else:
                         start.assert_called_once()
-                        self.assertTrue(text.startswith("UPDATE\n"), text)
+                        self.assertTrue(text.endswith("UPDATE\n"), text)
 
 
 if __name__ == "__main__":

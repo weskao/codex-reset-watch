@@ -1409,13 +1409,16 @@ def config_cmd(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
-    # Check and offer updates before argparse or any command output/menu.
+    # Check in the background; offer updates after command or argparse output.
     # `update` itself never hints: the hint would name the version it is replacing.
     parsed = _normalize_argv(raw)
     if parsed[:1] != ["update"]:
         update_check.start_check()
-        update_check.maybe_hint()
-    return _dispatch(build_parser().parse_args(parsed))
+    try:
+        return _dispatch(build_parser().parse_args(parsed))
+    finally:
+        if parsed[:1] != ["update"]:
+            update_check.maybe_hint()
 
 
 def _dispatch(args: argparse.Namespace) -> int:
