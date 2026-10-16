@@ -27,7 +27,6 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import telegram_kit
-import update_kit
 
 from . import config as cfgmod
 from . import filelock, i18n, scheduler, secrets_store, ui, update_check
@@ -1219,13 +1218,7 @@ def apply_schedule_cmd() -> int:
 
 def update_cmd() -> int:
     """`crw update` / `crw --update`: install the newest release tag (update_kit; no prompts)."""
-    prog = update_check.prog_name()
-    return update_kit.update(
-        app=prog, repo=update_check.REPO, dist=update_check.DIST,
-        lang=i18n.current_language(),
-        after=[[prog, "apply-schedule"]],  # re-register the schedule with the NEW binary
-        out=sys.stderr,
-    )
+    return update_check.self_update()
 
 
 def build_parser() -> argparse.ArgumentParser:

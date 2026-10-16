@@ -4,12 +4,13 @@
 
 - **cli:** `update` no longer means `check`; use `check` to query resets. `crw update` and
   `crw --update` now self-update via update-kit.
-- **update-check:** the interactive Update now / Skip / Skip until next version prompt is gone; a
-  newer release is a one-line stderr hint (`crw update` to install). The `update_check` setting is kept.
+- **update-check:** a newer release is now detected from the repo's `vX.Y.Z` git tags (via
+  update-kit, at most once a day) instead of PyPI; the prompt's **Update now** installs that tag
+  exactly like `crw update`, and the non-interactive hint names `crw update`.
 
 ### 🚀 Features
 
-- **cli:** `update` / `--update` install the newest release tag (uv or pipx), then re-apply the schedule
+- **cli:** `update` / `--update` always install the newest release tag (uv or pipx), then re-apply the schedule
 
 ## [0.20.5] - 2026-10-10
 

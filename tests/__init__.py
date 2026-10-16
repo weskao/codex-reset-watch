@@ -16,11 +16,17 @@ subprocess funnel — raises if anything still tries to shell out to
 ``get``/``set``/``delete`` themselves (see ``test_config_extras``), and
 ``test_secrets_store`` patches this same funnel with its own fake, which wins
 inside its own context.
+
+Self-update is fenced the same way: :func:`update_kit.update` reinstalls the
+tool with uv/pipx (a dev checkout included), so an unstubbed call would replace
+the developer's own installed ``crw``. It raises here; tests that check the
+call patch it with their own mock.
 """
 import contextlib
 import unittest.mock as mock
 
 import telegram_kit
+import update_kit
 
 
 def _no_credential_helpers(argv, stdin=None):  # pragma: no cover - a tripwire
@@ -34,6 +40,13 @@ def _no_credential_helpers(argv, stdin=None):  # pragma: no cover - a tripwire
 _REAL_BACKEND, _REAL_RUN = telegram_kit.backend, telegram_kit._run
 telegram_kit.backend = lambda: None
 telegram_kit._run = _no_credential_helpers
+
+
+def _no_self_update(**kwargs):  # pragma: no cover - a tripwire
+    raise AssertionError("a test reached the real update_kit.update()")
+
+
+update_kit.update = _no_self_update
 
 
 @contextlib.contextmanager

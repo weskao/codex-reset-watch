@@ -234,12 +234,14 @@ Update codex-reset-watch itself (`update` used to be an alias of `check`; it no 
 crw update        # or: crw --update
 ```
 
-`update` installs the newest `vX.Y.Z` release tag of this repo with `uv tool install` / `pipx`,
-re-applies the schedule with the new binary, and never prompts. It needs `git` on `PATH`, and it
-reinstalls from the git tag even if the current install came from PyPI. Exit codes: `0` updated or already
-current · `1` could not check (offline) or the install failed · `2` dev install (use `git pull`) or
-an unknown install kind (the manual command is printed). On Windows the running `.exe` is locked,
-so the install continues in the background after the command returns.
+`update` always installs the newest `vX.Y.Z` release tag of this repo with `uv tool install` /
+`pipx`, re-applies the schedule with the new binary, and never prompts. It needs `git` on `PATH`.
+Only a uv/pipx install already at that version counts as current (a git install must come from
+that exact tag); anything else — an older version, a source checkout or editable (dev) install,
+a branch or commit — is replaced by the tag (uv if found, else pipx). Exit codes: `0` updated or already current · `1` could not check
+(offline) or the install failed · `2` neither uv nor pipx was found (the manual `pip` command is
+printed). On Windows the running `.exe` is locked, so the install continues in the background
+after the command returns.
 
 Check without Telegram:
 
@@ -477,13 +479,19 @@ a keypress that cannot arrive.
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
-| `update_check` | After a command run in a terminal, print a one-line hint when a newer release exists (see below) | `on` / `off` |
+| `update_check` | After a command run in a terminal, ask whether to update when a newer release exists (see below) | `on` / `off` |
 
-**Update check.** When a newer release tag exists, a command run in a terminal ends with one
-line on stderr — ``crw vX.Y.Z is available (you have A.B.C) — run `crw update` `` — and nothing else:
-no prompt. The check runs in the background while the command works, at most once a day (cached
-centrally by update-kit in `~/.update-kit/state.json`, 1.5 s timeout); offline, piped output and
-the scheduled jobs stay silent, and the exit code never changes. Turn it off with
+**Update check.** When a newer release tag exists, a command run on a keyboard-capable terminal
+ends with a prompt — **Update now** (the same as `crw update`: installs the newest release tag,
+then `crw apply-schedule`), **Skip** (press `q` or `Ctrl+C` to skip and ask again next run), or
+**Skip until next version** (remembered in `update-check.json` in the state folder) — drawn with
+the same cursor and selection style as `crw config`, with a link to the release notes on GitHub.
+Off a keyboard terminal (piped stdin/stdout, stderr still a terminal) it stays the two-line hint
+on stderr — `codex-reset-watch X.Y.Z is available (you have A.B.C)`, then `crw update` — plus the
+release-notes link, instead. The check runs in
+the background while the command works, at most once a day (cached centrally by update-kit in
+`~/.update-kit/state.json`, 1.5 s timeout); offline, piped output and the scheduled jobs stay
+silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
 this — any subcommand except `update`, `--help`, `--version`, no arguments, or a mistyped command.
 
@@ -587,7 +595,8 @@ crw apply-schedule
 
 `uv tool upgrade` keeps an install's original source, so an install made from a source folder
 or git URL stays there; switch it to PyPI once with
-`uv tool install --force codex-reset-watch`.
+`uv tool install --force codex-reset-watch` (`crw update` and the in-app **Update now** move any
+install to the newest release tag instead).
 
 Source install, after source changes — recommended:
 
@@ -616,8 +625,8 @@ settings change) — the per-OS scripts under `scripts/` are thin wrappers aroun
 These are per-user scheduled jobs, not system daemons. To restart/re-register
 them from current settings on macOS, Linux, or Windows, run `crw apply-schedule`.
 From this checkout on macOS/Linux, `make restart-schedule` does the same thing.
-`crw update` calls `crw apply-schedule` after a successful
-upgrade; schedule-related `crw --config` changes also re-apply automatically.
+`crw update` and the interactive update prompt's **Update now** call `crw apply-schedule`
+after a successful upgrade; schedule-related `crw --config` changes also re-apply automatically.
 
 ### Daily job
 
@@ -874,10 +883,11 @@ make test-integration
 
 The integration tests (`tests/test_integration.py`, `tests/test_run_check.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`, `tests/test_install_telegram.py`) start a local HTTP server and exercise the real HTTP client, response normalization, and `run_check`/`crw config`/installer-prompt flows without contacting the production API or a real terminal. The full suite runs unmodified on macOS, Linux, and Windows in CI (see `.github/workflows/ci.yml`).
 
-Three families of side effect are mocked everywhere, for the same reason — a unit test must not touch what this machine actually has:
+Four families of side effect are mocked everywhere, for the same reason — a unit test must not touch what this machine actually has:
 
 - **The OS scheduler.** Every test that exercises `crw config` / `crw apply-schedule` mocks `scheduler.apply` (`tests/test_ui.py`, `tests/test_ui_menu.py`, `tests/test_cli_config.py`, `tests/test_cli_syntax.py`). The scheduler *rendering* logic itself (`tests/test_scheduler.py`, `tests/test_launchd.py`, `tests/test_systemd.py`) is exercised fully, always against a throwaway output directory.
 - **The credential store.** `tests/__init__.py` closes the OS boundary for the whole suite: the backend probe reports "no credential store" and `secrets_store._run` raises if anything still tries to shell out. Nothing else in the suite can reach the machine's real keychain — which it used to, every run, deleting the developer's own bot token. `tests/test_secrets_store.py` replaces the single subprocess funnel, so the macOS, Linux and Windows code paths are all covered on whatever machine runs the suite. `RoundTripTests` is the one deliberate exception: it lifts that fence (`tests.real_credential_store`) to store and re-read a throwaway `_roundtrip_probe` item in the machine's real credential store — its own account name, never the real token — deleted again in cleanup, and skipped where there is no store. Mocking that funnel is precisely what once hid an inert write — `add-generic-password -w` prompts `/dev/tty` rather than reading stdin, so it stored nothing and still exited 0 while every mocked assertion passed. A contract test cannot catch a tool ignoring the contract.
+- **Self-update.** `tests/__init__.py` also replaces `update_kit.update` with a tripwire that raises: it reinstalls the tool with uv/pipx even from a dev checkout, so an unstubbed call would replace the developer's own installed `crw`. Tests that check the call (`tests/test_update_check.py`) patch it with their own mock.
 - **The terminal.** The keyboard menu's brain (`ui.step`) is a pure function of state and keypress, so `tests/test_ui_menu.py` drives the whole interaction with synthetic `KeyEvent`s, and `tests/test_keys.py` feeds raw escape-sequence bytes through a fake byte source — no TTY, no raw mode, nothing to restore.
 
 Language-dependent assertions always pin the language explicitly (`lang="en"` / `CRW_LANG=zh-TW`), so the suite gives the same result on a machine with any locale.
@@ -956,7 +966,7 @@ GitHub environment, whose required reviewer approves each upload) and attaches t
 and `SHA256SUMS` to the GitHub release.
 
 The workflow creates the GitHub release **after** the PyPI upload. Other release tools may
-create it earlier, while the upload awaits approval; `crw update` and the update hint read
+create it earlier, while the upload awaits approval; `crw update` and the update check read
 the release tags (`vX.Y.Z`) of the GitHub repo, so push the tag only when the release is ready. Checksums are generated after publishing too:
 `uv publish` uploads everything in `dist/`, and `SHA256SUMS` is not a distribution.
 

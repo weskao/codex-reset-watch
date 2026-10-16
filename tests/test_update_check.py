@@ -1,7 +1,8 @@
-"""Update hint (update-kit): TTY + config gate, one stderr line, `update` wiring."""
+"""Update check: TTY + config gate, the interactive prompt, skip-version, `update` wiring."""
 import contextlib
 import importlib
 import io
+import json
 import os
 import pathlib
 import re
@@ -20,6 +21,9 @@ class _Tty(io.StringIO):
 
 
 class HintTests(unittest.TestCase):
+    """Off a keyboard terminal (stdin/stdout redirected, stderr still a TTY) the
+    prompt cannot be answered, so the result stays the flat stderr hint."""
+
     def setUp(self):
         self.tmp = pathlib.Path(tempfile.mkdtemp())
         env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json"),
@@ -30,18 +34,20 @@ class HintTests(unittest.TestCase):
 
     def _hint(self, stream, latest="v9.9.0"):
         with mock.patch.object(uc.sys, "stderr", stream), \
+                mock.patch.object(uc.sys, "argv", ["crw"]), \
                 mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
                 mock.patch.object(uc.update_kit, "check", return_value=latest) as check, \
+                mock.patch.object(uc.keys, "is_interactive_tty", return_value=False), \
                 mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []):
             uc.start_check()
             uc.maybe_hint()
         return stream.getvalue(), check
 
-    def test_one_line_hint_on_a_tty(self):
+    def test_hint_on_a_tty(self):
         out, check = self._hint(_Tty())
-        self.assertEqual(out.count("\n"), 1)
-        self.assertIn("v9.9.0 is available (you have 0.4.2)", out)
-        self.assertIn("update", out)
+        self.assertIn("codex-reset-watch 9.9.0 is available (you have 0.4.2)", out)
+        self.assertIn("  crw update\n", out)
+        self.assertIn("Release notes: https://github.com/weskao/codex-reset-watch/releases/tag/v9.9.0", out)
         self.assertEqual(check.call_args.kwargs["repo"], "weskao/codex-reset-watch")
         self.assertEqual(check.call_args.kwargs["current"], "0.4.2")
 
@@ -66,9 +72,102 @@ class HintTests(unittest.TestCase):
         self.assertEqual(stream.getvalue(), "")
 
 
+class SkipVersionTests(unittest.TestCase):
+    """A skipped release stays silent until a newer one ships."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json"),
+               "CRW_LANG": "en"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _report(self, latest):
+        stream = _Tty()
+        with mock.patch.object(uc.sys, "stderr", stream), \
+                mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
+                mock.patch.object(uc.update_kit, "check", return_value=latest), \
+                mock.patch.object(uc.keys, "is_interactive_tty", return_value=False), \
+                mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []):
+            uc.start_check()
+            uc.maybe_hint()
+        return stream.getvalue()
+
+    def test_a_skipped_release_stays_silent(self):
+        uc.skip_version("v0.5.0")
+        self.assertEqual(self._report("v0.5.0"), "")
+
+    def test_a_release_newer_than_the_skipped_one_is_reported(self):
+        uc.skip_version("v0.5.0")
+        self.assertIn("v0.6.0", self._report("v0.6.0"))
+
+    def test_skipping_keeps_the_other_entries_of_the_state_file(self):
+        cache = self.tmp / "update-check.json"
+        cache.write_text(json.dumps({"other": 1}), encoding="utf-8")
+        uc.skip_version("v0.5.0")
+        self.assertEqual(json.loads(cache.read_text(encoding="utf-8")),
+                         {"other": 1, "skipped": "v0.5.0"})
+
+
+class MaybeHintInteractiveTests(unittest.TestCase):
+    """On a keyboard-capable terminal the result is the settings menu's own
+    prompt: Update now / Skip / Skip until next version."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+        env = {"CRW_STATE_DIR": str(self.tmp), "CRW_CONFIG": str(self.tmp / "config.json"),
+               "CRW_LANG": "en"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.cache = self.tmp / "update-check.json"
+
+    def _run(self, answer, code=0):
+        with mock.patch.object(uc.sys, "stderr", _Tty()), \
+                mock.patch.object(uc.sys, "argv", ["crw"]), \
+                mock.patch.object(uc.ui, "package_version", return_value="0.4.2"), \
+                mock.patch.object(uc.update_kit, "check", return_value="v9.9.0"), \
+                mock.patch.object(uc, "_check", None), mock.patch.object(uc, "_latest", []), \
+                mock.patch.object(uc.keys, "is_interactive_tty", return_value=True), \
+                mock.patch.object(uc.ui, "update_prompt", return_value=answer) as prompt, \
+                mock.patch.object(uc.update_kit, "update", return_value=code) as update:
+            uc.start_check()
+            uc.maybe_hint()
+        return prompt, update
+
+    def test_the_prompt_gets_the_versions_and_the_release_notes_link(self):
+        prompt, _ = self._run(uc.ui.SKIP)
+        prompt.assert_called_once_with(
+            "0.4.2", "v9.9.0",
+            release_url="https://github.com/weskao/codex-reset-watch/releases/tag/v9.9.0",
+        )
+
+    def test_update_now_installs_the_newest_tag_then_reapplies_the_schedule(self):
+        _, update = self._run(uc.ui.UPDATE_NOW)
+        update.assert_called_once()
+        kw = update.call_args.kwargs
+        self.assertEqual((kw["app"], kw["repo"], kw["dist"], kw["lang"]),
+                         ("crw", "weskao/codex-reset-watch", "codex-reset-watch", "en"))
+        self.assertEqual(kw["after"], [["crw", "apply-schedule"]])
+
+    def test_a_failed_update_never_raises(self):
+        self._run(uc.ui.UPDATE_NOW, code=1)  # update_kit reports the failure itself
+
+    def test_skip_installs_nothing_and_asks_again_next_run(self):
+        _, update = self._run(uc.ui.SKIP)
+        update.assert_not_called()
+        self.assertFalse(self.cache.exists())
+
+    def test_skip_version_is_remembered(self):
+        _, update = self._run(uc.ui.SKIP_VERSION)
+        update.assert_not_called()
+        self.assertEqual(json.loads(self.cache.read_text(encoding="utf-8"))["skipped"], "v9.9.0")
+
+
 class UpdateCommandTests(unittest.TestCase):
     def _run(self, argv, code=0, prog="crw"):
-        with mock.patch.object(crw.update_kit, "update", return_value=code) as update, \
+        with mock.patch.object(uc.update_kit, "update", return_value=code) as update, \
                 mock.patch.object(crw.update_check, "start_check") as start, \
                 mock.patch.object(crw.sys, "argv", [prog]), \
                 mock.patch.dict(os.environ, {"CRW_LANG": "zh-TW"}):
