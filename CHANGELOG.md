@@ -1,3 +1,8 @@
+## [0.21.2] - 2026-10-16
+
+### 🐛 Bug Fixes
+
+- **cli:** Offer updates after commands finish
 ## [0.21.1] - 2026-10-16
 
 ### 🐛 Bug Fixes
