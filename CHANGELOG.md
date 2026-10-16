@@ -1,3 +1,22 @@
+## [0.21.0] - 2026-10-16
+
+### 🚀 Features
+
+- **cli:** [**breaking**] Self-update via update-kit; `update` no longer means `check`
+- **update:** Restore the interactive update prompt
+
+### 🐛 Bug Fixes
+
+- **make:** Drop the stale update target
+
+### 💼 Other
+
+- **deps:** Resolve update-kit from PyPI
+- **deps:** [**breaking**] Bump update-kit to 0.2.1
+
+### 🎨 Styling
+
+- Sort imports for third-party telegram_kit/update_kit (matches CI ruff)
 ## [Unreleased]
 
 ### ⚠️ BREAKING CHANGES
