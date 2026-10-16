@@ -211,24 +211,32 @@ def _console_scripts():
 
 
 class EveryEntryPointChecksTests(unittest.TestCase):
-    """Every console script runs the update check on every way out — --help,
-    --version, no args, a typo. A new script that skips the flow fails here."""
+    """Every entrypoint offers updates before output, including argparse exits."""
 
-    def test_every_script_starts_and_reports_the_check(self):
-        scripts = _console_scripts()
-        self.assertIn("crw", scripts)
-        for name, target in scripts.items():
+    def test_every_command_offers_update_before_its_output_except_update(self):
+        commands = sorted(crw.SUBCOMMANDS)
+        cases = [[prefix + command] for command in commands for prefix in ("", "--")]
+        cases += [["--help"], ["--version"], [], ["bogus"], ["doctor", "--help"]]
+        for name, target in _console_scripts().items():
             module, func = target.split(":")
             main = getattr(importlib.import_module(module), func)
-            for argv in (["--help"], ["--version"], [], ["bogus"], ["doctor", "--help"]):
+            for argv in cases:
+                out = io.StringIO()
+                updating = argv[0:1] in (["update"], ["--update"])
                 with self.subTest(script=name, argv=argv), \
                         mock.patch.object(uc, "start_check") as start, \
-                        mock.patch.object(uc, "maybe_hint") as hint, \
-                        redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                        mock.patch.object(uc, "maybe_hint", side_effect=lambda: out.write("UPDATE\n")), \
+                        mock.patch.object(crw, "_dispatch", side_effect=lambda args: out.write("COMMAND\n") and 0), \
+                        redirect_stdout(out), redirect_stderr(out):
                     with contextlib.suppress(SystemExit):
                         main(argv)
-                    start.assert_called_once()
-                    hint.assert_called_once()
+                    text = out.getvalue()
+                    self.assertEqual(text.count("UPDATE\n"), 0 if updating else 1)
+                    if updating:
+                        start.assert_not_called()
+                    else:
+                        start.assert_called_once()
+                        self.assertTrue(text.startswith("UPDATE\n"), text)
 
 
 if __name__ == "__main__":

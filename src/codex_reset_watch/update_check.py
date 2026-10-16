@@ -1,12 +1,11 @@
 """Tell an interactive user when a newer codex-reset-watch release exists.
 
 The check itself (git tags, cache) and the install live in ``update_kit``. This
-module decides *when* the check runs: in a background thread started with the
-command so it overlaps the command's own work, only when stderr is a TTY (the
+module decides *when* the check runs: before the command, only when stderr is a TTY (the
 launchd / systemd / schtasks runs never pay for it) and the ``update_check``
-setting is on. A newer release ends the command with the interactive Update now /
-Skip / Skip until next version prompt. Every failure is silence: a check must
-never slow a command noticeably or change its exit code.
+setting is on. A newer release precedes the command with the interactive Update now /
+Skip / Skip until next version prompt. Every failure is silence: a check must never
+wait more than JOIN_SECONDS or change the command's exit code.
 """
 from __future__ import annotations
 
@@ -111,7 +110,7 @@ def maybe_hint() -> None:
     try:
         if _check is None:
             return
-        _check.join(JOIN_SECONDS)  # usually already done: it ran alongside the command
+        _check.join(JOIN_SECONDS)
         latest = _latest[0] if _latest else None
         if latest is None or latest == _read_json(_skip_path(_cfg)).get("skipped"):
             return

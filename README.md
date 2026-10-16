@@ -479,17 +479,19 @@ a keypress that cannot arrive.
 | `max_log_bytes`, `log_backups` | Application log rotation | — |
 | `language` | Menu, `doctor`, and Telegram notification language | `en`, `zh-TW` |
 | `ui_mode` | Which settings `crw config` shows — Basic (curated) or Advanced (everything) | `basic`, `advanced` |
-| `update_check` | After a command run in a terminal, ask whether to update when a newer release exists (see below) | `on` / `off` |
+| `update_check` | Before a command, ask whether to update when a newer release exists (see below) | `on` / `off` |
 
 **Update check.** When a newer release tag exists, a command run on a keyboard-capable terminal
-ends with a prompt — **Update now** (the same as `crw update`: installs the newest release tag,
+starts with a prompt — **Update now** (the same as `crw update`: installs the newest release tag,
 then `crw apply-schedule`), **Skip** (press `q` or `Ctrl+C` to skip and ask again next run), or
 **Skip until next version** (remembered in `update-check.json` in the state folder) — drawn with
 the same cursor and selection style as `crw config`, with a link to the release notes on GitHub.
+Every command except `update` / `--update` checks first and offers this prompt before
+continuing, with no repeat on exit. Startup waits up to two seconds for the check.
 Off a keyboard terminal (piped stdin/stdout, stderr still a terminal) it stays the two-line hint
 on stderr — `codex-reset-watch X.Y.Z is available (you have A.B.C)`, then `crw update` — plus the
-release-notes link, instead. The check runs in
-the background while the command works, at most once a day (cached centrally by update-kit in
+release-notes link, instead. The check runs before command execution,
+at most once a day (cached centrally by update-kit in
 `~/.update-kit/state.json`, 1.5 s timeout); offline, piped output and the scheduled jobs stay
 silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
