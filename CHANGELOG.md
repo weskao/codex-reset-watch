@@ -1,3 +1,8 @@
+## [0.21.1] - 2026-10-16
+
+### 🐛 Bug Fixes
+
+- **cli:** Prompt for updates before commands
 ## [0.21.0] - 2026-10-16
 
 ### 🚀 Features
