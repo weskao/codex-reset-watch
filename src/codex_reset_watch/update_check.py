@@ -25,6 +25,8 @@ from .console import print_console as print
 
 REPO = "weskao/codex-reset-watch"
 DIST = "codex-reset-watch"
+#: Seconds a cached latest tag is trusted (update-kit 0.2's 24 h default hid new releases).
+CHECK_TTL = 3600
 #: update_kit.check()'s own network timeout is 1.5 s; wait a little longer than that.
 JOIN_SECONDS = 2.0
 _check: Optional[threading.Thread] = None
@@ -78,7 +80,7 @@ def start_check() -> None:
 
         def run() -> None:
             try:
-                _latest.append(update_kit.check(repo=REPO, current=current))
+                _latest.append(update_kit.check(repo=REPO, current=current, ttl=CHECK_TTL))
             except Exception:  # noqa: BLE001 - a hint must never fail the command
                 pass
 
