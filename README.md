@@ -20,13 +20,13 @@ New-reset and upcoming-reset notices arrive as one photo message: the text is th
 image picked at random from `src/codex_reset_watch/assets/reset/` or `assets/upcoming/`. To add
 more images, drop `.jpeg`/`.jpg`/`.png` files into those folders. Other notices stay text-only.
 
-Example reset-signal notification:
+Example upcoming-event result:
 
-![Codex Reset Watch Telegram notification showing a scheduled regular reset](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-reset-notification.png)
+![Upcoming reset result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/upcoming-event-result.png)
 
-Example Telegram configuration (`crw --config`):
+Example current-reset-event result (new-reset notice):
 
-![crw --config Telegram notification example](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-telegram.png)
+![Current reset event result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/current-reset-event-result.png)
 
 Everything is tuned through one keyboard-driven menu, `crw config`. It opens on the **Basic**
 tab (the settings most people touch); `Tab` switches to **Advanced** (every setting). Both tabs
@@ -799,9 +799,9 @@ Example:
 ⏳ 距離現在：2 Days 1 hour 35 minutes
 ```
 
-Example upcoming-event result:
+Example reset-signal notification:
 
-![Upcoming reset result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/upcoming-event-result.png)
+![Codex Reset Watch Telegram notification showing a scheduled regular reset](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-reset-notification.png)
 
 Reset times already past (latest reset, new-reset notice) add how long ago they were, largest
 unit Day, smallest unit the API's own precision — a date-only value shows days, an hour-only
@@ -811,9 +811,9 @@ value hours, and anything finer is cut at minutes; zero-value units are left out
 🕒 Time: 2026-09-27 02:17 UTC+8 (23 hours 16 minutes ago)
 ```
 
-Example current-reset-event result (new-reset notice):
+Example live-check notification (latest reset, no upcoming signal):
 
-![Current reset event result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/current-reset-event-result.png)
+![Codex Reset live check Telegram notification showing the latest reset](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-telegram.png)
 
 ## 10. Event parsing resilience
 
