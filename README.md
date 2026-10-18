@@ -20,13 +20,13 @@ New-reset and upcoming-reset notices arrive as one photo message: the text is th
 image picked at random from `src/codex_reset_watch/assets/reset/` or `assets/upcoming/`. To add
 more images, drop `.jpeg`/`.jpg`/`.png` files into those folders. Other notices stay text-only.
 
-Example upcoming-event result:
-
-![Upcoming reset result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/upcoming-event-result.png)
-
 Example current-reset-event result (new-reset notice):
 
 ![Current reset event result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/current-reset-event-result.png)
+
+Example upcoming-event result:
+
+![Upcoming reset result](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/upcoming-event-result.png)
 
 Everything is tuned through one keyboard-driven menu, `crw config`. It opens on the **Basic**
 tab (the settings most people touch); `Tab` switches to **Advanced** (every setting). Both tabs
