@@ -1,3 +1,18 @@
+## [0.21.3] - 2026-10-19
+
+### 🐛 Bug Fixes
+
+- **update:** Recheck the latest release hourly
+- **update:** Recheck the latest release every 10 min
+
+### 💼 Other
+
+- **deps:** Bump update-kit to 0.2.2
+
+### 📚 Documentation
+
+- Fix README reset examples
+- Reorder README examples
 ## [0.21.2] - 2026-10-16
 
 ### 🐛 Bug Fixes
