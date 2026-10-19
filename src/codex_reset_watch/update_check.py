@@ -25,8 +25,8 @@ from .console import print_console as print
 
 REPO = "weskao/codex-reset-watch"
 DIST = "codex-reset-watch"
-#: Seconds a cached latest tag is trusted (update-kit 0.2's 24 h default hid new releases).
-CHECK_TTL = 3600
+#: Seconds a cached latest tag is trusted; same as aicp/ai-accounts (git ls-remote isn't under the 60/h REST API limit).
+CHECK_TTL = 600
 #: update_kit.check()'s own network timeout is 1.5 s; wait a little longer than that.
 JOIN_SECONDS = 2.0
 _check: Optional[threading.Thread] = None

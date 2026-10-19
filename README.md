@@ -491,7 +491,7 @@ this prompt after it finishes. On exit, it waits up to two seconds for the check
 Off a keyboard terminal (piped stdin/stdout, stderr still a terminal) it stays the two-line hint
 on stderr — `codex-reset-watch X.Y.Z is available (you have A.B.C)`, then `crw update` — plus the
 release-notes link, instead. The check runs alongside command execution,
-at most once an hour (cached centrally by update-kit in
+at most once every 10 minutes (cached centrally by update-kit in
 `~/.update-kit/state.json`, 1.5 s timeout); offline, piped output and the scheduled jobs stay
 silent, and the exit code never changes. Turn it off with
 `crw config --set update_check=off`. Every way of running `crw` / `codex-reset-watch` gets
