@@ -25,8 +25,6 @@ from .console import print_console as print
 
 REPO = "weskao/codex-reset-watch"
 DIST = "codex-reset-watch"
-#: Seconds a cached latest tag is trusted; same as aicp/ai-accounts (git ls-remote isn't under the 60/h REST API limit).
-CHECK_TTL = 600
 #: update_kit.check()'s own network timeout is 1.5 s; wait a little longer than that.
 JOIN_SECONDS = 2.0
 _check: Optional[threading.Thread] = None
@@ -80,7 +78,7 @@ def start_check() -> None:
 
         def run() -> None:
             try:
-                _latest.append(update_kit.check(repo=REPO, current=current, ttl=CHECK_TTL))
+                _latest.append(update_kit.check(repo=REPO, current=current))
             except Exception:  # noqa: BLE001 - a hint must never fail the command
                 pass
 
