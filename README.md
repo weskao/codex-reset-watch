@@ -40,7 +40,7 @@ macOS/Linux keep the original emoji and symbols. Telegram messages and JSON
 exports keep their original Unicode on every platform. Powerline glyphs in your
 shell prompt are controlled by your shell theme, outside `crw`.
 
-![crw config — Basic mode](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-basic-mode.png)
+![crw config — Basic mode](https://raw.githubusercontent.com/weskao/codex-reset-watch/main/docs/images/crw-config-basic-mode.jpeg)
 
 This version is **uv-native**:
 
