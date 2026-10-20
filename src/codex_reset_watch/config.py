@@ -31,8 +31,9 @@ import json
 import os
 import pathlib
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any
 
 import telegram_kit
 from telegram_kit import mask_secret  # noqa: F401 - re-exported
@@ -70,12 +71,12 @@ class Setting:
     group: str
     label: str
     help: str
-    minimum: Optional[int] = None
-    maximum: Optional[int] = None
-    choices: Optional[Tuple[str, ...]] = None
+    minimum: int | None = None
+    maximum: int | None = None
+    choices: tuple[str, ...] | None = None
     #: Longest a free-text value may grow to; ``None`` falls back to
     #: :data:`DEFAULT_TEXT_MAX_LEN` for the text-like kinds (see :func:`coerce`).
-    max_len: Optional[int] = None
+    max_len: int | None = None
     #: "basic" rows are the curated subset Basic mode shows; everything else
     #: ("advanced", the default) is hidden there and shown only in Advanced
     #: mode. A row added to SETTINGS with no explicit tier is advanced-only,
@@ -89,10 +90,10 @@ class Setting:
 #: The two menu modes. Basic is the default: the curated subset most people
 #: need. Advanced is the full schema — what `--list` and the old single-mode
 #: menu always showed.
-UI_MODES: Tuple[str, ...] = ("basic", "advanced")
+UI_MODES: tuple[str, ...] = ("basic", "advanced")
 DEFAULT_UI_MODE = "basic"
 
-SETTINGS: Tuple[Setting, ...] = (
+SETTINGS: tuple[Setting, ...] = (
     # ── scheduling ───────────────────────────────────────────────────────
     Setting("daily_enabled", "bool", True, "scheduling", "Daily notification",
             "Send one overview at a fixed time each day.", tier="basic"),
@@ -171,14 +172,14 @@ SETTINGS: Tuple[Setting, ...] = (
             tier="basic"),
 )
 
-BY_KEY: Dict[str, Setting] = {s.key: s for s in SETTINGS}
-DEFAULTS: Dict[str, Any] = {s.key: s.default for s in SETTINGS}
-GROUPS: Tuple[str, ...] = tuple(dict.fromkeys(s.group for s in SETTINGS))
+BY_KEY: dict[str, Setting] = {s.key: s for s in SETTINGS}
+DEFAULTS: dict[str, Any] = {s.key: s.default for s in SETTINGS}
+GROUPS: tuple[str, ...] = tuple(dict.fromkeys(s.group for s in SETTINGS))
 
-_BASIC_SETTINGS: Tuple[Setting, ...] = tuple(s for s in SETTINGS if s.tier == "basic")
+_BASIC_SETTINGS: tuple[Setting, ...] = tuple(s for s in SETTINGS if s.tier == "basic")
 
 
-def current_ui_mode(cfg: Optional[Dict[str, Any]] = None) -> str:
+def current_ui_mode(cfg: dict[str, Any] | None = None) -> str:
     """The active menu mode: whatever ``cfg`` has, defaulting to Basic.
 
     A junk value (hand-edited config, an older/newer build) falls back to
@@ -188,7 +189,7 @@ def current_ui_mode(cfg: Optional[Dict[str, Any]] = None) -> str:
     return value if value in UI_MODES else DEFAULT_UI_MODE
 
 
-def visible_settings(mode: str) -> Tuple[Setting, ...]:
+def visible_settings(mode: str) -> tuple[Setting, ...]:
     """Which rows *mode* shows: every row for ``"advanced"``, otherwise the
     curated ``tier="basic"`` subset — same safe-default policy as
     :func:`current_ui_mode`, so an unrecognised mode never over-shares."""
@@ -218,17 +219,17 @@ LOCAL_KEYS = SECRET_KEYS | frozenset(s.key for s in SETTINGS if not s.portable)
 
 # ── translated text ──────────────────────────────────────────────────────────
 
-def label(setting: Setting, lang: Optional[str] = None) -> str:
+def label(setting: Setting, lang: str | None = None) -> str:
     """The row label in *lang*, falling back to the English source text."""
     return i18n.t(f"setting.{setting.key}.label", lang, default=setting.label)
 
 
-def help_text(setting: Setting, lang: Optional[str] = None) -> str:
+def help_text(setting: Setting, lang: str | None = None) -> str:
     """The row's one-line explanation in *lang*, falling back to English."""
     return i18n.t(f"setting.{setting.key}.help", lang, default=setting.help)
 
 
-def group_label(group: str, lang: Optional[str] = None) -> str:
+def group_label(group: str, lang: str | None = None) -> str:
     """The heading for a group id in *lang*, falling back to the id itself."""
     return i18n.t(f"group.{group}", lang, default=group)
 
@@ -260,7 +261,7 @@ def parse_interval(raw: Any) -> int:
     return minutes
 
 
-def format_interval(minutes: int, lang: Optional[str] = None) -> str:
+def format_interval(minutes: int, lang: str | None = None) -> str:
     """``120`` → ``"2 hours"``. Defaults to English so machine-facing callers
     (``--list`` piped to a file, tests) do not depend on the machine's locale;
     the menu passes the language it is rendering in."""
@@ -285,7 +286,7 @@ def parse_hhmm(raw: Any) -> str:
     return f"{hour:02d}:{minute:02d}"
 
 
-def tzinfo_for(cfg: Optional[Dict[str, Any]] = None) -> dt.tzinfo:
+def tzinfo_for(cfg: dict[str, Any] | None = None) -> dt.tzinfo:
     """Resolve the ``timezone`` setting. Unknown names fall back to UTC+8.
 
     Fixed offsets are parsed here rather than via zoneinfo because Windows has
@@ -294,9 +295,9 @@ def tzinfo_for(cfg: Optional[Dict[str, Any]] = None) -> dt.tzinfo:
     name = str((cfg or {}).get("timezone") or DEFAULTS["timezone"]).strip()
     upper = name.upper()
     if upper in ("UTC", "GMT", "Z"):
-        return dt.timezone.utc
+        return dt.UTC
     if upper in ("LOCAL", "SYSTEM"):
-        return dt.datetime.now().astimezone().tzinfo or dt.timezone.utc
+        return dt.datetime.now().astimezone().tzinfo or dt.UTC
     m = _OFFSET_RE.match(name)
     if m:
         sign = -1 if m.group(1) == "-" else 1
@@ -310,7 +311,7 @@ def tzinfo_for(cfg: Optional[Dict[str, Any]] = None) -> dt.tzinfo:
     return FALLBACK_TZ
 
 
-def tz_label(cfg: Optional[Dict[str, Any]] = None) -> str:
+def tz_label(cfg: dict[str, Any] | None = None) -> str:
     """Short suffix appended to rendered timestamps, e.g. ``UTC+8``."""
     name = str((cfg or {}).get("timezone") or DEFAULTS["timezone"]).strip()
     if name.upper() in ("LOCAL", "SYSTEM"):
@@ -322,12 +323,12 @@ def tz_label(cfg: Optional[Dict[str, Any]] = None) -> str:
     return name
 
 
-def daily_hm(cfg: Dict[str, Any]) -> Tuple[int, int]:
+def daily_hm(cfg: dict[str, Any]) -> tuple[int, int]:
     hh, mm = parse_hhmm(cfg.get("daily_time", DEFAULTS["daily_time"])).split(":")
     return int(hh), int(mm)
 
 
-def daily_os_local_hm(cfg: Dict[str, Any], *, now: Optional[dt.datetime] = None) -> Tuple[int, int]:
+def daily_os_local_hm(cfg: dict[str, Any], *, now: dt.datetime | None = None) -> tuple[int, int]:
     """The configured daily time expressed in the machine's own local time.
 
     The OS schedulers all fire on system local time, while ``daily_time`` is
@@ -410,7 +411,7 @@ def coerce(setting: Setting, raw: Any) -> Any:
     return text
 
 
-def render(setting: Setting, value: Any, lang: Optional[str] = None) -> str:
+def render(setting: Setting, value: Any, lang: str | None = None) -> str:
     """Human-readable form of a stored value, for the menu and ``--list``.
 
     Defaults to English for the same reason as :func:`format_interval`: a
@@ -447,7 +448,7 @@ def config_path() -> pathlib.Path:
     return pathlib.Path(override) if override else pathlib.Path(paths.app_config_dir()) / "config.json"
 
 
-def _migrate(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _migrate(raw: dict[str, Any]) -> dict[str, Any]:
     """Accept configs written before these keys were renamed/merged."""
     out = dict(raw)
     if "daily_time" not in out and ("daily_hour" in out or "daily_minute" in out):
@@ -458,7 +459,7 @@ def _migrate(raw: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def load() -> Dict[str, Any]:
+def load() -> dict[str, Any]:
     """Defaults, overlaid with the config file, plus secrets from the keychain.
 
     Unreadable or invalid values are dropped rather than fatal — a scheduled
@@ -468,7 +469,7 @@ def load() -> Dict[str, Any]:
     """
     cfg = dict(DEFAULTS)
     path = config_path()
-    raw: Dict[str, Any] = {}
+    raw: dict[str, Any] = {}
     with contextlib.suppress(OSError, json.JSONDecodeError, ValueError):
         parsed = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(parsed, dict):
@@ -492,7 +493,7 @@ def load() -> Dict[str, Any]:
     return cfg
 
 
-def _rescue_plaintext_secrets(cfg: Dict[str, Any], raw: Dict[str, Any],
+def _rescue_plaintext_secrets(cfg: dict[str, Any], raw: dict[str, Any],
                               path: pathlib.Path) -> None:
     """Move a plaintext secret out of *path* and into the keychain.
 
@@ -507,7 +508,7 @@ def _rescue_plaintext_secrets(cfg: Dict[str, Any], raw: Dict[str, Any],
     save(cfg, path)
 
 
-def save_secrets(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+def save_secrets(cfg: dict[str, Any]) -> tuple[str, ...]:
     """Push every secret in *cfg* to the keychain. Returns the keys that failed.
 
     A non-empty result means "this machine has no credential store" (or it
@@ -542,7 +543,7 @@ def clear_secret(key: str) -> bool:
     return secrets_store.delete(key) or not secrets_store.get(key)
 
 
-def restore_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def restore_defaults(cfg: dict[str, Any]) -> dict[str, Any]:
     """*cfg* reset to :data:`DEFAULTS`, with any stored secret kept.
 
     "Restore defaults" means the tuned settings, not the credentials: a bot
@@ -554,7 +555,7 @@ def restore_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return {**cfg, **DEFAULTS, **kept}
 
 
-def save(cfg: Dict[str, Any], path: Optional[pathlib.Path] = None) -> pathlib.Path:
+def save(cfg: dict[str, Any], path: pathlib.Path | None = None) -> pathlib.Path:
     """Atomically write the config, 0600, and route secrets to the keychain.
 
     Secret-kind settings are filtered out of the JSON payload entirely — the
@@ -574,7 +575,7 @@ def save(cfg: Dict[str, Any], path: Optional[pathlib.Path] = None) -> pathlib.Pa
     return path
 
 
-def set_value(cfg: Dict[str, Any], key: str, raw: Any) -> Any:
+def set_value(cfg: dict[str, Any], key: str, raw: Any) -> Any:
     """Validate and store one setting in ``cfg`` (caller saves). Returns the stored value."""
     setting = BY_KEY.get(key)
     if setting is None:
@@ -587,7 +588,7 @@ def set_value(cfg: Dict[str, Any], key: str, raw: Any) -> Any:
 
 # ── Telegram credentials ─────────────────────────────────────────────────────
 
-def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+def telegram_credentials(cfg: dict[str, Any] | None = None) -> tuple[str, str]:
     """``(token, chat_id)``: the config file first, then the environment.
 
     What ``crw config`` stored wins deliberately. That is where the user sets
@@ -603,14 +604,14 @@ def telegram_credentials(cfg: Optional[Dict[str, Any]] = None) -> Tuple[str, str
                                             cfg.get("telegram_chat_id", ""))
 
 
-def device_label(cfg: Optional[Dict[str, Any]] = None) -> str:
+def device_label(cfg: dict[str, Any] | None = None) -> str:
     """The notification device line: the custom text, else the automatic label."""
     return str((cfg or {}).get("device_label") or "").strip() or host_identity.device_label()
 
 
 # ── export / import ──────────────────────────────────────────────────────────
 
-def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def export_payload(cfg: dict[str, Any]) -> dict[str, Any]:
     """The portable settings in *cfg* — i.e. every declared non-secret one.
 
     Secrets are filtered by ``kind``, never by a hand-kept key list, so a
@@ -621,7 +622,7 @@ def export_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if s.portable and s.kind != "secret"}
 
 
-def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]]:
+def import_updates(raw: dict[str, Any]) -> tuple[dict[str, Any], tuple[str, ...]]:
     """``(updates, skipped)`` for the settings in *raw*. All or nothing.
 
     Three things are never written, and each is reported rather than dropped
@@ -635,8 +636,8 @@ def import_updates(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]
     * **Anything invalid** raises before the first write, so a half-applied
       config can never be the outcome.
     """
-    updates: Dict[str, Any] = {}
-    skipped: List[str] = []
+    updates: dict[str, Any] = {}
+    skipped: list[str] = []
     for key, value in raw.items():
         setting = BY_KEY.get(key)
         if setting is None or not setting.portable or setting.kind == "secret":
@@ -657,11 +658,11 @@ def _dir(env_var: str, configured: Any, fallback: Any) -> pathlib.Path:
     return pathlib.Path(str(fallback))
 
 
-def state_dir(cfg: Optional[Dict[str, Any]] = None) -> pathlib.Path:
+def state_dir(cfg: dict[str, Any] | None = None) -> pathlib.Path:
     return _dir("CRW_STATE_DIR", (cfg or {}).get("state_dir"), paths.app_state_dir())
 
 
-def log_dir(cfg: Optional[Dict[str, Any]] = None) -> pathlib.Path:
+def log_dir(cfg: dict[str, Any] | None = None) -> pathlib.Path:
     return _dir("CRW_LOG_DIR", (cfg or {}).get("log_dir"), paths.app_log_dir())
 
 

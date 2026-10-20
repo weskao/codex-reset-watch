@@ -32,7 +32,6 @@ import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Optional
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -62,12 +61,12 @@ class KeyEvent:
     menu state machine can be driven from a list of these in a test."""
 
     key: Key
-    char: Optional[str] = None
+    char: str | None = None
 
 
 # ── platform byte-read funnel ────────────────────────────────────────────────
 
-def _read_byte_posix(timeout: Optional[float]) -> Optional[bytes]:
+def _read_byte_posix(timeout: float | None) -> bytes | None:
     import select
 
     try:
@@ -81,7 +80,7 @@ def _read_byte_posix(timeout: Optional[float]) -> Optional[bytes]:
     return os.read(fd, 1)
 
 
-def _read_byte_windows(timeout: Optional[float]) -> Optional[bytes]:
+def _read_byte_windows(timeout: float | None) -> bytes | None:
     import msvcrt
 
     if timeout is not None:
@@ -93,7 +92,7 @@ def _read_byte_windows(timeout: Optional[float]) -> Optional[bytes]:
     return msvcrt.getch()
 
 
-def _read_byte(timeout: Optional[float] = None) -> Optional[bytes]:
+def _read_byte(timeout: float | None = None) -> bytes | None:
     """The single OS-specific funnel: read one raw byte from the keyboard.
 
     ``timeout=None`` blocks until a byte arrives. A numeric timeout returns

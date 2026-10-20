@@ -82,7 +82,7 @@ class TimeParsingTests(unittest.TestCase):
 
 class TimezoneTests(unittest.TestCase):
     def test_utc_alias(self):
-        self.assertEqual(config.tzinfo_for({"timezone": "UTC"}), dt.timezone.utc)
+        self.assertEqual(config.tzinfo_for({"timezone": "UTC"}), dt.UTC)
 
     def test_fixed_positive_offset(self):
         tz = config.tzinfo_for({"timezone": "UTC+8"})
@@ -119,7 +119,7 @@ class DailyTimeTests(unittest.TestCase):
         hour, minute = config.daily_os_local_hm(cfg, now=now)
         # The local system timezone is unknown in CI, but the target instant
         # (10:00 UTC+8 == 02:00 UTC) is fixed; recompute independently to check.
-        expected = dt.datetime(2026, 1, 1, 2, 0, tzinfo=dt.timezone.utc).astimezone()
+        expected = dt.datetime(2026, 1, 1, 2, 0, tzinfo=dt.UTC).astimezone()
         self.assertEqual((hour, minute), (expected.hour, expected.minute))
 
 

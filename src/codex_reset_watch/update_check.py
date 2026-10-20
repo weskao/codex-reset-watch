@@ -15,7 +15,6 @@ import json
 import os
 import sys
 import threading
-from typing import Optional
 
 import update_kit
 
@@ -27,7 +26,7 @@ REPO = "weskao/codex-reset-watch"
 DIST = "codex-reset-watch"
 #: update_kit.check()'s own network timeout is 1.5 s; wait a little longer than that.
 JOIN_SECONDS = 2.0
-_check: Optional[threading.Thread] = None
+_check: threading.Thread | None = None
 _latest: list = []
 _cfg: dict = {}
 
@@ -46,11 +45,11 @@ def _write_json(path, data: dict) -> None:
         path.write_text(json.dumps(data) + "\n", encoding="utf-8")
 
 
-def _skip_path(cfg: Optional[dict] = None):
+def _skip_path(cfg: dict | None = None):
     return cfgmod.state_dir(cfg) / "update-check.json"
 
 
-def skip_version(tag: str, cfg: Optional[dict] = None) -> None:
+def skip_version(tag: str, cfg: dict | None = None) -> None:
     """Stop reporting *tag*; a newer release is reported again. Never raises."""
     path = _skip_path(cfg)
     _write_json(path, {**_read_json(path), "skipped": tag})

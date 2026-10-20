@@ -21,7 +21,8 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-from typing import IO, Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import IO, Any
 
 try:  # stdlib on macOS/Linux; absent on Windows, where the console
     import readline  # noqa: F401  (imported for its input() line-editing side effect)
@@ -62,7 +63,7 @@ _RC_FILES = (
 )
 
 
-def path_shadows(bin_dir: pathlib.Path, environ: Dict[str, str] | None = None) -> List[pathlib.Path]:
+def path_shadows(bin_dir: pathlib.Path, environ: dict[str, str] | None = None) -> list[pathlib.Path]:
     """Same-named executables that PATH reaches before ``bin_dir``.
 
     The venv running this installer is skipped: ``uv run`` puts its own shims on
@@ -92,7 +93,7 @@ def path_shadows(bin_dir: pathlib.Path, environ: Dict[str, str] | None = None) -
     return found
 
 
-def rc_shadows(home: pathlib.Path | None = None) -> List[str]:
+def rc_shadows(home: pathlib.Path | None = None) -> list[str]:
     """``file:line: text`` for each shell alias/function that would hide the CLI."""
     home = pathlib.Path.home() if home is None else home
     hits = []
@@ -115,13 +116,13 @@ def rc_shadows(home: pathlib.Path | None = None) -> List[str]:
 # terminal on any exit path including Ctrl-C, and needs no trap/cleanup code
 # of our own to get wrong. One function call replaces the whole shell pattern.
 
-def telegram_already_configured(cfg: Dict[str, Any]) -> bool:
+def telegram_already_configured(cfg: dict[str, Any]) -> bool:
     """True when a token *and* a chat id are already reachable — env or config."""
     token, chat_id = config.telegram_credentials(cfg)
     return bool(token and chat_id)
 
 
-def prompt_telegram_setup(cfg: Dict[str, Any], *, ask: Callable[[str], str] = input,
+def prompt_telegram_setup(cfg: dict[str, Any], *, ask: Callable[[str], str] = input,
                           ask_secret: Callable[[str], str] = getpass.getpass,
                           out: IO[str] = sys.stdout) -> bool:
     """Ask for the bot token and chat id, store them, report what happened.
@@ -162,7 +163,7 @@ def prompt_telegram_setup(cfg: Dict[str, Any], *, ask: Callable[[str], str] = in
     return True
 
 
-def maybe_setup_telegram(cfg: Dict[str, Any], *, ask: Callable[[str], str] = input,
+def maybe_setup_telegram(cfg: dict[str, Any], *, ask: Callable[[str], str] = input,
                          ask_secret: Callable[[str], str] = getpass.getpass,
                          out: IO[str] = sys.stdout) -> bool:
     """Run :func:`prompt_telegram_setup` only when it can and needs to.
