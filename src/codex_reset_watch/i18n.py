@@ -30,7 +30,7 @@ import locale
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 FALLBACK = "en"
 
@@ -50,24 +50,24 @@ class Language:
 
     code: str
     label: str
-    aliases: Tuple[str, ...]
+    aliases: tuple[str, ...]
 
 
 # Deliberately no bare "zh" alias: zh_CN/zh_SG are Simplified and must not
 # resolve to Traditional — they fall back to English until a zh-CN entry lands.
-LANGUAGES: Tuple[Language, ...] = (
+LANGUAGES: tuple[Language, ...] = (
     Language("en", "English", ("en",)),
     Language("zh-TW", "繁體中文", ("zh_tw", "zh_hant", "zh_hk", "zh_mo")),
 )
 
-LANGUAGE_CODES: Tuple[str, ...] = tuple(lang.code for lang in LANGUAGES)
+LANGUAGE_CODES: tuple[str, ...] = tuple(lang.code for lang in LANGUAGES)
 
 
 # ── catalogue ────────────────────────────────────────────────────────────────
 # Setting labels/help use the id form `setting.<key>.label` / `setting.<key>.help`
 # and group headings `group.<id>`, so config.SETTINGS needs no translated text.
 
-MESSAGES: Dict[str, Dict[str, str]] = {
+MESSAGES: dict[str, dict[str, str]] = {
     # ── groups ──────────────────────────────────────────────────────────────
     "group.scheduling": {"en": "Scheduling", "zh-TW": "排程"},
     "group.notifications": {"en": "Notifications", "zh-TW": "通知"},
@@ -607,7 +607,7 @@ def system_language() -> str:
 
 
 @lru_cache(maxsize=1)
-def _stored_language() -> Optional[str]:
+def _stored_language() -> str | None:
     """The raw ``language`` value in the config file, or ``None`` when absent
     or unreadable — read without ``config.load``.
 
@@ -629,7 +629,7 @@ def forget_stored_language() -> None:
     _stored_language.cache_clear()
 
 
-def current_language(cfg: Optional[Dict[str, Any]] = None) -> str:
+def current_language(cfg: dict[str, Any] | None = None) -> str:
     """The language to render in: ``$CRW_LANG``, else *cfg*, else the config
     file, else the system's own language (first use — nothing chosen yet).
 
@@ -643,7 +643,7 @@ def current_language(cfg: Optional[Dict[str, Any]] = None) -> str:
     return configured if configured in LANGUAGE_CODES else system_language()
 
 
-def language_labels() -> Dict[str, str]:
+def language_labels() -> dict[str, str]:
     """Config value → the name to SHOW for it, e.g. ``{"en": "English"}``.
 
     Every language names itself in its own script (``English``, ``繁體中文``),
@@ -652,7 +652,7 @@ def language_labels() -> Dict[str, str]:
     return {lang.code: lang.label for lang in LANGUAGES}
 
 
-def t(msg_id: str, lang: Optional[str] = None, default: Optional[str] = None, **kwargs: Any) -> str:
+def t(msg_id: str, lang: str | None = None, default: str | None = None, **kwargs: Any) -> str:
     """The *msg_id* message in *lang*, formatted with *kwargs*.
 
     Falls back, in order: the requested language → English → *default* → the id

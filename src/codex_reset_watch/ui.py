@@ -33,8 +33,9 @@ import re
 import shutil
 import sys
 import unicodedata
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field, replace
-from typing import IO, Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import IO, Any
 
 import telegram_kit
 
@@ -80,8 +81,8 @@ CURSOR_PULSE_BRIGHT = (190, 255, 225)
 CURSOR_PULSE_INTERVAL = 0.1   # seconds per frame while a real terminal is idle
 
 
-def _pulse_frames(glyph: str, dim: Tuple[int, int, int],
-                  bright: Tuple[int, int, int], steps: int = 7) -> Tuple[str, ...]:
+def _pulse_frames(glyph: str, dim: tuple[int, int, int],
+                  bright: tuple[int, int, int], steps: int = 7) -> tuple[str, ...]:
     """The breathe cycle: *steps* colours from *bright* down to *dim* and back,
     each an SGR prefix on *glyph*.
 
@@ -93,7 +94,7 @@ def _pulse_frames(glyph: str, dim: Tuple[int, int, int],
     frames = []
     for level in levels[::-1] + levels[1:-1]:
         rgb = tuple(round(d + (b - d) * level) for d, b in zip(dim, bright))
-        frames.append("\033[38;2;%d;%d;%dm%s" % (*rgb, glyph))
+        frames.append(f"\033[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m{glyph}")
     return tuple(frames)
 
 
@@ -143,7 +144,7 @@ BANNER_MIN_HEIGHT = 30
 BANNER_COMPACT_MIN_HEIGHT = 24
 
 
-def _banner_rows(columns: int, height: int) -> Tuple[str, ...]:
+def _banner_rows(columns: int, height: int) -> tuple[str, ...]:
     """The banner tier that fits *columns* x *height*, or ``()`` for none."""
     if columns >= len(BANNER[0]) and height >= BANNER_MIN_HEIGHT:
         return BANNER
@@ -152,7 +153,7 @@ def _banner_rows(columns: int, height: int) -> Tuple[str, ...]:
     return ()
 
 
-def _banner(paint: Paint, rows: Sequence[str] = BANNER) -> List[str]:
+def _banner(paint: Paint, rows: Sequence[str] = BANNER) -> list[str]:
     """*rows* plus a blank spacer, gradient-painted when colour is on."""
     if not rows:
         return []
@@ -166,7 +167,7 @@ def _banner(paint: Paint, rows: Sequence[str] = BANNER) -> List[str]:
             if ch in BANNER_FACE:
                 t = i / span
                 rgb = tuple(round(a + (b - a) * t) for a, b in zip(BANNER_FROM, BANNER_TO))
-                out.append("\033[38;2;%d;%d;%dm%s" % (*rgb, ch))
+                out.append(f"\033[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m{ch}")
             elif ch == " ":
                 out.append(" ")
             else:
@@ -237,7 +238,7 @@ def _enable_windows_vt() -> None:
             ctypes.windll.kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
 
 
-def colour_enabled(stream: Optional[IO[str]] = None) -> bool:
+def colour_enabled(stream: IO[str] | None = None) -> bool:
     stream = stream if stream is not None else sys.stdout
     if os.environ.get("NO_COLOR"):
         return False
@@ -268,7 +269,7 @@ def _pad(text: str, columns: int) -> str:
     return text + " " * max(0, columns - width(text))
 
 
-def _slice_by_width(text: str, columns: int) -> Tuple[str, str]:
+def _slice_by_width(text: str, columns: int) -> tuple[str, str]:
     """*text* split into a prefix that fits *columns* display cells and the rest."""
     used = 0
     for i, ch in enumerate(text):
@@ -279,7 +280,7 @@ def _slice_by_width(text: str, columns: int) -> Tuple[str, str]:
     return text, ""
 
 
-def _wrap(text: str, columns: int, max_lines: int = 3) -> List[str]:
+def _wrap(text: str, columns: int, max_lines: int = 3) -> list[str]:
     """Word-wrap *text* to *columns* display cells instead of clipping it.
 
     A footer message (help text, a validation error, an import summary) used
@@ -290,7 +291,7 @@ def _wrap(text: str, columns: int, max_lines: int = 3) -> List[str]:
     swallow the whole settings list; anything left over falls back to the old
     ellipsis on the last line.
     """
-    lines: List[str] = [""]
+    lines: list[str] = [""]
     for word in text.split(" "):
         candidate = f"{lines[-1]} {word}".strip() if lines[-1] else word
         if width(candidate) <= columns:
@@ -332,8 +333,8 @@ def _tilde(path: Any) -> str:
     return "~" + text[len(home):] if text.startswith(home) else text
 
 
-def _header(paint: Paint, lang: str, mode: Optional[str] = None,
-            rule: bool = True) -> List[str]:
+def _header(paint: Paint, lang: str, mode: str | None = None,
+            rule: bool = True) -> list[str]:
     """The top of the panel — title, config path, and (by default) the hairline.
 
     *mode* adds a badge between the title and the version, for the surfaces
@@ -361,7 +362,7 @@ def _header(paint: Paint, lang: str, mode: Optional[str] = None,
     return lines
 
 
-def _tab_bar(paint: Paint, lang: str, mode: str) -> List[str]:
+def _tab_bar(paint: Paint, lang: str, mode: str) -> list[str]:
     """The two mode tabs, and the rule that underlines the active one.
 
     Both modes are always on screen with the size of each list, so switching
@@ -376,7 +377,7 @@ def _tab_bar(paint: Paint, lang: str, mode: str) -> List[str]:
     """
     labels = [(m, f"{i18n.t(f'menu.tab_{m}', lang)} {len(config.visible_settings(m))}")
               for m in config.UI_MODES]
-    cells: List[str] = []
+    cells: list[str] = []
     column = TAB_INDENT          # where the next tab's text starts
     active = (column, 0)         # (start column, width) of the selected tab
     for name, text in labels:
@@ -503,16 +504,16 @@ def _group_heading(paint: Paint, group: str, lang: str) -> str:
             f"{paint.bold}{paint.title}{config.group_label(group, lang)}{paint.reset}")
 
 
-def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Optional[int],
+def _setting_blocks(cfg: dict[str, Any], paint: Paint, lang: str, cursor: int | None,
                     editing: bool, edit_buffer: str, cursor_glyph: str = GLYPH_CURSOR,
                     settings: Sequence[config.Setting] = config.SETTINGS,
-                    ) -> List[Tuple[Optional[int], str]]:
+                    ) -> list[tuple[int | None, str]]:
     """``(row index or None, line)`` for every group heading and settings row.
 
     *settings* is whichever rows the current mode shows — ``cursor`` and every
     row number are positions in *that* sequence, not in :data:`config.SETTINGS`.
     """
-    blocks: List[Tuple[Optional[int], str]] = []
+    blocks: list[tuple[int | None, str]] = []
     current_group = None
     for index, setting in enumerate(settings):
         if setting.group != current_group:
@@ -527,8 +528,8 @@ def _setting_blocks(cfg: Dict[str, Any], paint: Paint, lang: str, cursor: Option
     return blocks
 
 
-def _window(blocks: Sequence[Tuple[Optional[int], str]], cursor: Optional[int],
-            budget: int, paint: Optional[Paint] = None) -> List[str]:
+def _window(blocks: Sequence[tuple[int | None, str]], cursor: int | None,
+            budget: int, paint: Paint | None = None) -> list[str]:
     """The slice of *blocks* that fits *budget* lines and still shows the cursor.
 
     When the list does not fit, the first and last line of the slice become
@@ -549,10 +550,10 @@ def _window(blocks: Sequence[Tuple[Optional[int], str]], cursor: Optional[int],
     return lines
 
 
-def render_settings(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
-                    lang: Optional[str] = None,
-                    settings: Optional[Sequence[config.Setting]] = None,
-                    mode: Optional[str] = None) -> str:
+def render_settings(cfg: dict[str, Any], *, paint: Paint | None = None,
+                    lang: str | None = None,
+                    settings: Sequence[config.Setting] | None = None,
+                    mode: str | None = None) -> str:
     """The whole settings panel as one string.
 
     With no *settings*/*mode*, this is ``crw config --list``: every setting,
@@ -572,8 +573,8 @@ def render_settings(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
     return "\n".join(lines)
 
 
-def summary_line(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
-                 lang: Optional[str] = None) -> str:
+def summary_line(cfg: dict[str, Any], *, paint: Paint | None = None,
+                 lang: str | None = None) -> str:
     """One-line digest of the timing settings, for ``doctor`` and after an apply."""
     paint = paint or Paint(colour_enabled())
     lang = lang or i18n.FALLBACK
@@ -585,7 +586,7 @@ def summary_line(cfg: Dict[str, Any], *, paint: Optional[Paint] = None,
     return f"{paint.accent}{GLYPH_MARK}{paint.reset} {daily}  {paint.muted}·{paint.reset}  {monitor}"
 
 
-def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
+def _hint_bars(paint: Paint, lang: str, position: str = "") -> list[str]:
     """Two fixed lines — navigation (with the position counter), then actions.
 
     Always two, never one wrapped line: the frame's height must not change with
@@ -594,7 +595,7 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
     def key(glyph: str, msg_id: str) -> str:
         return f"{paint.accent}{glyph}{paint.reset} {paint.muted}{i18n.t(msg_id, lang)}{paint.reset}"
 
-    def bar(parts: List[str]) -> str:
+    def bar(parts: list[str]) -> str:
         line = " " + f" {paint.frame}·{paint.reset} ".join(parts)
         return (line if width(strip_ansi(line)) <= panel_width() + 1
                 else " " + f"{paint.frame}·{paint.reset} ".join(parts))
@@ -614,14 +615,14 @@ def _hint_bars(paint: Paint, lang: str, position: str = "") -> List[str]:
     ]
 
 
-def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = None,
-                lang: Optional[str] = None, editing: bool = False, edit_buffer: str = "",
-                error: Optional[str] = None, notice: Optional[str] = None,
-                confirm_defaults: bool = False, confirm_reset_row: Optional[str] = None,
-                prompt: Optional[str] = None,
-                prompt_buffer: str = "", height: Optional[int] = None,
+def render_menu(cfg: dict[str, Any], cursor: int, *, paint: Paint | None = None,
+                lang: str | None = None, editing: bool = False, edit_buffer: str = "",
+                error: str | None = None, notice: str | None = None,
+                confirm_defaults: bool = False, confirm_reset_row: str | None = None,
+                prompt: str | None = None,
+                prompt_buffer: str = "", height: int | None = None,
                 pulse_frame: int = 0,
-                settings: Optional[Sequence[config.Setting]] = None) -> List[str]:
+                settings: Sequence[config.Setting] | None = None) -> list[str]:
     """Every line of one frame of the keyboard menu, already windowed to *height*.
 
     *pulse_frame* selects the selected row's cursor colour from
@@ -643,7 +644,7 @@ def render_menu(cfg: Dict[str, Any], cursor: int, *, paint: Optional[Paint] = No
     head = _header(paint, lang, rule=False) + _tab_bar(paint, lang, mode)
     head = _banner(paint, _banner_rows(panel_width(), height)) + head
     setting = settings[cursor]
-    foot: List[str] = [f" {paint.frame}{'─' * panel_width()}{paint.reset}"]
+    foot: list[str] = [f" {paint.frame}{'─' * panel_width()}{paint.reset}"]
     if confirm_defaults:
         foot.append(f" {paint.warn}{i18n.t('menu.confirm_defaults', lang)}{paint.reset}")
     elif confirm_reset_row:
@@ -709,22 +710,22 @@ class MenuState:
     and no side effects.
     """
 
-    values: Dict[str, Any] = field(default_factory=dict)
+    values: dict[str, Any] = field(default_factory=dict)
     cursor: int = 0
     editing: bool = False
     edit_buffer: str = ""
-    error: Optional[str] = None
-    notice: Optional[str] = None
+    error: str | None = None
+    notice: str | None = None
     confirm_defaults: bool = False
     #: Key of the single row awaiting ``r``'s y/N confirmation, or ``None``.
-    confirm_reset_row: Optional[str] = None
-    prompt: Optional[str] = None       # "export" | "import"
+    confirm_reset_row: str | None = None
+    prompt: str | None = None       # "export" | "import"
     prompt_buffer: str = ""
     pending_save: bool = False
-    pending_action: Optional[str] = None  # "apply" | "export" | "import"
+    pending_action: str | None = None  # "apply" | "export" | "import"
     #: The values the OS schedule was last built from. Defaults to the values
     #: the menu opened with, and moves forward on a successful apply.
-    applied: Optional[Dict[str, Any]] = None
+    applied: dict[str, Any] | None = None
     quitting: bool = False
 
     def __post_init__(self) -> None:
@@ -738,7 +739,7 @@ class MenuState:
         return config.schedule_changed(self.applied, self.values)
 
 
-def _cycle_options(setting: config.Setting) -> Optional[Tuple[Any, ...]]:
+def _cycle_options(setting: config.Setting) -> tuple[Any, ...] | None:
     """The values this row cycles through, or ``None`` when it must be typed."""
     if setting.choices is not None:
         return tuple(setting.choices)
@@ -781,7 +782,7 @@ def _seed_buffer(state: MenuState, setting: config.Setting) -> str:
 INTERVAL_UNITS = "mhd"
 
 
-def _typed_int(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
+def _typed_int(setting: config.Setting, buffer: str, ch: str) -> str | None:
     """Calculator-style digit entry: digits only, live-clamped to the maximum.
 
     A fresh digit replaces a lone leading zero (``0`` then ``6`` is ``6``, never
@@ -801,7 +802,7 @@ def _typed_int(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
     return candidate
 
 
-def _typed_interval(buffer: str, ch: str) -> Optional[str]:
+def _typed_interval(buffer: str, ch: str) -> str | None:
     """Digits, then at most one unit letter — ``45m`` / ``2h`` / ``1d``.
 
     Once a unit is present the value is complete, so further keys are ignored
@@ -816,7 +817,7 @@ def _typed_interval(buffer: str, ch: str) -> Optional[str]:
     return None
 
 
-def _typed_time(buffer: str, ch: str) -> Optional[str]:
+def _typed_time(buffer: str, ch: str) -> str | None:
     """``HH:MM`` entry that cannot express an impossible time.
 
     Digits only; the colon is inserted automatically after the hour; a first
@@ -842,7 +843,7 @@ def _typed_time(buffer: str, ch: str) -> Optional[str]:
     return f"{digits[:2]}:{digits[2:]}"
 
 
-def _typed(setting: config.Setting, buffer: str, ch: str) -> Optional[str]:
+def _typed(setting: config.Setting, buffer: str, ch: str) -> str | None:
     """The buffer after typing *ch*, or ``None`` when the key is not allowed here.
 
     One funnel for every per-kind input rule, so "which characters may this
@@ -1043,7 +1044,7 @@ def step(state: MenuState, event: keys.KeyEvent,
 
 # ── side effects the state machine asks for ──────────────────────────────────
 
-def _apply_schedule(cfg: Dict[str, Any], lang: str) -> Tuple[bool, str]:
+def _apply_schedule(cfg: dict[str, Any], lang: str) -> tuple[bool, str]:
     try:
         backend, jobs = scheduler.apply(cfg=cfg)
     except Exception as exc:  # noqa: BLE001 - surface any backend failure, never crash the menu
@@ -1052,7 +1053,7 @@ def _apply_schedule(cfg: Dict[str, Any], lang: str) -> Tuple[bool, str]:
     return True, i18n.t("menu.applied", lang, backend=backend, jobs=listed)
 
 
-def export_settings(cfg: Dict[str, Any], target: str, lang: str) -> Tuple[bool, str]:
+def export_settings(cfg: dict[str, Any], target: str, lang: str) -> tuple[bool, str]:
     """Write the portable settings to *target* (``-`` means stdout).
 
     Written owner-only through the same 0600 rule as the config file: the
@@ -1076,7 +1077,7 @@ def export_settings(cfg: Dict[str, Any], target: str, lang: str) -> Tuple[bool, 
     return True, i18n.t("menu.export_done", lang, count=len(payload), target=where)
 
 
-def import_settings(cfg: Dict[str, Any], source: str, lang: str) -> Tuple[bool, str]:
+def import_settings(cfg: dict[str, Any], source: str, lang: str) -> tuple[bool, str]:
     """Apply the settings in the JSON file at *source* into *cfg*, all or nothing."""
     path = pathlib.Path(source).expanduser()
     try:
@@ -1096,7 +1097,7 @@ def import_settings(cfg: Dict[str, Any], source: str, lang: str) -> Tuple[bool, 
     return True, message
 
 
-def _perform(state: MenuState, cfg: Dict[str, Any], lang: str) -> MenuState:
+def _perform(state: MenuState, cfg: dict[str, Any], lang: str) -> MenuState:
     """Run the action *state* asked for and fold the outcome back into it."""
     action = state.pending_action
     if action == "apply":
@@ -1117,10 +1118,10 @@ def _perform(state: MenuState, cfg: Dict[str, Any], lang: str) -> MenuState:
 # ── terminal shell (thin: draw, read one key, hand it to `step`) ─────────────
 
 #: Terminal size (columns, rows) the last frame was drawn at — see :func:`_draw`.
-_drawn_size: Optional[Tuple[int, int]] = None
+_drawn_size: tuple[int, int] | None = None
 
 
-def _draw(lines: List[str], out: IO[str], previous: int) -> int:
+def _draw(lines: list[str], out: IO[str], previous: int) -> int:
     """Repaint *lines* in place: move up over the last frame, clear to the end of
     screen so a frame that lost a line leaves no orphan text behind.
 
@@ -1160,10 +1161,10 @@ def _leave_frame(out: IO[str]) -> Iterator[None]:
         out.write("\n")
 
 
-def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
+def run_menu(cfg: dict[str, Any] | None = None, *,
              read: Callable[[], keys.KeyEvent] = keys.read_key,
-             out: Optional[IO[str]] = None, cursor: int = 0,
-             height: Optional[int] = None) -> int:
+             out: IO[str] | None = None, cursor: int = 0,
+             height: int | None = None) -> int:
     """The keyboard menu. Saves as you go; re-applies the schedule on exit if needed.
 
     *read* is the injection seam: production passes :func:`keys.read_key`, a
@@ -1234,13 +1235,13 @@ def run_menu(cfg: Optional[Dict[str, Any]] = None, *,
 
 # ── numbered fallback (piped stdin/stdout, CI, tests) ────────────────────────
 
-def _read_line(stdin: IO[str]) -> Optional[str]:
+def _read_line(stdin: IO[str]) -> str | None:
     line = stdin.readline()
     return None if line == "" else line.rstrip("\n")
 
 
-def _edit(setting: config.Setting, cfg: Dict[str, Any], paint: Paint,
-          stdin: IO[str], out: IO[str], lang: Optional[str] = None) -> bool:
+def _edit(setting: config.Setting, cfg: dict[str, Any], paint: Paint,
+          stdin: IO[str], out: IO[str], lang: str | None = None) -> bool:
     """Prompt for one setting in the numbered menu. True when the value changed."""
     lang = lang or i18n.current_language(cfg)
     before = cfg.get(setting.key, setting.default)
@@ -1357,7 +1358,7 @@ def fallback_menu(stdin: IO[str], out: IO[str]) -> int:
     return 0
 
 
-def config_menu(stdin: Optional[IO[str]] = None, out: Optional[IO[str]] = None) -> int:
+def config_menu(stdin: IO[str] | None = None, out: IO[str] | None = None) -> int:
     """``crw config`` with no flags: the keyboard menu, or the numbered fallback.
 
     A real terminal gets :func:`run_menu`; anything else — piped stdin or
@@ -1379,7 +1380,7 @@ SKIP_VERSION = "skip-version"
 
 
 def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: int,
-                  release_url: str = "") -> List[str]:
+                  release_url: str = "") -> list[str]:
     """Same visual language as :func:`_row`'s selected state — the accent
     cursor glyph, the bold near-white label, the saturated row band — without
     the dotted leader or value column a plain choice doesn't need."""
@@ -1436,7 +1437,7 @@ def _update_lines(paint: Paint, lang: str, current: str, latest: str, selected: 
 
 def update_prompt(current: str, latest: str, *,
                   read: Callable[[], keys.KeyEvent] = keys.read_key,
-                  out: Optional[IO[str]] = None, release_url: str = "") -> str:
+                  out: IO[str] | None = None, release_url: str = "") -> str:
     """Ask what to do about a newer release; returns UPDATE_NOW / SKIP /
     SKIP_VERSION. An exhausted key source (tests), Ctrl-C, ``q`` or Esc are
     all SKIP — backing out of a question changes nothing.

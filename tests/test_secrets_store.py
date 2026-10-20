@@ -110,7 +110,7 @@ class KeychainTests(unittest.TestCase):
         self.assertNotIn("super-secret", " ".join(argv))
         # -X hex-encodes it, so the plaintext is not even in the stdin stream.
         self.assertNotIn("super-secret", stdin)
-        self.assertIn("super-secret".encode().hex(), stdin)
+        self.assertIn(b"super-secret".hex(), stdin)
 
     def test_a_newline_in_an_identifier_is_refused_not_injected(self):
         with backend("keychain", Recorder((0, ""))):

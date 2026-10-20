@@ -8,20 +8,20 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
-from typing import Any, Dict, Optional, Type
+from typing import Any
 
 from telegram_kit import write_private  # noqa: F401 - re-exported
 
 APP_DIR_NAME = "codex-reset-watch"
 
 
-def _path_cls(platform: str) -> Type[pathlib.PurePath]:
+def _path_cls(platform: str) -> type[pathlib.PurePath]:
     if platform == sys.platform:
         return pathlib.Path
     return pathlib.PureWindowsPath if platform == "win32" else pathlib.PurePosixPath
 
 
-def _root(platform: str, home: Any, environ: Dict[str, str], env_var: str, *fallback_parts: str) -> pathlib.PurePath:
+def _root(platform: str, home: Any, environ: dict[str, str], env_var: str, *fallback_parts: str) -> pathlib.PurePath:
     cls = _path_cls(platform)
     value = environ.get(env_var)
     if value:
@@ -30,9 +30,9 @@ def _root(platform: str, home: Any, environ: Dict[str, str], env_var: str, *fall
 
 
 def _resolve(
-    platform: Optional[str],
+    platform: str | None,
     home: Any,
-    environ: Optional[Dict[str, str]],
+    environ: dict[str, str] | None,
     darwin_parts: tuple,
     win_env_var: str,
     win_fallback_parts: tuple,
@@ -53,7 +53,7 @@ def _resolve(
     return base.joinpath(APP_DIR_NAME, *extra_parts)
 
 
-def app_config_dir(*, platform: Optional[str] = None, home: Any = None, environ: Optional[Dict[str, str]] = None) -> pathlib.PurePath:
+def app_config_dir(*, platform: str | None = None, home: Any = None, environ: dict[str, str] | None = None) -> pathlib.PurePath:
     return _resolve(
         platform, home, environ,
         ("Library", "Application Support"),
@@ -62,7 +62,7 @@ def app_config_dir(*, platform: Optional[str] = None, home: Any = None, environ:
     )
 
 
-def app_state_dir(*, platform: Optional[str] = None, home: Any = None, environ: Optional[Dict[str, str]] = None) -> pathlib.PurePath:
+def app_state_dir(*, platform: str | None = None, home: Any = None, environ: dict[str, str] | None = None) -> pathlib.PurePath:
     return _resolve(
         platform, home, environ,
         ("Library", "Application Support"),
@@ -71,7 +71,7 @@ def app_state_dir(*, platform: Optional[str] = None, home: Any = None, environ: 
     )
 
 
-def app_log_dir(*, platform: Optional[str] = None, home: Any = None, environ: Optional[Dict[str, str]] = None) -> pathlib.PurePath:
+def app_log_dir(*, platform: str | None = None, home: Any = None, environ: dict[str, str] | None = None) -> pathlib.PurePath:
     platform = platform or sys.platform
     if platform == "darwin":
         return _resolve(platform, home, environ, ("Library", "Logs"), "", (), "", ())

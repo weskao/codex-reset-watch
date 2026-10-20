@@ -12,7 +12,7 @@ import contextlib
 import os
 import pathlib
 import sys
-from typing import Iterator
+from collections.abc import Iterator
 
 if sys.platform == "win32":
     import msvcrt

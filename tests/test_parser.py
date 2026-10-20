@@ -17,7 +17,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(crw.iso_utc(e.timestamp), "2026-09-12T08:09:00Z")
 
     def test_upcoming_forecast_window(self):
-        now = dt.datetime(2026,9,19,13,25,tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026,9,19,13,25,tzinfo=dt.UTC)
         u = crw.upcoming_from_status(self.fixture("status_upcoming.json"), now=now)
         self.assertIsNotNone(u)
         self.assertEqual(u.chance_percent, 45)
@@ -26,26 +26,26 @@ class ParserTests(unittest.TestCase):
 
     def test_exact_eta_beats_window(self):
         data = {"upcoming_reset": {"eta": "2026-09-20T00:00:00Z", "window_end":"2026-09-21T00:00:00Z"}}
-        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.timezone.utc))
+        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.UTC))
         self.assertEqual(u.timing_kind, "announced_or_estimated_time")
         self.assertIn("eta", u.raw_field)
 
     def test_nested_forecast_schema(self):
         data = {"forecast": {"window": {"window_end_at": "2026-09-20T02:00:00Z"}, "score": {"chance_percent": 0.6}, "confidence": "medium"}}
-        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.timezone.utc))
+        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.UTC))
         self.assertIsNotNone(u)
         self.assertEqual(u.chance_percent, 60)
         self.assertIn("window_end_at", u.raw_field)
 
     def test_past_upcoming_is_ignored(self):
         data = {"forecast": {"window_end": "2026-09-18T00:00:00Z"}}
-        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.timezone.utc))
+        u = crw.upcoming_from_status(data, now=dt.datetime(2026,9,19,tzinfo=dt.UTC))
         self.assertIsNone(u)
 
     def test_epoch_millis(self):
         t = crw.parse_time(1789824000000)
         self.assertIsNotNone(t)
-        self.assertEqual(t.tzinfo, dt.timezone.utc)
+        self.assertEqual(t.tzinfo, dt.UTC)
 
     def test_event_nested_source_and_camelcase_time(self):
         data = {
@@ -79,7 +79,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(e.source_url, "https://x.com/thsottiaux/status/2098685367058612394")
 
     def test_scheduled_upcoming_without_exact_time_is_kept(self):
-        now = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026, 9, 20, 0, 0, tzinfo=dt.UTC)
         u = crw.upcoming_from_status(self.fixture("status_scheduled_tba.json"), now=now)
         self.assertIsNotNone(u)
         self.assertIsNone(u.timestamp)
@@ -98,7 +98,7 @@ class ParserTests(unittest.TestCase):
                 "sourceUrl": "https://x.com/thsottiaux/status/2101352781219258527",
             }
         }
-        u = crw.upcoming_from_status(data, now=dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc))
+        u = crw.upcoming_from_status(data, now=dt.datetime(2026, 9, 20, tzinfo=dt.UTC))
         self.assertIsNotNone(u)
         self.assertIsNone(u.timestamp)
         self.assertEqual(u.time_text, "Time to be announced")
@@ -106,7 +106,7 @@ class ParserTests(unittest.TestCase):
 
     def test_active_watch_is_an_upcoming_signal(self):
         # Live payload shape: scheduled_reset is null, the tracker's watch carries the signal.
-        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.UTC)
         u = crw.upcoming_from_status(self.fixture("status_active_watch.json"), now=now)
         self.assertIsNotNone(u)
         self.assertEqual(crw.iso_utc(u.timestamp), "2026-09-30T06:59:59.999000Z")
@@ -116,7 +116,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(u.event_type, "")  # source.type "observed" is not a reset type
 
     def test_expired_active_watch_is_ignored(self):
-        now = dt.datetime(2026, 9, 30, 7, 0, tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026, 9, 30, 7, 0, tzinfo=dt.UTC)
         self.assertIsNone(crw.upcoming_from_status(self.fixture("status_active_watch.json"), now=now))
 
     def test_avg_interval_days_from_stats(self):
@@ -147,7 +147,7 @@ class ParserTests(unittest.TestCase):
 
     def test_scheduled_reset_outranks_active_watch(self):
         # Explicit announcement beats the AI-classified watch, even with no time yet.
-        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.UTC)
         u = crw.upcoming_from_status(self._with_scheduled(None), now=now)
         self.assertEqual(u.status, "scheduled")
         self.assertEqual(u.event_type, "regular")
@@ -155,7 +155,7 @@ class ParserTests(unittest.TestCase):
 
     def test_passed_scheduled_for_is_still_awaiting_execution(self):
         # API docs: "A passed scheduled_for does not imply completion."
-        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.timezone.utc)
+        now = dt.datetime(2026, 9, 27, 17, 30, tzinfo=dt.UTC)
         u = crw.upcoming_from_status(self._with_scheduled("2026-09-27T12:00:00.000Z"), now=now)
         self.assertEqual(u.status, "scheduled")
         self.assertEqual(crw.iso_utc(u.timestamp), "2026-09-27T12:00:00Z")

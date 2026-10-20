@@ -21,7 +21,8 @@ import platform
 import plistlib
 import re
 import subprocess
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from . import config, secrets_store
 
@@ -47,7 +48,7 @@ def current_backend() -> str:
     return backend_for(platform.system())
 
 
-def job_ref(job: str, system: Optional[str] = None) -> str:
+def job_ref(job: str, system: str | None = None) -> str:
     """``"<scheduler>: <name>"`` for *job* on this OS, or ``""`` on an unsupported one."""
     return {
         "launchd": f"launchd: {LAUNCHD_LABELS[job]}",
@@ -56,7 +57,7 @@ def job_ref(job: str, system: Optional[str] = None) -> str:
     }.get(BACKENDS.get(system or platform.system(), ""), "")
 
 
-def enabled_jobs(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+def enabled_jobs(cfg: dict[str, Any]) -> tuple[str, ...]:
     return tuple(job for job in JOBS if cfg.get(f"{job}_enabled", True))
 
 
@@ -70,10 +71,10 @@ def systemd_user_dir() -> pathlib.Path:
 
 # ── launchd ──────────────────────────────────────────────────────────────────
 
-def _plist(program: str, args: List[str], label: str, stdout: str, stderr: str,
-           *, calendar: Any = None, interval: Optional[int] = None,
-           run_at_load: bool = True) -> Dict[str, Any]:
-    d: Dict[str, Any] = {
+def _plist(program: str, args: list[str], label: str, stdout: str, stderr: str,
+           *, calendar: Any = None, interval: int | None = None,
+           run_at_load: bool = True) -> dict[str, Any]:
+    d: dict[str, Any] = {
         "Label": label,
         "ProgramArguments": [program] + args,
         "RunAtLoad": bool(run_at_load),
@@ -89,8 +90,8 @@ def _plist(program: str, args: List[str], label: str, stdout: str, stderr: str,
     return d
 
 
-def launchd_plists(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
-                   env: Optional[Dict[str, str]] = None) -> Dict[str, Dict[str, Any]]:
+def launchd_plists(program: str, log_dir: pathlib.Path, cfg: dict[str, Any],
+                   env: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """``{plist filename: plist dict}`` for the jobs enabled in ``cfg``."""
     if env:
         raise ValueError("Environment variables cannot be written to scheduler files")
@@ -111,7 +112,7 @@ def launchd_plists(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
     return {f"{LAUNCHD_LABELS[job]}.plist": built[job] for job in enabled_jobs(cfg)}
 
 
-def write_launchd(out_dir: pathlib.Path, plists: Dict[str, Dict[str, Any]]) -> List[pathlib.Path]:
+def write_launchd(out_dir: pathlib.Path, plists: dict[str, dict[str, Any]]) -> list[pathlib.Path]:
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     written = []
@@ -129,8 +130,8 @@ def write_launchd(out_dir: pathlib.Path, plists: Dict[str, Dict[str, Any]]) -> L
     return written
 
 
-def launchd_existing_env(out_dir: pathlib.Path) -> Dict[str, str]:
-    found: Dict[str, str] = {}
+def launchd_existing_env(out_dir: pathlib.Path) -> dict[str, str]:
+    found: dict[str, str] = {}
     for job in JOBS:
         path = pathlib.Path(out_dir) / f"{LAUNCHD_LABELS[job]}.plist"
         with contextlib.suppress(OSError, ValueError, plistlib.InvalidFileException):
@@ -158,8 +159,8 @@ def _bootout(job: str) -> None:
     _launchctl("bootout", f"gui/{os.getuid()}/{LAUNCHD_LABELS[job]}")
 
 
-def apply_launchd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
-                  env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
+def apply_launchd(program: str, log_dir: pathlib.Path, cfg: dict[str, Any],
+                  env: dict[str, str] | None = None) -> tuple[str, ...]:
     out_dir = launch_agents_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     apply_jobs(
@@ -196,8 +197,8 @@ def _timer_unit(description: str, body: Iterable[str]) -> str:
                       "", "[Install]", "WantedBy=timers.target", ""])
 
 
-def systemd_units(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
-                  env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def systemd_units(program: str, log_dir: pathlib.Path, cfg: dict[str, Any],
+                  env: dict[str, str] | None = None) -> dict[str, str]:
     """``{unit filename: contents}`` for the jobs enabled in ``cfg``."""
     if env:
         raise ValueError("Environment variables cannot be written to scheduler files")
@@ -206,7 +207,7 @@ def systemd_units(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
     log = pathlib.Path(log_dir)
     hour, minute = config.daily_os_local_hm(cfg)
     minutes = int(cfg.get("scan_interval_minutes", 120))
-    units: Dict[str, str] = {}
+    units: dict[str, str] = {}
     if "daily" in enabled_jobs(cfg):
         units[f"{SYSTEMD_UNITS['daily']}.service"] = _service_unit(
             "Codex Reset Watch (daily)", f"{program} daily",
@@ -224,7 +225,7 @@ def systemd_units(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
     return units
 
 
-def write_systemd(out_dir: pathlib.Path, units: Dict[str, str]) -> List[pathlib.Path]:
+def write_systemd(out_dir: pathlib.Path, units: dict[str, str]) -> list[pathlib.Path]:
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     written = []
@@ -240,8 +241,8 @@ def write_systemd(out_dir: pathlib.Path, units: Dict[str, str]) -> List[pathlib.
     return written
 
 
-def systemd_existing_env(out_dir: pathlib.Path) -> Dict[str, str]:
-    found: Dict[str, str] = {}
+def systemd_existing_env(out_dir: pathlib.Path) -> dict[str, str]:
+    found: dict[str, str] = {}
     for job in JOBS:
         path = pathlib.Path(out_dir) / f"{SYSTEMD_UNITS[job]}.service"
         with contextlib.suppress(OSError):
@@ -269,8 +270,8 @@ def _stop_systemd_timer(job: str) -> None:
         raise OSError(f"Could not stop systemd unit(s) {', '.join(failed)}; they may retain old credentials")
 
 
-def apply_systemd(program: str, log_dir: pathlib.Path, cfg: Dict[str, Any],
-                  env: Optional[Dict[str, str]] = None) -> Tuple[str, ...]:
+def apply_systemd(program: str, log_dir: pathlib.Path, cfg: dict[str, Any],
+                  env: dict[str, str] | None = None) -> tuple[str, ...]:
     out_dir = systemd_user_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     existing = systemd_existing_env(out_dir)
@@ -307,15 +308,15 @@ def remove_systemd() -> None:
 # Task Scheduler reads local credentials at runtime; secrets never enter task
 # arguments or the Windows user environment registry.
 
-def daily_task_command(program: str, cfg: Optional[Dict[str, Any]] = None,
-                       task_name: str = DAILY_TASK_NAME) -> List[str]:
+def daily_task_command(program: str, cfg: dict[str, Any] | None = None,
+                       task_name: str = DAILY_TASK_NAME) -> list[str]:
     hour, minute = config.daily_os_local_hm(cfg or config.DEFAULTS)
     return ["schtasks", "/Create", "/F", "/TN", task_name, "/TR", f'"{program}" daily',
             "/SC", "DAILY", "/ST", f"{hour:02d}:{minute:02d}"]
 
 
-def monitor_task_command(program: str, cfg: Optional[Dict[str, Any]] = None,
-                         task_name: str = MONITOR_TASK_NAME) -> List[str]:
+def monitor_task_command(program: str, cfg: dict[str, Any] | None = None,
+                         task_name: str = MONITOR_TASK_NAME) -> list[str]:
     minutes = int((cfg or config.DEFAULTS).get("scan_interval_minutes", 120))
     head = ["schtasks", "/Create", "/F", "/TN", task_name, "/TR", f'"{program}" monitor']
     # HOURLY/DAILY read more naturally than a big /MO count and are what a human
@@ -327,11 +328,11 @@ def monitor_task_command(program: str, cfg: Optional[Dict[str, Any]] = None,
     return head + ["/SC", "MINUTE", "/MO", str(minutes)]
 
 
-def delete_task_command(task_name: str) -> List[str]:
+def delete_task_command(task_name: str) -> list[str]:
     return ["schtasks", "/Delete", "/F", "/TN", task_name]
 
 
-def apply_schtasks(program: str, cfg: Dict[str, Any]) -> Tuple[str, ...]:
+def apply_schtasks(program: str, cfg: dict[str, Any]) -> tuple[str, ...]:
     builders = {"daily": daily_task_command, "monitor": monitor_task_command}
     for job in JOBS:
         if job in enabled_jobs(cfg):
@@ -357,7 +358,7 @@ def remove_schtasks() -> None:
 
 # ── entry points ─────────────────────────────────────────────────────────────
 
-def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) -> Dict[str, str]:
+def merged_env(process_env: dict[str, str] | None, existing: dict[str, str]) -> dict[str, str]:
     """Find environment-only credentials, including those in older job files."""
     env = dict(existing)
     for key in SECRET_ENV_KEYS:
@@ -367,7 +368,7 @@ def merged_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str]) 
     return env
 
 
-def _migrate_legacy_credentials(existing: Dict[str, str], cfg: Dict[str, Any]) -> None:
+def _migrate_legacy_credentials(existing: dict[str, str], cfg: dict[str, Any]) -> None:
     """Rescue credentials from older app-owned jobs before stripping their env.
 
     The chat id is plain config and always migrates; the token only when a
@@ -387,8 +388,8 @@ def _migrate_legacy_credentials(existing: Dict[str, str], cfg: Dict[str, Any]) -
         cfg.update(updates)
 
 
-def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str],
-            cfg: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+def job_env(process_env: dict[str, str] | None, existing: dict[str, str],
+            cfg: dict[str, Any] | None = None) -> dict[str, str]:
     """Scheduled jobs resolve local credentials; never persist their environment."""
     cfg = cfg if cfg is not None else config.load()
     env = merged_env(process_env, existing)
@@ -401,7 +402,7 @@ def job_env(process_env: Optional[Dict[str, str]], existing: Dict[str, str],
 
 def _each(jobs: Iterable[str], action: Callable[[str], None]) -> None:
     """Run *action* for every job, then re-raise the last OSError, if any."""
-    error: Optional[OSError] = None
+    error: OSError | None = None
     for job in jobs:
         try:
             action(job)
@@ -411,9 +412,9 @@ def _each(jobs: Iterable[str], action: Callable[[str], None]) -> None:
         raise error
 
 
-def apply_jobs(existing: Dict[str, str], cfg: Dict[str, Any], env: Optional[Dict[str, str]], *,
+def apply_jobs(existing: dict[str, str], cfg: dict[str, Any], env: dict[str, str] | None, *,
                write: Callable[[], Any], stop: Callable[[], Any] = lambda: None,
-               stop_all: Optional[Callable[[], Any]] = None) -> None:
+               stop_all: Callable[[], Any] | None = None) -> None:
     """Validate credentials, then stop jobs and write env-free job files.
 
     *existing* is what older job files still carry. A credential problem with
@@ -493,8 +494,8 @@ def program_path() -> str:
     return os.path.abspath(argv0 or "codex-reset-watch")
 
 
-def apply(*, program: Optional[str] = None, cfg: Optional[Dict[str, Any]] = None,
-          env: Optional[Dict[str, str]] = None) -> Tuple[str, Tuple[str, ...]]:
+def apply(*, program: str | None = None, cfg: dict[str, Any] | None = None,
+          env: dict[str, str] | None = None) -> tuple[str, tuple[str, ...]]:
     """Re-render and (re)register the scheduler entries. Returns (backend, jobs)."""
     cfg = cfg if cfg is not None else config.load()
     program = program or program_path()

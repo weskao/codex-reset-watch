@@ -221,15 +221,15 @@ class EveryEntryPointChecksTests(unittest.TestCase):
                     tempfile.TemporaryDirectory() as folder:
                 events = []
 
-                def command():
+                def command(events=events, command_code=command_code):
                     events.extend(["command started", "command finished"])
                     return command_code
 
-                def prompt(*args, **kwargs):
+                def prompt(*args, events=events, answer=answer, **kwargs):
                     events.append("prompt")
                     return answer
 
-                def update(**kwargs):
+                def update(events=events, update_code=update_code, **kwargs):
                     events.append("update")
                     return update_code
 
@@ -264,8 +264,8 @@ class EveryEntryPointChecksTests(unittest.TestCase):
                 updating = argv[0:1] in (["update"], ["--update"])
                 with self.subTest(script=name, argv=argv), \
                         mock.patch.object(uc, "start_check") as start, \
-                        mock.patch.object(uc, "maybe_hint", side_effect=lambda: out.write("UPDATE\n")), \
-                        mock.patch.object(crw, "_dispatch", side_effect=lambda args: out.write("COMMAND\n") and 0), \
+                        mock.patch.object(uc, "maybe_hint", side_effect=lambda out=out: out.write("UPDATE\n")), \
+                        mock.patch.object(crw, "_dispatch", side_effect=lambda args, out=out: out.write("COMMAND\n") and 0), \
                         redirect_stdout(out), redirect_stderr(out):
                     with contextlib.suppress(SystemExit):
                         main(argv)

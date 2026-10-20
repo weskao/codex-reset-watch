@@ -23,8 +23,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any
 
 import telegram_kit
 
@@ -35,7 +36,7 @@ from .console import print_console as print
 
 APP_NAME = "codex-reset-watch"
 DEFAULT_API_BASE = cfgmod.DEFAULT_API_BASE
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 def home() -> pathlib.Path:
@@ -62,13 +63,13 @@ def display_path(value: Any) -> str:
 default_config_path = cfgmod.config_path
 default_state_dir = cfgmod.state_dir
 default_log_dir = cfgmod.log_dir
-DEFAULT_CONFIG: Dict[str, Any] = cfgmod.DEFAULTS
+DEFAULT_CONFIG: dict[str, Any] = cfgmod.DEFAULTS
 
 
 @dataclass
 class Event:
     event_id: str = ""
-    timestamp: Optional[dt.datetime] = None
+    timestamp: dt.datetime | None = None
     event_type: str = ""
     message: str = ""
     source_url: str = ""
@@ -88,13 +89,13 @@ class Event:
 
 @dataclass
 class Upcoming:
-    timestamp: Optional[dt.datetime] = None
+    timestamp: dt.datetime | None = None
     timing_kind: str = "forecast_window"
     event_type: str = ""
     status: str = ""
     title: str = ""
     time_text: str = ""
-    chance_percent: Optional[float] = None
+    chance_percent: float | None = None
     confidence: str = ""
     window_label: str = ""
     message: str = ""
@@ -122,26 +123,26 @@ class Upcoming:
 @dataclass
 class Snapshot:
     checked_at: dt.datetime
-    latest: Optional[Event]
-    upcoming: Optional[Upcoming]
+    latest: Event | None
+    upcoming: Upcoming | None
     status_ok: bool
     resets_ok: bool
     status_error: str = ""
     resets_error: str = ""
-    avg_interval_days: Optional[float] = None
+    avg_interval_days: float | None = None
 
 
 def now_utc() -> dt.datetime:
     return dt.datetime.now(tz=UTC)
 
 
-def iso_utc(value: Optional[dt.datetime]) -> str:
+def iso_utc(value: dt.datetime | None) -> str:
     if value is None:
         return ""
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def parse_time(value: Any) -> Optional[dt.datetime]:
+def parse_time(value: Any) -> dt.datetime | None:
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -180,7 +181,7 @@ def normalize_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value).lower())
 
 
-def first_value(d: Dict[str, Any], keys: Sequence[str]) -> Any:
+def first_value(d: dict[str, Any], keys: Sequence[str]) -> Any:
     normalized = {normalize_key(k): v for k, v in d.items()}
     for key in keys:
         if key in d and d[key] not in (None, ""):
@@ -191,7 +192,7 @@ def first_value(d: Dict[str, Any], keys: Sequence[str]) -> Any:
     return None
 
 
-def first_str(d: Dict[str, Any], keys: Sequence[str]) -> str:
+def first_str(d: dict[str, Any], keys: Sequence[str]) -> str:
     v = first_value(d, keys)
     if isinstance(v, str):
         return v.strip()
@@ -200,7 +201,7 @@ def first_str(d: Dict[str, Any], keys: Sequence[str]) -> str:
     return str(v)
 
 
-def numeric(v: Any) -> Optional[float]:
+def numeric(v: Any) -> float | None:
     if isinstance(v, bool) or v is None:
         return None
     if isinstance(v, (int, float)):
@@ -213,9 +214,9 @@ def numeric(v: Any) -> Optional[float]:
     return None
 
 
-def deep_first(d: Dict[str, Any], keys: Sequence[str], max_depth: int = 3) -> Tuple[Any, str]:
+def deep_first(d: dict[str, Any], keys: Sequence[str], max_depth: int = 3) -> tuple[Any, str]:
     wanted = {normalize_key(k) for k in keys}
-    queue: List[Tuple[Dict[str, Any], str, int]] = [(d, "", 0)]
+    queue: list[tuple[dict[str, Any], str, int]] = [(d, "", 0)]
     while queue:
         cur, prefix, depth = queue.pop(0)
         for k, v in cur.items():
@@ -230,7 +231,7 @@ def deep_first(d: Dict[str, Any], keys: Sequence[str], max_depth: int = 3) -> Tu
     return None, ""
 
 
-def list_from_payload(payload: Any) -> List[Any]:
+def list_from_payload(payload: Any) -> list[Any]:
     if isinstance(payload, list):
         return payload
     if not isinstance(payload, dict):
@@ -268,7 +269,7 @@ def time_unit_of(value: Any) -> str:
     return "minute"
 
 
-def x_snowflake_time(value: Any) -> Optional[dt.datetime]:
+def x_snowflake_time(value: Any) -> dt.datetime | None:
     """Decode an X/Twitter snowflake ID into its UTC creation timestamp.
 
     This is a fallback only. API-provided timestamps always win. X snowflakes encode
@@ -292,7 +293,7 @@ def x_snowflake_time(value: Any) -> Optional[dt.datetime]:
     return parsed
 
 
-def nested_source_url(d: Dict[str, Any]) -> str:
+def nested_source_url(d: dict[str, Any]) -> str:
     direct = first_value(d, SOURCE_URL_KEYS)
     if isinstance(direct, str) and direct.strip():
         return direct.strip()
@@ -304,7 +305,7 @@ def nested_source_url(d: Dict[str, Any]) -> str:
     return ""
 
 
-def event_from_dict(d: Dict[str, Any]) -> Event:
+def event_from_dict(d: dict[str, Any]) -> Event:
     # The upstream API has changed shape over time (snake_case/camelCase and nested
     # source objects). Search a few levels deep instead of assuming one fixed schema.
     ts_value, _ = deep_first(d, EVENT_TIME_KEYS, max_depth=3)
@@ -325,8 +326,8 @@ def event_from_dict(d: Dict[str, Any]) -> Event:
     )
 
 
-def latest_event(status: Any, resets: Any) -> Optional[Event]:
-    candidates: List[Event] = []
+def latest_event(status: Any, resets: Any) -> Event | None:
+    candidates: list[Event] = []
     if isinstance(status, dict):
         for key in ("latest_reset", "latest_event", "last_reset", "latest"):
             v = status.get(key)
@@ -375,10 +376,10 @@ UPCOMING_FLAG_KEYS = (
 )
 
 
-def iter_candidate_containers(status: Dict[str, Any]) -> Iterable[Tuple[str, Dict[str, Any]]]:
+def iter_candidate_containers(status: dict[str, Any]) -> Iterable[tuple[str, dict[str, Any]]]:
     wanted = {normalize_key(k) for k in UPCOMING_CONTAINER_KEYS}
 
-    def yield_from(parent: Dict[str, Any], prefix: str = "") -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def yield_from(parent: dict[str, Any], prefix: str = "") -> Iterable[tuple[str, dict[str, Any]]]:
         for key, value in parent.items():
             if isinstance(value, dict) and normalize_key(key) in wanted:
                 name = f"{prefix}.{key}" if prefix else str(key)
@@ -420,20 +421,20 @@ def looks_like_future_signal(*values: Any) -> bool:
     return any(p in text for p in phrases)
 
 
-def avg_interval_days(status: Any) -> Optional[float]:
+def avg_interval_days(status: Any) -> float | None:
     if not isinstance(status, dict):
         return None
     val, _ = deep_first(status, ["avg_interval_days"])
     return numeric(val)
 
 
-def upcoming_from_status(status: Any, *, now: Optional[dt.datetime] = None) -> Optional[Upcoming]:
+def upcoming_from_status(status: Any, *, now: dt.datetime | None = None) -> Upcoming | None:
     if not isinstance(status, dict):
         return None
     now = now or now_utc()
-    found: List[Upcoming] = []
+    found: list[Upcoming] = []
     for container_name, d in iter_candidate_containers(status):
-        ts: Optional[dt.datetime] = None
+        ts: dt.datetime | None = None
         raw_field = ""
         timing_kind = "forecast_window"
 
@@ -536,7 +537,7 @@ class RotatingJsonl:
         with contextlib.suppress(OSError):
             self.path.replace(self.path.with_suffix(self.path.suffix + ".1"))
 
-    def write(self, obj: Dict[str, Any]) -> None:
+    def write(self, obj: dict[str, Any]) -> None:
         self._rotate()
         line = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str)
         with self.path.open("a", encoding="utf-8") as f:
@@ -544,7 +545,7 @@ class RotatingJsonl:
 
 
 class Logger:
-    def __init__(self, cfg: Dict[str, Any]):
+    def __init__(self, cfg: dict[str, Any]):
         self.log_dir = default_log_dir(cfg)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         max_bytes = int(cfg.get("max_log_bytes", DEFAULT_CONFIG["max_log_bytes"]))
@@ -555,7 +556,7 @@ class Logger:
     def event(self, level: str, name: str, **fields: Any) -> None:
         self.events.write({"ts": iso_utc(now_utc()), "level": level, "event": name, **fields})
 
-    def api_response(self, endpoint: str, ok: bool, payload: Any = None, error: str = "", http_status: Optional[int] = None) -> None:
+    def api_response(self, endpoint: str, ok: bool, payload: Any = None, error: str = "", http_status: int | None = None) -> None:
         self.api.write({
             "ts": iso_utc(now_utc()), "endpoint": endpoint, "ok": ok, "http_status": http_status,
             "error": error, "payload": payload,
@@ -563,13 +564,13 @@ class Logger:
 
 
 class StateStore:
-    def __init__(self, state_dir: Optional[pathlib.Path] = None, cfg: Optional[Dict[str, Any]] = None):
+    def __init__(self, state_dir: pathlib.Path | None = None, cfg: dict[str, Any] | None = None):
         self.dir = state_dir or default_state_dir(cfg)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.path = self.dir / "state.json"
         self.lock_path = self.dir / "run.lock"
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         try:
             with self.path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -577,7 +578,7 @@ class StateStore:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return {}
 
-    def save(self, data: Dict[str, Any]) -> None:
+    def save(self, data: dict[str, Any]) -> None:
         tmp = self.path.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
@@ -590,7 +591,7 @@ class StateStore:
 
 
 class APIClient:
-    def __init__(self, cfg: Dict[str, Any], logger: Optional[Logger] = None):
+    def __init__(self, cfg: dict[str, Any], logger: Logger | None = None):
         self.cfg = cfg
         self.logger = logger
         self.base = str(os.environ.get("CRW_API_BASE", cfg.get("api_base", DEFAULT_API_BASE))).rstrip("/")
@@ -598,11 +599,11 @@ class APIClient:
         self.retries = max(1, int(cfg.get("request_retries", 3)))
         self.ua = str(cfg.get("user_agent", DEFAULT_CONFIG["user_agent"]))
 
-    def get_json(self, path: str, *, optional: bool = False) -> Tuple[Optional[Any], str]:
+    def get_json(self, path: str, *, optional: bool = False) -> tuple[Any | None, str]:
         url = path if path.startswith("http") else self.base + path
         error = ""
         for attempt in range(1, self.retries + 1):
-            status_code: Optional[int] = None
+            status_code: int | None = None
             body = ""
             try:
                 req = urllib.request.Request(url, headers={
@@ -659,15 +660,15 @@ class APIClient:
 load_config = cfgmod.load
 
 
-def fmt_local(value: Optional[dt.datetime], cfg: Optional[Dict[str, Any]] = None) -> str:
+def fmt_local(value: dt.datetime | None, cfg: dict[str, Any] | None = None) -> str:
     if value is None:
         return "—"
     local = value.astimezone(cfgmod.tzinfo_for(cfg))
     return local.strftime(f"%Y-%m-%d %H:%M {cfgmod.tz_label(cfg)}")
 
 
-def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = None,
-                  lang: Optional[str] = None) -> str:
+def fmt_remaining(target: dt.datetime | None, now: dt.datetime | None = None,
+                  lang: str | None = None) -> str:
     if target is None:
         return "—"
     lang = lang or i18n.FALLBACK
@@ -676,7 +677,7 @@ def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = No
     total_minutes = seconds // 60
     days, rem_min = divmod(total_minutes, 1440)
     hours, minutes = divmod(rem_min, 60)
-    parts: List[str] = []
+    parts: list[str] = []
     if days:
         parts.append(i18n.t("remaining.day" if days == 1 else "remaining.days", lang, n=days))
     if hours or days:
@@ -688,7 +689,7 @@ def fmt_remaining(target: Optional[dt.datetime], now: Optional[dt.datetime] = No
 AGO_UNIT_MINUTES = {"day": 1440, "hour": 60, "minute": 1}
 
 
-def fmt_ago(ts: dt.datetime, now: Optional[dt.datetime] = None, lang: Optional[str] = None,
+def fmt_ago(ts: dt.datetime, now: dt.datetime | None = None, lang: str | None = None,
             unit: str = "minute") -> str:
     """Elapsed time since ``ts``: largest unit Day, smallest ``unit`` (the API's precision)."""
     lang = lang or i18n.FALLBACK
@@ -698,7 +699,7 @@ def fmt_ago(ts: dt.datetime, now: Optional[dt.datetime] = None, lang: Optional[s
         return "< " + i18n.t(f"remaining.{unit if unit in AGO_UNIT_MINUTES else 'minute'}", lang, n=1)
     days, rem = divmod(minutes, 1440)
     hours, mins = divmod(rem, 60)
-    parts: List[str] = []
+    parts: list[str] = []
     if days:
         parts.append(i18n.t("remaining.day" if days == 1 else "remaining.days", lang, n=days))
     if hours:
@@ -708,14 +709,14 @@ def fmt_ago(ts: dt.datetime, now: Optional[dt.datetime] = None, lang: Optional[s
     return " ".join(parts)
 
 
-def event_time_line(event: Event, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]], lang: str) -> str:
+def event_time_line(event: Event, checked_at: dt.datetime, cfg: dict[str, Any] | None, lang: str) -> str:
     if event.timestamp is None:
         return i18n.t("notice.time", lang, time=fmt_local(None, cfg))
     return i18n.t("notice.time_ago", lang, time=fmt_local(event.timestamp, cfg),
                   ago=fmt_ago(event.timestamp, checked_at, lang, event.time_unit))
 
 
-def notice_lang(cfg: Optional[Dict[str, Any]] = None) -> str:
+def notice_lang(cfg: dict[str, Any] | None = None) -> str:
     """Language for a Telegram/console notice: cfg's ``language``, falling back to
     English when cfg carries none — same English-default policy as
     config.render/format_interval, so a notice built with no config context
@@ -751,7 +752,7 @@ def format_event_type(event_type: str, lang: str) -> str:
 def upcoming_status_label(upcoming: Upcoming, lang: str = "en") -> str:
     if upcoming.title:
         return upcoming.title
-    parts: List[str] = []
+    parts: list[str] = []
     if upcoming.event_type:
         event_type = upcoming.event_type.replace("_", " ").strip()
         parts.append(event_type[:1].upper() + event_type[1:])
@@ -772,7 +773,7 @@ def tracker_line() -> str:
     return f"🌐 Codex Resets：{DEFAULT_API_BASE}/"
 
 
-def append_upcoming_links(lines: List[str], upcoming: Upcoming, lang: str) -> None:
+def append_upcoming_links(lines: list[str], upcoming: Upcoming, lang: str) -> None:
     if upcoming.source_url:
         lines.append(i18n.t("notice.source", lang, url=upcoming.source_url))
 
@@ -781,8 +782,8 @@ def heading(paint: ui.Paint, colour: str, text: str) -> str:
     return f"{colour}{paint.bold}{text}{paint.reset}"
 
 
-def latest_section(latest: Optional[Event], checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None, *,
-                   paint: Optional[ui.Paint] = None) -> List[str]:
+def latest_section(latest: Event | None, checked_at: dt.datetime, cfg: dict[str, Any] | None = None, *,
+                   paint: ui.Paint | None = None) -> list[str]:
     """The 'latest reset' block shared by format_manual and format_no_signal_notice."""
     lang = notice_lang(cfg)
     if not latest:
@@ -806,13 +807,13 @@ def latest_section(latest: Optional[Event], checked_at: dt.datetime, cfg: Option
 def upcoming_section(
     upcoming: Upcoming,
     checked_at: dt.datetime,
-    cfg: Optional[Dict[str, Any]] = None,
+    cfg: dict[str, Any] | None = None,
     *,
-    paint: Optional[ui.Paint] = None,
+    paint: ui.Paint | None = None,
     header: str,
     status_icon: str,
     disclaimer: str,
-) -> List[str]:
+) -> list[str]:
     """The 'upcoming reset signal' body shared by format_manual and format_upcoming_notice."""
     lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
@@ -851,7 +852,7 @@ def upcoming_section(
     return lines
 
 
-def render_notice(title: str, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]], sections: List[List[str]]) -> str:
+def render_notice(title: str, checked_at: dt.datetime, cfg: dict[str, Any] | None, sections: list[list[str]]) -> str:
     """Shared template: header + checked-at line + each section + tracker footer."""
     lang = notice_lang(cfg)
     lines = [title, "━━━━━━━━━━━━━━", i18n.t("notice.checked_at", lang, time=fmt_local(checked_at, cfg))]
@@ -861,7 +862,7 @@ def render_notice(title: str, checked_at: dt.datetime, cfg: Optional[Dict[str, A
     return "\n".join(lines)
 
 
-def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, paint: Optional[ui.Paint] = None) -> str:
+def format_manual(snapshot: Snapshot, cfg: dict[str, Any] | None = None, *, paint: ui.Paint | None = None) -> str:
     lang = notice_lang(cfg)
     p = paint or ui.Paint(False)
     sections = [latest_section(snapshot.latest, snapshot.checked_at, cfg, paint=p)]
@@ -879,7 +880,7 @@ def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, p
         ))
     else:
         sections.append(["", i18n.t("notice.manual.no_upcoming", lang)])
-    errors: List[str] = []
+    errors: list[str] = []
     if snapshot.status_error:
         errors += ["", i18n.t("notice.manual.status_error", lang, error=safe_text(snapshot.status_error, 300))]
     if snapshot.resets_error:
@@ -889,7 +890,7 @@ def format_manual(snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None, *, p
     return render_notice(i18n.t("notice.manual.title", lang), snapshot.checked_at, cfg, sections)
 
 
-def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
+def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: dict[str, Any] | None = None) -> str:
     lang = notice_lang(cfg)
     section = upcoming_section(
         upcoming,
@@ -902,7 +903,7 @@ def format_upcoming_notice(upcoming: Upcoming, checked_at: dt.datetime, cfg: Opt
     return render_notice(i18n.t("notice.watch.title", lang), checked_at, cfg, [section])
 
 
-def format_no_signal_notice(checked_at: dt.datetime, latest: Optional[Event] = None, cfg: Optional[Dict[str, Any]] = None) -> str:
+def format_no_signal_notice(checked_at: dt.datetime, latest: Event | None = None, cfg: dict[str, Any] | None = None) -> str:
     lang = notice_lang(cfg)
     sections = [
         latest_section(latest, checked_at, cfg),
@@ -911,7 +912,7 @@ def format_no_signal_notice(checked_at: dt.datetime, latest: Optional[Event] = N
     return render_notice(i18n.t("notice.watch.title", lang), checked_at, cfg, sections)
 
 
-def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: Optional[Dict[str, Any]] = None) -> str:
+def format_new_event_notice(event: Event, checked_at: dt.datetime, cfg: dict[str, Any] | None = None) -> str:
     lang = notice_lang(cfg)
     section = [
         "",
@@ -936,7 +937,7 @@ class NoticeKind(enum.Enum):
     UPCOMING = "upcoming"
 
 
-def notice_image(kind: NoticeKind) -> Optional[pathlib.Path]:
+def notice_image(kind: NoticeKind) -> pathlib.Path | None:
     """A random image from ``assets/<kind>/`` to send with that notice; None if there is none."""
     images = [p for p in (ASSETS_DIR / kind.value).glob("*") if p.suffix.lower() in (".jpeg", ".jpg", ".png")]
     return random.choice(images) if images else None
@@ -952,7 +953,7 @@ def send_photo(token: str, chat_id: str, image: pathlib.Path, caption: str) -> b
             f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
             f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="{image.name}"\r\n'
             f'Content-Type: {content_type}\r\n\r\n'
-        ).encode("utf-8") + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode("ascii")
+        ).encode() + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode("ascii")
         request = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendPhoto", data=body,
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
@@ -964,8 +965,8 @@ def send_photo(token: str, chat_id: str, image: pathlib.Path, caption: str) -> b
         return False
 
 
-def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger,
-                  image: Optional[pathlib.Path] = None) -> bool:
+def send_telegram(cfg: dict[str, Any], message: str, logger: Logger,
+                  image: pathlib.Path | None = None) -> bool:
     # The keychain-backed config first, then the environment — see
     # config.telegram_credentials. Neither value is ever logged.
     token, chat_id = cfgmod.telegram_credentials(cfg)
@@ -979,15 +980,15 @@ def send_telegram(cfg: Dict[str, Any], message: str, logger: Logger,
     return ok
 
 
-def snapshot_to_log(snapshot: Snapshot) -> Dict[str, Any]:
-    def event_dict(e: Optional[Event]) -> Optional[Dict[str, Any]]:
+def snapshot_to_log(snapshot: Snapshot) -> dict[str, Any]:
+    def event_dict(e: Event | None) -> dict[str, Any] | None:
         if not e:
             return None
         d = asdict(e)
         d["timestamp"] = iso_utc(e.timestamp)
         d["key"] = e.key
         return d
-    def upcoming_dict(u: Optional[Upcoming]) -> Optional[Dict[str, Any]]:
+    def upcoming_dict(u: Upcoming | None) -> dict[str, Any] | None:
         if not u:
             return None
         d = asdict(u)
@@ -1009,12 +1010,12 @@ def is_recent_event(event: Event, checked_at: dt.datetime, hours: int = 12) -> b
     return bool(event.timestamp and dt.timedelta(0) <= checked_at - event.timestamp <= dt.timedelta(hours=hours))
 
 
-def scheduled_footer(mode: str, cfg: Dict[str, Any], logger: Logger) -> str:
+def scheduled_footer(mode: str, cfg: dict[str, Any], logger: Logger) -> str:
     job = scheduler.job_ref(mode)
     return f"\n{cfgmod.device_label(cfg)}" + (f"\n{job}" if job else "") + f"\nlog: {logger.log_dir / 'events.jsonl'}"
 
 
-def format_blind_notice(count: int, snapshot: Snapshot, cfg: Optional[Dict[str, Any]] = None) -> str:
+def format_blind_notice(count: int, snapshot: Snapshot, cfg: dict[str, Any] | None = None) -> str:
     lang = notice_lang(cfg)
     reason = (i18n.t("notice.blind.error", lang, error=safe_text(snapshot.status_error, 300))
               if not snapshot.status_ok else i18n.t("notice.blind.unparsed", lang))
@@ -1022,7 +1023,7 @@ def format_blind_notice(count: int, snapshot: Snapshot, cfg: Optional[Dict[str, 
     return render_notice(i18n.t("notice.blind.title", lang), snapshot.checked_at, cfg, [section])
 
 
-def track_blindness(mode: str, snapshot: Snapshot, state: Dict[str, Any], cfg: Dict[str, Any],
+def track_blindness(mode: str, snapshot: Snapshot, state: dict[str, Any], cfg: dict[str, Any],
                     logger: Logger, notify: bool) -> None:
     """Count scheduled scans in a row that saw nothing usable; notice once at the threshold.
 
@@ -1092,7 +1093,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         prev_latest = state.get("latest_event_key", "")
         prev_upcoming = state.get("upcoming_key", "")
         is_first = not state.get("initialized_at")
-        messages: List[Tuple[str, Optional[pathlib.Path]]] = []
+        messages: list[tuple[str, pathlib.Path | None]] = []
 
         if mode == "manual":
             if notify:
@@ -1140,7 +1141,7 @@ def run_check(mode: str, *, notify: bool, force_daily: bool = False) -> int:
         return 0
 
 
-def _credential_source(cfg: Dict[str, Any], key: str) -> str:
+def _credential_source(cfg: dict[str, Any], key: str) -> str:
     """Where a credential came from, for ``doctor``. Never prints the value."""
     if not str(cfg.get(key, "") or "").strip():
         return "environment"
@@ -1150,7 +1151,7 @@ def _credential_source(cfg: Dict[str, Any], key: str) -> str:
 def doctor() -> int:
     cfg = load_config()
     logger = Logger(cfg)
-    checks: List[Tuple[str, bool, str]] = []
+    checks: list[tuple[str, bool, str]] = []
     py_ok = sys.version_info >= (3, 11)
     checks.append(("Python >= 3.11", py_ok, f"{sys.version.split()[0]} ({display_path(sys.executable)})"))
     cfg_path = default_config_path()
@@ -1253,14 +1254,14 @@ def build_parser() -> argparse.ArgumentParser:
 # flag `list` as well as `--list`. One pure rewrite of argv before argparse
 # sees it, rather than a second parser or a pile of aliases.
 
-SUBCOMMANDS: Tuple[str, ...] = (
+SUBCOMMANDS: tuple[str, ...] = (
     "check", "update", "monitor", "daily", "doctor", "logs", "config", "apply-schedule",
 )
 
 #: Bare words that mean a flag, per subcommand. A name is only rewritten after
 #: the subcommand that actually declares it, so `check force` stays a
 #: positional argparse can complain about instead of a flag we invented.
-SUBCOMMAND_FLAGS: Dict[str, Tuple[str, ...]] = {
+SUBCOMMAND_FLAGS: dict[str, tuple[str, ...]] = {
     "check": ("no-notify",),
     "update": (),
     "monitor": ("no-notify",),
@@ -1276,15 +1277,15 @@ SUBCOMMAND_FLAGS: Dict[str, Tuple[str, ...]] = {
 VALUE_FLAGS = frozenset({"set", "lines", "export", "import"})
 
 
-def _normalize_argv(argv: Sequence[str]) -> List[str]:
+def _normalize_argv(argv: Sequence[str]) -> list[str]:
     """Rewrite *argv* so `--` is optional on subcommands and on their flags.
 
     Pure and total: a token it does not recognise passes through untouched, so
     argparse still produces its own error for a genuine typo. Everything after
     a bare ``--`` is left exactly as typed.
     """
-    out: List[str] = []
-    command: Optional[str] = None
+    out: list[str] = []
+    command: str | None = None
     take_value = False
     for index, token in enumerate(argv):
         if token == "--":  # POSIX end-of-options: the rest is verbatim
@@ -1407,7 +1408,7 @@ def config_cmd(args: argparse.Namespace) -> int:
     return ui.config_menu()
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     # Check in the background; offer updates after command or argparse output.
     # `update` itself never hints: the hint would name the version it is replacing.
