@@ -5,7 +5,7 @@ Runtime dependencies are stdlib-only; packaging/runtime are managed by uv tool.
 """
 from __future__ import annotations
 
-__version__ = "0.21.3"
+__version__ = "0.21.4"
 
 import argparse
 import contextlib

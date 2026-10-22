@@ -1,3 +1,13 @@
+## [0.21.4] - 2026-10-22
+
+### 📚 Documentation
+
+- **readme:** Refresh crw config screenshot with the wide UI
+- **readme:** Refresh crw config screenshot with the wide UI
+
+### ⚙️ Miscellaneous Tasks
+
+- **lint:** Enable ruff UP, B023, B904
 ## [0.21.3] - 2026-10-19
 
 ### 🐛 Bug Fixes
